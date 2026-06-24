@@ -1,6 +1,6 @@
 <template>
   <AppLayout title="Tambah Project Category">
-    <div class="max-w-xl">
+    <div class="max-w-xl mx-auto">
       <div class="bg-white rounded-2xl border border-gray-200 p-6">
         <h2 class="text-base font-semibold text-gray-800 mb-5">Tambah Project Category</h2>
         <form @submit.prevent="submit" class="space-y-4">

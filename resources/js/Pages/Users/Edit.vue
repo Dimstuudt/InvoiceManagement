@@ -1,6 +1,6 @@
 <template>
   <AppLayout title="Edit User">
-    <div class="max-w-xl">
+    <div class="max-w-xl mx-auto">
       <div class="bg-white rounded-2xl border border-gray-200 p-6">
         <h2 class="text-base font-semibold text-gray-800 mb-5">Edit Data User</h2>
 

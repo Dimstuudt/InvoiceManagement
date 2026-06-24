@@ -1,6 +1,6 @@
 <template>
   <AppLayout title="Edit Client">
-    <div class="max-w-2xl">
+    <div class="max-w-2xl mx-auto">
       <div class="bg-white rounded-2xl border border-gray-200 p-6">
         <h2 class="text-base font-semibold text-gray-800 mb-5">Edit Client</h2>
 

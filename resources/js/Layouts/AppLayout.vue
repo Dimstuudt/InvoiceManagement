@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-screen bg-gray-100 overflow-hidden">
+  <div class="flex h-screen overflow-hidden bg-slate-200">
 
     <!-- Sidebar -->
     <aside class="w-64 bg-gray-900 flex flex-col flex-shrink-0">
@@ -11,7 +11,7 @@
       </div>
 
       <!-- Nav -->
-      <nav class="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
+      <nav class="flex-1 px-3 py-5 space-y-1 overflow-y-auto scroll-dark">
         <!-- Dashboard -->
         <Link
           :href="route('dashboard')"
@@ -137,7 +137,7 @@
     <!-- Main -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <!-- Topbar -->
-      <header class="h-16 bg-white shadow-sm flex items-center px-6 flex-shrink-0">
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
         <h1 class="text-lg font-semibold text-gray-800">{{ title }}</h1>
 
         <!-- Flash messages -->
@@ -154,7 +154,7 @@
       </header>
 
       <!-- Content -->
-      <main class="flex-1 overflow-y-auto p-6">
+      <main class="flex-1 overflow-y-auto p-6 bg-slate-100 scroll-light">
         <slot />
       </main>
     </div>

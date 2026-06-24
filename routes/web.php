@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\Master\BankAccountController;
 use App\Http\Controllers\Master\ClientCategoryController;
 use App\Http\Controllers\Master\DocumentIssuerController;
@@ -30,6 +31,10 @@ Route::middleware('auth')->group(function () {
     Route::resource('users', UserController::class)->except(['show'])->middleware('admin');
 
     Route::resource('clients', ClientController::class)->except(['show']);
+
+    Route::resource('invoices', InvoiceController::class);
+    Route::patch('invoices/{invoice}/status', [InvoiceController::class, 'updateStatus'])->name('invoices.status');
+    Route::patch('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items');
 
     // Master Data
     Route::prefix('master')->name('master.')->group(function () {

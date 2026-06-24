@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Http\Controllers\Master;
+
+use App\Http\Controllers\Controller;
+use App\Models\DocumentIssuer;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
+
+class DocumentIssuerController extends Controller
+{
+    public function index()
+    {
+        return Inertia::render('Master/DocumentIssuers/Index', [
+            'issuers' => DocumentIssuer::latest()->get()->map(fn($i) => [
+                ...$i->toArray(),
+                'header_image_url' => $i->header_image ? Storage::url($i->header_image) : null,
+            ]),
+        ]);
+    }
+
+    public function create()
+    {
+        return Inertia::render('Master/DocumentIssuers/Create');
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name'           => 'required|string|max:255',
+            'header_image'   => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
+            'tax_id_name'    => 'required|string|max:255',
+            'tax_id_address' => 'required|string',
+            'tax_id_number'  => 'required|string|max:50',
+        ]);
+
+        $data = $request->only('name', 'tax_id_name', 'tax_id_address', 'tax_id_number');
+
+        if ($request->hasFile('header_image')) {
+            $data['header_image'] = $request->file('header_image')->store('issuers', 'public');
+        }
+
+        DocumentIssuer::create($data);
+
+        return redirect()->route('master.document-issuers.index')->with('success', 'Document issuer berhasil ditambahkan.');
+    }
+
+    public function edit(DocumentIssuer $documentIssuer)
+    {
+        return Inertia::render('Master/DocumentIssuers/Edit', [
+            'issuer' => [
+                ...$documentIssuer->toArray(),
+                'header_image_url' => $documentIssuer->header_image ? Storage::url($documentIssuer->header_image) : null,
+            ],
+        ]);
+    }
+
+    public function update(Request $request, DocumentIssuer $documentIssuer)
+    {
+        $request->validate([
+            'name'           => 'required|string|max:255',
+            'header_image'   => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
+            'tax_id_name'    => 'required|string|max:255',
+            'tax_id_address' => 'required|string',
+            'tax_id_number'  => 'required|string|max:50',
+        ]);
+
+        $data = $request->only('name', 'tax_id_name', 'tax_id_address', 'tax_id_number');
+
+        if ($request->hasFile('header_image')) {
+            if ($documentIssuer->header_image) {
+                Storage::disk('public')->delete($documentIssuer->header_image);
+            }
+            $data['header_image'] = $request->file('header_image')->store('issuers', 'public');
+        }
+
+        $documentIssuer->update($data);
+
+        return redirect()->route('master.document-issuers.index')->with('success', 'Document issuer berhasil diupdate.');
+    }
+
+    public function destroy(DocumentIssuer $documentIssuer)
+    {
+        if ($documentIssuer->header_image) {
+            Storage::disk('public')->delete($documentIssuer->header_image);
+        }
+
+        $documentIssuer->delete();
+
+        return redirect()->route('master.document-issuers.index')->with('success', 'Document issuer berhasil dihapus.');
+    }
+}

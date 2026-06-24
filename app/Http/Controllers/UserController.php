@@ -9,16 +9,6 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware(function ($request, $next) {
-            if (!auth()->user()->isAdmin()) {
-                abort(403, 'Akses ditolak.');
-            }
-            return $next($request);
-        });
-    }
-
     public function index()
     {
         return Inertia::render('Users/Index', [

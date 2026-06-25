@@ -2,7 +2,7 @@
   <AppLayout :title="invoice.invoice_number">
 
     <!-- ACTION BAR -->
-    <div class="no-print -mx-6 -mt-6 mb-6 bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between gap-4">
+    <div class="no-print -mx-6 -mt-6 mb-0 bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between gap-4">
 
       <!-- Kembali -->
       <Link :href="route('invoices.index')"
@@ -33,8 +33,8 @@
       <!-- Kanan: tombol aksi -->
       <div class="flex items-center gap-2 shrink-0">
 
-        <!-- Simpan item (disembunyikan kalau paid) -->
-        <button v-if="invoice.status !== 'paid'" @click="saveItems" :disabled="savingItems"
+        <!-- Simpan item (disembunyikan kalau paid atau ditandai) -->
+        <button v-if="invoice.status !== 'paid' && !invoice.is_marked" @click="saveItems" :disabled="savingItems"
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition">
           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
@@ -60,14 +60,43 @@
           Perpanjang
         </Link>
 
-        <!-- Edit (disembunyikan kalau paid) -->
-        <Link v-if="invoice.status !== 'paid'" :href="route('invoices.edit', invoice.id)"
+        <!-- Edit (disembunyikan kalau paid atau ditandai) -->
+        <Link v-if="invoice.status !== 'paid' && !invoice.is_marked" :href="route('invoices.edit', invoice.id)"
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414A2 2 0 019 13z"/>
           </svg>
           Edit
         </Link>
+
+        <!-- Tandai toggle -->
+        <button @click="toggleMark"
+          :class="invoice.is_marked
+            ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 border border-amber-300'
+            : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-500'"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+          {{ invoice.is_marked ? 'Ditandai' : 'Tandai' }}
+        </button>
+
+        <!-- Kirim via Email (hanya jika ditandai) -->
+        <Link v-if="invoice.is_marked" :href="route('invoices.send-email.form', invoice.id)"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-sm">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+          </svg>
+          Kirim Email
+        </Link>
+        <span v-else
+          title="Aktifkan tanda centang dulu untuk bisa mengirim email"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-300 rounded-lg cursor-not-allowed">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+          </svg>
+          Kirim Email
+        </span>
 
         <!-- Print -->
         <button @click="printPage"
@@ -89,6 +118,21 @@
 
       </div>
     </div>
+
+    <!-- NOTIF DITANDAI -->
+    <div v-if="invoice.is_marked"
+      class="no-print -mx-6 mb-6 bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2.5">
+      <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
+      </svg>
+      <p class="text-xs text-amber-700 font-medium">
+        Invoice ini sedang ditandai untuk batch kirim. Matikan tanda centang terlebih dahulu jika ingin mengedit.
+      </p>
+      <button @click="toggleMark" class="ml-auto text-xs text-amber-600 hover:text-amber-800 underline font-medium shrink-0">
+        Hapus tanda
+      </button>
+    </div>
+    <div v-else class="mb-6"/>
 
     <!-- PAPER PREVIEW AREA -->
     <div class="invoice-bg -mx-6 -mb-6 min-h-screen py-8 px-6">
@@ -332,6 +376,10 @@ function saveItems() {
 
 function changeStatus(status) {
   router.patch(route('invoices.status', props.invoice.id), { status }, { preserveScroll: true })
+}
+
+function toggleMark() {
+  router.patch(route('invoices.mark', props.invoice.id), {}, { preserveScroll: true })
 }
 
 function destroy() {

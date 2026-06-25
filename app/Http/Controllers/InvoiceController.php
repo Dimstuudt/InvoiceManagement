@@ -10,38 +10,82 @@ use App\Models\ProjectCategory;
 use App\Models\Signature;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class InvoiceController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        $now      = Carbon::now();
-        $month    = $request->integer('month', $now->month);
-        $year     = $request->integer('year',  $now->year);
-        $status   = $request->input('status');
-        $clientId = $request->input('client_id');
+        $clients = Client::where('is_active', true)
+            ->with('category')
+            ->withCount([
+                'invoices as draft_count'  => fn($q) => $q->where('status', 'draft'),
+                'invoices as sent_count'   => fn($q) => $q->where('status', 'sent'),
+                'invoices as paid_count'   => fn($q) => $q->where('status', 'paid'),
+                'invoices as unpaid_count' => fn($q) => $q->where('status', 'unpaid'),
+            ])
+            ->orderBy('company_name')
+            ->get();
 
-        $query = Invoice::with(['client', 'projectCategory', 'user'])
+        // Hitung jumlah jenis produk (distinct project_category_id) per client
+        $productCounts = Invoice::select('client_id', DB::raw('COUNT(DISTINCT project_category_id) as count'))
+            ->groupBy('client_id')
+            ->pluck('count', 'client_id');
+
+        $clients->each(fn($c) => $c->product_type_count = $productCounts[$c->id] ?? 0);
+
+        return Inertia::render('Invoices/Index', compact('clients'));
+    }
+
+    public function all(Request $request)
+    {
+        $now  = Carbon::now();
+        $month = $request->integer('month', $now->month);
+        $year  = $request->integer('year',  $now->year);
+
+        // Invoice yang issue_date = bulan berikutnya dari bulan referensi
+        $next = Carbon::create($year, $month, 1)->addMonth();
+
+        $with = ['client', 'projectCategory', 'user'];
+
+        $priorityInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
             ->where('user_id', auth()->id())
-            ->whereYear('issue_date',  $year)
-            ->whereMonth('issue_date', $month)
-            ->orderBy('due_date');
+            ->whereYear('issue_date',  $next->year)
+            ->whereMonth('issue_date', $next->month)
+            ->orderBy('due_date')
+            ->get();
 
-        if ($status)   $query->where('status', $status);
-        if ($clientId) $query->where('client_id', $clientId);
+        $otherInvoices = Invoice::with($with)
+            ->withSum('items', 'amount')
+            ->where('user_id', auth()->id())
+            ->where(fn($q) => $q
+                ->whereYear('issue_date', '!=', $next->year)
+                ->orWhereMonth('issue_date', '!=', $next->month)
+            )
+            ->orderByDesc('issue_date')
+            ->get();
 
-        return Inertia::render('Invoices/Index', [
-            'invoices' => $query->get(),
-            'clients'  => Client::where('is_active', true)->get(['id', 'company_name']),
-            'filters'  => [
-                'month'     => $month,
-                'year'      => $year,
-                'status'    => $status ?? '',
-                'client_id' => $clientId ?? '',
-            ],
+        return Inertia::render('Invoices/AllInvoices', [
+            'priorityInvoices' => $priorityInvoices,
+            'otherInvoices'    => $otherInvoices,
+            'nextMonthLabel'   => $next->translatedFormat('F Y'),
+            'filters'          => ['month' => $month, 'year' => $year],
         ]);
+    }
+
+    public function clientInvoices(Client $client)
+    {
+        $client->load('category');
+
+        $invoices = Invoice::with(['projectCategory', 'user'])
+            ->withSum('items', 'amount')
+            ->where('client_id', $client->id)
+            ->orderByDesc('issue_date')
+            ->get();
+
+        return Inertia::render('Invoices/ClientInvoices', compact('client', 'invoices'));
     }
 
     public function create(Request $request)
@@ -210,10 +254,126 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice berhasil dihapus.');
     }
 
+    public function sendEmailForm(Invoice $invoice)
+    {
+        if (! $invoice->is_marked) {
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('error', 'Aktifkan tanda centang invoice terlebih dahulu sebelum mengirim email.');
+        }
+
+        $invoice->load(['client', 'projectCategory', 'documentIssuer', 'user']);
+
+        $defaultSubject = "Invoice {$invoice->invoice_number}";
+        if ($invoice->projectCategory) {
+            $defaultSubject .= " - {$invoice->projectCategory->name}";
+        }
+
+        $clientName = $invoice->client?->company_name ?? '';
+        $invoiceNumber = $invoice->invoice_number;
+        $dueDate = $invoice->due_date?->translatedFormat('d F Y') ?? '';
+        $total = number_format($invoice->total, 0, ',', '.');
+
+        $defaultBody = "Yth. {$clientName},\n\nBersama email ini kami kirimkan invoice {$invoiceNumber} dengan total tagihan sebesar Rp {$total}.\n\nMohon untuk melakukan pembayaran sebelum tanggal {$dueDate}.\n\nTerlampir file PDF invoice untuk referensi.\n\nTerima kasih atas kepercayaan Anda.\n\nHormat kami,\n{$invoice->user?->name}";
+
+        return Inertia::render('Invoices/SendEmail', [
+            'invoice'        => array_merge($invoice->toArray(), ['total' => $invoice->total]),
+            'defaultSubject' => $defaultSubject,
+            'defaultBody'    => $defaultBody,
+        ]);
+    }
+
+    public function sendEmail(Request $request, Invoice $invoice)
+    {
+        $validated = $request->validate([
+            'to'      => 'required|email',
+            'subject' => 'required|string|max:255',
+            'body'    => 'required|string',
+        ]);
+
+        $invoice->load(['client', 'projectCategory', 'documentIssuer',
+                        'bankAccount', 'signature', 'items', 'user']);
+
+        $html = view('invoices.pdf', [
+            'invoice' => $invoice,
+            'imgB64'  => fn($url) => $this->urlToBase64($url),
+        ])->render();
+
+        $pdfBase64 = app(\App\Services\PdfService::class)->generate($html);
+        $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
+
+        $response = \Illuminate\Support\Facades\Http::withHeaders([
+            'api-key'      => config('services.brevo.key'),
+            'Content-Type' => 'application/json',
+        ])->post('https://api.brevo.com/v3/smtp/email', [
+            'sender'      => [
+                'name'  => config('services.brevo.sender_name'),
+                'email' => config('services.brevo.sender_email'),
+            ],
+            'to'          => [['email' => $validated['to']]],
+            'subject'     => $validated['subject'],
+            'textContent' => $validated['body'],
+            'attachment'  => [[
+                'content' => $pdfBase64,
+                'name'    => $filename,
+            ]],
+        ]);
+
+        if (! $response->successful()) {
+            return back()->with('error', 'Gagal mengirim email: ' . $response->json('message', 'Unknown error'));
+        }
+
+        $invoice->update(['status' => 'sent', 'is_marked' => false]);
+
+        return redirect()->route('invoices.show', $invoice->id)
+            ->with('success', "Invoice berhasil dikirim ke {$validated['to']}.");
+    }
+
+    public function toggleMark(Invoice $invoice)
+    {
+        $invoice->update(['is_marked' => ! $invoice->is_marked]);
+        return back()->with('success', $invoice->is_marked ? 'Invoice ditandai.' : 'Tanda dihapus.');
+    }
+
     public function updateStatus(Request $request, Invoice $invoice)
     {
         $request->validate(['status' => 'required|in:draft,sent,paid,unpaid']);
         $invoice->update(['status' => $request->status]);
         return back()->with('success', 'Status diperbarui.');
+    }
+
+    private function urlToBase64(?string $url): ?string
+    {
+        if (! $url) return null;
+        try {
+            // Path relatif /storage/xxx → filesystem langsung
+            if (str_starts_with($url, '/storage/')) {
+                $filePath = storage_path('app/public/' . substr($url, 9));
+                if (file_exists($filePath)) {
+                    $content = file_get_contents($filePath);
+                    $mime    = (new \finfo(FILEINFO_MIME_TYPE))->buffer($content);
+                    return "data:{$mime};base64," . base64_encode($content);
+                }
+            }
+            // URL absolut lokal
+            $appUrl = rtrim(config('app.url'), '/');
+            if (str_starts_with($url, $appUrl)) {
+                $path     = ltrim(substr($url, strlen($appUrl)), '/');
+                $filePath = str_starts_with($path, 'storage/')
+                    ? storage_path('app/public/' . substr($path, 8))
+                    : public_path($path);
+                if (file_exists($filePath)) {
+                    $content = file_get_contents($filePath);
+                    $mime    = (new \finfo(FILEINFO_MIME_TYPE))->buffer($content);
+                    return "data:{$mime};base64," . base64_encode($content);
+                }
+            }
+            // External URL
+            $content = @file_get_contents($url);
+            if (! $content) return null;
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($content);
+            return "data:{$mime};base64," . base64_encode($content);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

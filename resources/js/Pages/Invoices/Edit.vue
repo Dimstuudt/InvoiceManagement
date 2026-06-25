@@ -175,7 +175,7 @@ watch(() => form.issue_date, (val, old) => {
   form.due_date = d.toISOString().slice(0, 10);
 });
 
-function submit() { form.post(route('invoices.update', props.invoice.id), { _method: 'put' }); }
+function submit() { form.put(route('invoices.update', props.invoice.id)); }
 </script>
 
 <style scoped>

@@ -1,0 +1,263 @@
+<template>
+  <AppLayout title="Semua Invoice">
+    <div class="space-y-4">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900">Semua Invoice</h2>
+          <p class="text-sm text-gray-400 mt-0.5">
+            Referensi bulan <span class="font-medium text-gray-600">{{ MONTHS[filters.month - 1] }} {{ filters.year }}</span>
+          </p>
+        </div>
+        <Link :href="route('invoices.create')"
+          class="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Buat Invoice
+        </Link>
+      </div>
+
+      <!-- Filter bulan referensi -->
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-3 flex flex-wrap items-center gap-3">
+        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bulan referensi</span>
+        <select v-model="localMonth" @change="applyFilters"
+          class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
+          <option v-for="(name, i) in MONTHS" :key="i" :value="i + 1">{{ name }}</option>
+        </select>
+        <select v-model="localYear" @change="applyFilters"
+          class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
+          <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+        </select>
+        <span class="text-[10px] text-gray-400">→ prioritas issue <span class="font-semibold text-indigo-500">{{ nextMonthLabel }}</span></span>
+      </div>
+
+      <!-- PRIORITY SECTION -->
+      <div>
+        <div class="flex items-center gap-3 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block"/>
+            <span class="text-sm font-semibold text-gray-700">Akan dikirim {{ nextMonthLabel }}</span>
+          </div>
+          <span class="text-xs text-gray-400">{{ priorityInvoices.length }} invoice</span>
+        </div>
+
+        <div v-if="priorityInvoices.length === 0"
+          class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-8 text-center">
+          <p class="text-sm text-indigo-300">Tidak ada invoice yang akan dikirim di {{ nextMonthLabel }}.</p>
+        </div>
+
+        <div v-else class="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-indigo-50 bg-indigo-50/40">
+                <th class="px-4 py-3 w-8"/>
+                <th class="text-left text-[10px] font-semibold text-indigo-300 uppercase tracking-wider px-3 py-3">Status</th>
+                <th class="text-left text-[10px] font-semibold text-indigo-300 uppercase tracking-wider px-4 py-3">Invoice # / Project</th>
+                <th class="text-left text-[10px] font-semibold text-indigo-300 uppercase tracking-wider px-4 py-3">Recipient</th>
+                <th class="text-left text-[10px] font-semibold text-indigo-300 uppercase tracking-wider px-4 py-3">Issue / Due Date</th>
+                <th class="text-right text-[10px] font-semibold text-indigo-300 uppercase tracking-wider px-4 py-3">Total</th>
+                <th class="px-5 py-3"/>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-indigo-50/50">
+              <tr v-for="invoice in priorityInvoices" :key="invoice.id"
+                :class="invoice.is_marked ? 'bg-amber-50/60' : 'hover:bg-indigo-50/30'"
+                class="transition-colors group">
+                <!-- Checkbox -->
+                <td class="px-4 py-4">
+                  <input type="checkbox" :checked="invoice.is_marked"
+                    @change="toggleMark(invoice)"
+                    class="w-4 h-4 rounded border-gray-300 text-amber-500 cursor-pointer focus:ring-amber-400"/>
+                </td>
+                <td class="px-3 py-4">
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(invoice.status)">
+                    {{ statusLabel(invoice.status) }}
+                  </span>
+                </td>
+                <td class="px-4 py-4">
+                  <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
+                  <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
+                </td>
+                <td class="px-4 py-4">
+                  <p class="text-sm font-medium text-gray-800">{{ invoice.client?.company_name ?? '-' }}</p>
+                </td>
+                <td class="px-4 py-4">
+                  <p class="text-sm text-gray-700">{{ fmtDate(invoice.issue_date) }}</p>
+                  <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
+                    → {{ fmtDate(invoice.due_date) }}
+                  </p>
+                </td>
+                <td class="px-4 py-4 text-right">
+                  <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
+                </td>
+                <td class="px-5 py-4">
+                  <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
+                    <Link :href="route('invoices.show', invoice.id)"
+                      class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
+                      Lihat
+                    </Link>
+                    <span v-if="invoice.is_marked"
+                      class="text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
+                      title="Matikan tanda centang dulu untuk mengedit">
+                      Edit
+                    </span>
+                    <Link v-else :href="route('invoices.edit', invoice.id)"
+                      class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap">
+                      Edit
+                    </Link>
+                    <button @click="deleteInvoice(invoice)"
+                      class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                      Hapus
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DIVIDER -->
+      <div class="flex items-center gap-3 pt-2">
+        <div class="flex-1 h-px bg-gray-200"/>
+        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Invoice Lainnya</span>
+        <div class="flex-1 h-px bg-gray-200"/>
+      </div>
+
+      <!-- OTHER SECTION -->
+      <div v-if="otherInvoices.length === 0" class="text-center py-6">
+        <p class="text-sm text-gray-300">Tidak ada invoice lainnya.</p>
+      </div>
+
+      <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-gray-100 bg-gray-50/60">
+              <th class="px-4 py-3 w-8"/>
+              <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 py-3">Status</th>
+              <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Invoice # / Project</th>
+              <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Recipient</th>
+              <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Issue / Due Date</th>
+              <th class="text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Total</th>
+              <th class="px-5 py-3"/>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            <tr v-for="invoice in otherInvoices" :key="invoice.id"
+              :class="invoice.is_marked ? 'bg-amber-50/60' : 'hover:bg-gray-50/50'"
+              class="transition-colors group">
+              <!-- Checkbox -->
+              <td class="px-4 py-4">
+                <input type="checkbox" :checked="invoice.is_marked"
+                  @change="toggleMark(invoice)"
+                  class="w-4 h-4 rounded border-gray-300 text-amber-500 cursor-pointer focus:ring-amber-400"/>
+              </td>
+              <td class="px-3 py-4">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(invoice.status)">
+                  {{ statusLabel(invoice.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-4">
+                <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
+              </td>
+              <td class="px-4 py-4">
+                <p class="text-sm font-medium text-gray-800">{{ invoice.client?.company_name ?? '-' }}</p>
+              </td>
+              <td class="px-4 py-4">
+                <p class="text-sm text-gray-700">{{ fmtDate(invoice.issue_date) }}</p>
+                <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
+                  → {{ fmtDate(invoice.due_date) }}
+                  <span v-if="isPastDue(invoice)"
+                    class="ml-1 w-1.5 h-1.5 rounded-full bg-red-400 inline-block animate-pulse"/>
+                </p>
+              </td>
+              <td class="px-4 py-4 text-right">
+                <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
+              </td>
+              <td class="px-5 py-4">
+                <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
+                  <Link :href="route('invoices.show', invoice.id)"
+                    class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
+                    Lihat
+                  </Link>
+                  <span v-if="invoice.is_marked"
+                    class="text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
+                    title="Matikan tanda centang dulu untuk mengedit">
+                    Edit
+                  </span>
+                  <Link v-else :href="route('invoices.edit', invoice.id)"
+                    class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap">
+                    Edit
+                  </Link>
+                  <button @click="deleteInvoice(invoice)"
+                    class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                    Hapus
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </AppLayout>
+</template>
+
+<script setup>
+import AppLayout from '@/Layouts/AppLayout.vue';
+import { Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
+
+const props = defineProps({
+  priorityInvoices: Array,
+  otherInvoices:    Array,
+  nextMonthLabel:   String,
+  filters:          Object,
+});
+
+const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+
+const localMonth = ref(props.filters.month);
+const localYear  = ref(props.filters.year);
+
+function applyFilters() {
+  router.get(route('invoices.all'), {
+    month: localMonth.value,
+    year:  localYear.value,
+  }, { preserveState: true, replace: true });
+}
+
+const statusClass = (s) => ({
+  draft:  'bg-gray-100 text-gray-500',
+  sent:   'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
+  paid:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  unpaid: 'bg-red-50 text-red-600 ring-1 ring-red-200',
+}[s] ?? 'bg-gray-100 text-gray-500');
+
+const statusLabel = (s) => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[s] ?? s);
+
+const isPastDue = (inv) => inv.status !== 'paid' && new Date(inv.due_date) < new Date();
+
+const fmtDate = (d) => d
+  ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+  : '-';
+
+const fmtCurrency = (v) => v != null
+  ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
+  : '-';
+
+function toggleMark(invoice) {
+  router.patch(route('invoices.mark', invoice.id), {}, { preserveScroll: true });
+}
+
+function deleteInvoice(invoice) {
+  if (!confirm(`Hapus invoice ${invoice.invoice_number}?`)) return;
+  router.delete(route('invoices.destroy', invoice.id), { preserveScroll: true });
+}
+</script>

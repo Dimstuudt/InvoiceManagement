@@ -32,9 +32,14 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('clients', ClientController::class)->except(['show']);
 
+    Route::get('invoices/all', [InvoiceController::class, 'all'])->name('invoices.all');
+    Route::get('invoices/clients/{client}', [InvoiceController::class, 'clientInvoices'])->name('invoices.client');
     Route::resource('invoices', InvoiceController::class);
     Route::patch('invoices/{invoice}/status', [InvoiceController::class, 'updateStatus'])->name('invoices.status');
     Route::patch('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items');
+    Route::patch('invoices/{invoice}/mark', [InvoiceController::class, 'toggleMark'])->name('invoices.mark');
+    Route::get('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmailForm'])->name('invoices.send-email.form');
+    Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.send-email');
 
     // Master Data
     Route::prefix('master')->name('master.')->group(function () {

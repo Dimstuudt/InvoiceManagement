@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'brevo' => [
+        'key'          => env('BREVO_API_KEY'),
+        'sender_name'  => env('BREVO_FROM_NAME', 'Invoice App'),
+        'sender_email' => env('BREVO_FROM_EMAIL'),
+    ],
+
 ];

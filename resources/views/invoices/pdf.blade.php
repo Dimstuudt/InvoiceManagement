@@ -6,180 +6,188 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   @page { size: A4 portrait; margin: 0; }
-  body { margin: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .invoice-paper { width: 794px; margin: 0 auto; background: white; font-family: Arial, sans-serif; }
-  .mono { font-family: 'Courier New', Courier, monospace; }
+  body  { margin: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .paper { width: 794px; margin: 0 auto; background: white; font-family: Arial, sans-serif; font-size: 13px; color: #1f2937; }
+  @media print { .no-print { display: none !important; } }
 </style>
 </head>
 <body>
 @php
-  $BLN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-  $tgl = fn($d) => $d ? $d->format('d') . ' ' . $BLN[(int)$d->format('n')] . ' ' . $d->format('Y') : '-';
-  $headerImg = $imgB64($invoice->documentIssuer?->header_image_url);
-  $logoImg   = $imgB64($invoice->bankAccount?->bank_logo_url);
-  $sigImg    = $imgB64($invoice->signature?->signature_image_url);
+  $BLN  = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  $tgl  = fn($d) => $d ? $d->format('d-m-Y') : '-';
+  $hdr  = $imgB64($invoice->documentIssuer?->header_image_url);
+  $logo = $imgB64($invoice->bankAccount?->bank_logo_url);
+  $sig  = $imgB64($invoice->signature?->signature_image_url);
 @endphp
-<div class="invoice-paper">
+<div class="paper">
 
-  {{-- KOP SURAT --}}
+  {{-- HEADER / KOP SURAT --}}
   @if($invoice->documentIssuer)
-    @if($headerImg)
-      <img src="{{ $headerImg }}" class="w-full object-contain" style="max-height:160px" alt="Kop"/>
-      <div class="border-b-4 border-gray-800"></div>
+    @if($hdr)
+      <img src="{{ $hdr }}" style="width:100%;display:block;max-height:160px;object-fit:contain" alt="Kop"/>
     @else
-      <div class="border-b-2 border-gray-800 py-6 px-20">
-        <p class="text-2xl font-black text-gray-900 tracking-wide uppercase">{{ $invoice->documentIssuer->name }}</p>
-        <div class="flex gap-x-4 mt-1 text-xs text-gray-500">
-          @if($invoice->documentIssuer->tax_id_name)<span>{{ $invoice->documentIssuer->tax_id_name }}</span>@endif
-          @if($invoice->documentIssuer->tax_id_address)<span>{{ $invoice->documentIssuer->tax_id_address }}</span>@endif
-        </div>
+      <div style="padding:1.5rem 2.5rem;border-bottom:3px solid #1d4ed8">
+        <p style="font-size:1.5rem;font-weight:900;color:#1d4ed8;text-transform:uppercase">{{ $invoice->documentIssuer->name }}</p>
       </div>
     @endif
   @endif
 
-  {{-- BODY --}}
-  <div style="padding: 2rem 5rem 3rem 5rem">
+  {{-- INVOICE TO --}}
+  <div style="padding:1.5rem 2.5rem 1rem 2.5rem">
+    <p style="font-size:0.75rem;color:#6b7280;margin-bottom:0.35rem">Invoice To</p>
+    <p style="font-size:1.35rem;font-weight:900;color:#60a5fa;text-transform:uppercase;margin-bottom:1rem;line-height:1.3;text-align:center">{{ $invoice->client?->company_name }}</p>
 
-    {{-- Title + Meta --}}
-    <div class="flex items-start justify-between gap-6 mb-8">
-      <div>
-        <h1 class="text-4xl font-black text-gray-900 tracking-widest uppercase">Invoice</h1>
-        <p class="mono text-sm text-gray-500 mt-1.5 tracking-wider">{{ $invoice->invoice_number }}</p>
-        @if($invoice->spk_number)
-          <p class="text-xs text-gray-400 mt-0.5">No. SPK: {{ $invoice->spk_number }}</p>
+    {{-- Dua kolom: kiri address, kanan meta --}}
+    <table style="width:100%;border-collapse:collapse">
+      <tr>
+        <td style="width:50%;vertical-align:top;padding-right:2rem">
+          <table style="border-collapse:collapse">
+            @if($invoice->client?->address)
+            <tr>
+              <td style="font-weight:700;color:#111827;padding-right:0.5rem;padding-bottom:0.5rem;vertical-align:top;white-space:nowrap">Address</td>
+              <td style="padding-bottom:0.5rem;vertical-align:top;color:#374151">: {{ $invoice->client->address }}@if($invoice->client->city), {{ $invoice->client->city }}@endif</td>
+            </tr>
+            @endif
+            @if($invoice->attention)
+            <tr>
+              <td style="font-weight:700;color:#111827;padding-right:0.5rem;vertical-align:top;white-space:nowrap">Attention</td>
+              <td style="vertical-align:top;color:#374151">: {{ $invoice->attention }}</td>
+            </tr>
+            @endif
+          </table>
+        </td>
+        <td style="width:50%;vertical-align:top">
+          <table style="border-collapse:collapse;margin-left:auto">
+            <tr>
+              <td style="font-weight:700;color:#111827;padding-right:0.5rem;padding-bottom:0.4rem;white-space:nowrap">No Invoice</td>
+              <td style="padding-bottom:0.4rem;color:#374151">: {{ $invoice->invoice_number }}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:#111827;padding-right:0.5rem;padding-bottom:0.4rem;white-space:nowrap">Invoice Date</td>
+              <td style="padding-bottom:0.4rem;color:#374151">: {{ $tgl($invoice->issue_date) }}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:#111827;padding-right:0.5rem;padding-bottom:0.4rem;white-space:nowrap">Due Date</td>
+              <td style="padding-bottom:0.4rem;color:#374151">: {{ $tgl($invoice->due_date) }}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:#111827;padding-right:0.5rem;white-space:nowrap">SPK No</td>
+              <td style="color:#374151">: {{ $invoice->spk_number ?? '-' }}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  {{-- ITEMS TABLE --}}
+  <div style="margin:0.5rem 2.5rem 0 2.5rem;background:#f9fafb;border-radius:0.75rem;overflow:hidden;border:1px solid #e5e7eb">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:0.6rem 1rem 0.5rem 1rem;font-size:0.875rem;font-weight:700;color:#2563eb">Description</th>
+          <th style="text-align:right;padding:0.6rem 1rem 0.5rem 1rem;font-size:0.875rem;font-weight:700;color:#2563eb;width:10rem">Price</th>
+        </tr>
+        <tr>
+          <td colspan="2" style="padding:0 0.75rem">
+            <div style="border-bottom:2px solid #2563eb"></div>
+          </td>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach($invoice->items as $item)
+        <tr style="border-bottom:1px solid #e5e7eb">
+          <td style="padding:0.75rem 1rem;font-size:0.875rem;color:#1f2937">{{ $item->description }}</td>
+          <td style="padding:0.75rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937">Rp {{ number_format($item->amount, 2, ',', '.') }}</td>
+        </tr>
+        @endforeach
+      </tbody>
+      <tfoot>
+        <tr style="border-top:1px solid #e5e7eb">
+          <td colspan="2" style="padding:0.6rem 1rem;text-align:right;font-size:0.875rem;color:#6b7280">
+            Sub Total &nbsp;&nbsp;&nbsp;
+            <span style="font-family:'Courier New',monospace;color:#1f2937">Rp {{ number_format($invoice->subtotal, 2, ',', '.') }}</span>
+          </td>
+        </tr>
+        @if($invoice->tax_percentage)
+        <tr>
+          <td colspan="2" style="padding:0.1rem 1rem;text-align:right;font-size:0.875rem;color:#6b7280">
+            Pajak {{ $invoice->tax_percentage }}% &nbsp;&nbsp;&nbsp;
+            <span style="font-family:'Courier New',monospace;color:#1f2937">Rp {{ number_format($invoice->tax_amount, 2, ',', '.') }}</span>
+          </td>
+        </tr>
+        @endif
+        <tr>
+          <td colspan="2" style="padding:0.25rem 0.75rem 0.75rem 0.75rem;text-align:right">
+            <span style="display:inline-flex;align-items:center;gap:2rem;background:#1d4ed8;border-radius:0.5rem;padding:0.6rem 1.25rem;font-weight:900;color:white">
+              <span style="font-size:0.875rem;letter-spacing:0.05em;text-transform:uppercase">TOTAL</span>
+              <span style="font-size:1rem;font-family:'Courier New',monospace">Rp {{ number_format($invoice->total, 2, ',', '.') }}</span>
+            </span>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {{-- PAYMENT + SIGNATURE --}}
+  <div style="display:flex;align-items:flex-start;gap:2rem;padding:2rem 2.5rem 2rem 2.5rem">
+
+    {{-- Payment Method --}}
+    <div style="flex:1">
+      <p style="font-weight:700;font-size:0.9rem;color:#111827;margin-bottom:0.6rem">Payment Method</p>
+
+      <p style="font-size:0.8rem;color:#4b5563;line-height:1.5">
+        Pembayaran dapat dilakukan melalui transfer atau setoran<br/>tunai ke {{ $invoice->bankAccount->bank_name }}
+      </p>
+      @if($invoice->bankAccount)
+        <p style="font-size:0.875rem;font-weight:700;color:#111827;margin-top:0.2rem;margin-bottom:0.25rem">{{ $invoice->documentIssuer?->name ?? $invoice->bankAccount->bank_name }}</p>
+        <p style="font-size:0.875rem;color:#1d4ed8;font-weight:600;margin-bottom:0.6rem;font-family:'Courier New',monospace">
+          {{ $invoice->bankAccount->account_number }}
+          <span style="font-family:Arial,sans-serif;font-weight:400;color:#9ca3af;font-size:0.8rem">(atas nama {{ $invoice->bankAccount->name }})</span>
+        </p>
+      @endif
+
+      @if($invoice->documentIssuer?->tax_id_number)
+        <p style="font-size:0.875rem;font-weight:700;color:#111827">NPWP : {{ $invoice->documentIssuer->tax_id_number }}</p>
+        <p style="font-size:0.875rem;font-weight:700;color:#111827">{{ $invoice->documentIssuer->name }}</p>
+      @endif
+      @if($invoice->documentIssuer?->tax_id_address)
+        <p style="font-size:0.75rem;color:#6b7280;margin-top:0.15rem">{{ $invoice->documentIssuer->tax_id_address }}</p>
+      @endif
+    </div>
+
+    {{-- Signature --}}
+    @if($invoice->with_signature && $invoice->signature)
+    <div style="text-align:center;min-width:200px;flex-shrink:0">
+      <div style="height:80px;display:flex;align-items:center;justify-content:center">
+        @if($sig)
+          <img src="{{ $sig }}" style="max-height:80px;max-width:200px;object-fit:contain" alt="TTD"/>
         @endif
       </div>
-      <div class="shrink-0 text-right">
-        <table class="text-sm" style="border-spacing:0 5px;border-collapse:separate;">
-          <tr>
-            <td class="text-xs text-gray-400 font-medium pr-4 text-right whitespace-nowrap">Issue Date</td>
-            <td class="font-semibold text-gray-700">{{ $tgl($invoice->issue_date) }}</td>
-          </tr>
-          <tr>
-            <td class="text-xs text-gray-400 font-medium pr-4 text-right whitespace-nowrap">Due Date</td>
-            <td class="font-bold text-red-600">{{ $tgl($invoice->due_date) }}</td>
-          </tr>
-          @if($invoice->projectCategory)
-          <tr>
-            <td class="text-xs text-gray-400 font-medium pr-4 text-right whitespace-nowrap">Project</td>
-            <td class="text-gray-600">{{ $invoice->projectCategory->name }}</td>
-          </tr>
-          @endif
-        </table>
-      </div>
-    </div>
-
-    <hr class="border-gray-300 mb-7"/>
-
-    {{-- Kepada --}}
-    <div class="mb-7">
-      <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Kepada Yth.</p>
-      <p class="text-lg font-bold text-gray-900">{{ $invoice->client?->company_name }}</p>
-      @if($invoice->client?->address)
-        <p class="text-sm text-gray-600 mt-1 leading-relaxed">{{ $invoice->client->address }}@if($invoice->client->city), {{ $invoice->client->city }}@endif</p>
+      <div style="border-bottom:1px solid #374151;margin:0.25rem 1rem 0.4rem 1rem"></div>
+      <p style="font-weight:700;font-size:0.875rem;color:#111827">{{ $invoice->signature->name }}</p>
+      <p style="font-size:0.75rem;color:#6b7280;margin-top:0.1rem">{{ $invoice->signature->position }}</p>
+      @if($invoice->documentIssuer)
+      <p style="font-size:0.75rem;color:#6b7280;margin-top:0.1rem">{{ $invoice->documentIssuer->name }}</p>
       @endif
-      @if($invoice->attention)
-        <p class="text-sm text-gray-500 mt-2">u.p. <span class="font-semibold text-gray-700">{{ $invoice->attention }}</span></p>
-      @endif
-    </div>
-
-    {{-- Notes --}}
-    @if($invoice->notes)
-    <div class="mb-7">
-      <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Keterangan</p>
-      <div class="border-l-4 border-gray-200 pl-4">
-        <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{{ $invoice->notes }}</p>
-      </div>
     </div>
     @endif
 
-    <hr class="border-gray-200 mb-7"/>
-
-    {{-- Items --}}
-    <div class="mb-8">
-      <table class="w-full">
-        <thead>
-          <tr class="border-b-2 border-gray-800">
-            <th class="text-left text-xs font-bold text-gray-500 uppercase tracking-wider pb-2.5 w-8">No</th>
-            <th class="text-left text-xs font-bold text-gray-500 uppercase tracking-wider pb-2.5">Deskripsi</th>
-            <th class="text-right text-xs font-bold text-gray-500 uppercase tracking-wider pb-2.5 w-48">Harga</th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach($invoice->items as $i => $item)
-          <tr class="border-b border-gray-100{{ $loop->last ? ' border-gray-300' : '' }}">
-            <td class="py-3 text-sm text-gray-400 pr-3">{{ $i + 1 }}</td>
-            <td class="py-3 text-sm text-gray-800 pr-6">{{ $item->description }}</td>
-            <td class="py-3 text-sm text-right mono text-gray-800">Rp {{ number_format($item->amount, 0, ',', '.') }}</td>
-          </tr>
-          @endforeach
-        </tbody>
-      </table>
-      <div class="mt-5 pt-4 border-t-2 border-gray-800 flex justify-end">
-        <div class="text-right">
-          <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total</p>
-          <p class="text-2xl font-black text-gray-900">Rp {{ number_format($invoice->total, 0, ',', '.') }}</p>
-        </div>
-      </div>
-    </div>
-
-    <hr class="border-gray-200 mb-7"/>
-
-    {{-- Bank + Signature --}}
-    <div class="flex items-end justify-between gap-10">
-
-      @if($invoice->bankAccount)
-      <div>
-        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Pembayaran Ke</p>
-        <div class="flex items-center gap-3 mb-2">
-          @if($logoImg)
-          <div class="w-12 h-12 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-center p-1.5 shrink-0">
-            <img src="{{ $logoImg }}" class="w-full h-full object-contain"/>
-          </div>
-          @endif
-          <div>
-            <p class="font-bold text-gray-900">{{ $invoice->bankAccount->bank_name }}</p>
-            <p class="text-xs text-gray-500">a/n {{ $invoice->bankAccount->name }}</p>
-          </div>
-        </div>
-        <div class="inline-flex items-center gap-2 border border-gray-200 rounded-lg px-4 py-2 bg-gray-50">
-          <span class="text-xs font-black text-gray-300">#</span>
-          <span class="mono font-bold text-gray-800 tracking-widest">{{ $invoice->bankAccount->account_number }}</span>
-        </div>
-      </div>
-      @else
-      <div></div>
-      @endif
-
-      @if($invoice->with_signature && $invoice->signature)
-      <div class="text-center" style="min-width:180px">
-        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Hormat Kami,</p>
-        <div class="flex items-center justify-center" style="height:80px">
-          @if($sigImg)
-            <img src="{{ $sigImg }}" class="max-h-full object-contain" style="max-width:180px" alt="TTD"/>
-          @endif
-        </div>
-        <div class="border-b border-gray-500 mt-1 mb-2 mx-4"></div>
-        <p class="font-bold text-gray-900 text-sm">{{ $invoice->signature->name }}</p>
-        <p class="text-xs text-gray-500 mt-0.5">{{ $invoice->signature->position }}</p>
-      </div>
-      @endif
-
-    </div>
   </div>
-
-  {{-- Footer --}}
-  @if($invoice->documentIssuer && ($invoice->documentIssuer->tax_id_name || $invoice->documentIssuer->tax_id_address))
-  <div class="border-t-2 border-gray-800 py-3 text-center px-20">
-    <p class="text-xs text-gray-500 leading-relaxed">
-      @if($invoice->documentIssuer->tax_id_name){{ $invoice->documentIssuer->tax_id_name }}@endif
-      @if($invoice->documentIssuer->tax_id_name && $invoice->documentIssuer->tax_id_address) &nbsp;|&nbsp; @endif
-      @if($invoice->documentIssuer->tax_id_address){{ $invoice->documentIssuer->tax_id_address }}@endif
-      @if($invoice->documentIssuer->tax_id_number)&nbsp;&nbsp;NPWP: {{ $invoice->documentIssuer->tax_id_number }}@endif
-    </p>
-  </div>
-  @endif
 
 </div>
+
+@if($printMode ?? false)
+<div class="no-print" style="position:fixed;bottom:2rem;right:2rem;z-index:999">
+  <button onclick="window.print()"
+    style="display:inline-flex;align-items:center;gap:0.5rem;background:#1d4ed8;color:white;font-family:Arial,sans-serif;font-size:0.875rem;font-weight:600;padding:0.625rem 1.25rem;border-radius:0.75rem;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(29,78,216,0.4)">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print Invoice
+  </button>
+</div>
+@endif
+
 </body>
 </html>

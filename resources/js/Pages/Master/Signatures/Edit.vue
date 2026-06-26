@@ -70,6 +70,6 @@ import ImageUpload from '@/Components/ImageUpload.vue';
 import { Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({ signature: Object });
-const form = useForm({ name: props.signature.name, position: props.signature.position, signature_image: null });
-function submit() { form.post(route('master.signatures.update', props.signature.id), { _method: 'put' }); }
+const form = useForm({ _method: 'put', name: props.signature.name, position: props.signature.position, signature_image: null });
+function submit() { form.post(route('master.signatures.update', props.signature.id)); }
 </script>

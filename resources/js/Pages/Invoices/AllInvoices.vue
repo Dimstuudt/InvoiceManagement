@@ -63,7 +63,7 @@
             </thead>
             <tbody class="divide-y divide-indigo-50/50">
               <tr v-for="invoice in priorityInvoices" :key="invoice.id"
-                :class="invoice.is_marked ? 'bg-amber-50/60' : 'hover:bg-indigo-50/30'"
+                :class="invoice.is_marked ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-indigo-50/30'"
                 class="transition-colors group">
                 <!-- Checkbox -->
                 <td class="px-4 py-4">
@@ -88,9 +88,20 @@
                   <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
                     → {{ fmtDate(invoice.due_date) }}
                   </p>
+                  <span v-if="isPastDue(invoice)"
+                    class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-md">
+                    <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg> lewat {{ daysPastDue(invoice) }} hari
+                  </span>
                 </td>
                 <td class="px-4 py-4 text-right">
                   <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
+                  <span v-if="invoice.tax_percentage"
+                    class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
+                    PPN {{ invoice.tax_percentage }}%
+                  </span>
+                  <span v-else class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs text-gray-300">
+                    No tax
+                  </span>
                 </td>
                 <td class="px-5 py-4">
                   <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
@@ -146,7 +157,7 @@
           </thead>
           <tbody class="divide-y divide-gray-50">
             <tr v-for="invoice in otherInvoices" :key="invoice.id"
-              :class="invoice.is_marked ? 'bg-amber-50/60' : 'hover:bg-gray-50/50'"
+              :class="invoice.is_marked ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50/50'"
               class="transition-colors group">
               <!-- Checkbox -->
               <td class="px-4 py-4">
@@ -170,9 +181,11 @@
                 <p class="text-sm text-gray-700">{{ fmtDate(invoice.issue_date) }}</p>
                 <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
                   → {{ fmtDate(invoice.due_date) }}
-                  <span v-if="isPastDue(invoice)"
-                    class="ml-1 w-1.5 h-1.5 rounded-full bg-red-400 inline-block animate-pulse"/>
                 </p>
+                <span v-if="isPastDue(invoice)"
+                  class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-md">
+                  <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg> lewat {{ daysPastDue(invoice) }} hari
+                </span>
               </td>
               <td class="px-4 py-4 text-right">
                 <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
@@ -242,7 +255,9 @@ const statusClass = (s) => ({
 
 const statusLabel = (s) => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[s] ?? s);
 
-const isPastDue = (inv) => inv.status !== 'paid' && new Date(inv.due_date) < new Date();
+const isPastDue = (inv) => inv.status !== 'paid' && new Date(inv.due_date) < new Date(new Date().toDateString());
+
+const daysPastDue = (inv) => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000);
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })

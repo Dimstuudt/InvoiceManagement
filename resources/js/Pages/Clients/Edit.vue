@@ -159,6 +159,7 @@ const props = defineProps({
 });
 
 const form = useForm({
+  _method: 'put',
   client_category_id: props.client.client_category_id,
   company_name: props.client.company_name,
   address: props.client.address,
@@ -181,6 +182,6 @@ function removeSocialMedia(index) {
 }
 
 function submit() {
-  form.post(route('clients.update', props.client.id), { _method: 'put' });
+  form.post(route('clients.update', props.client.id));
 }
 </script>

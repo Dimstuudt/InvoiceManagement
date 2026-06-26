@@ -78,6 +78,6 @@ import ImageUpload from '@/Components/ImageUpload.vue';
 import { Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({ account: Object });
-const form = useForm({ name: props.account.name, account_number: props.account.account_number, bank_name: props.account.bank_name, bank_logo: null });
-function submit() { form.post(route('master.bank-accounts.update', props.account.id), { _method: 'put' }); }
+const form = useForm({ _method: 'put', name: props.account.name, account_number: props.account.account_number, bank_name: props.account.bank_name, bank_logo: null });
+function submit() { form.post(route('master.bank-accounts.update', props.account.id)); }
 </script>

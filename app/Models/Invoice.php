@@ -9,7 +9,7 @@ class Invoice extends Model
     protected $fillable = [
         'user_id', 'client_id', 'project_category_id', 'document_issuer_id',
         'bank_account_id', 'signature_id', 'with_signature', 'spk_number',
-        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked',
+        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked', 'tax_percentage',
     ];
 
     protected $casts = [
@@ -27,9 +27,20 @@ class Invoice extends Model
     public function signature()       { return $this->belongsTo(Signature::class); }
     public function items()           { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order'); }
 
-    public function getTotalAttribute(): float
+    public function getSubtotalAttribute(): float
     {
         return $this->items->sum('amount');
+    }
+
+    public function getTaxAmountAttribute(): float
+    {
+        if (! $this->tax_percentage) return 0;
+        return $this->subtotal * ($this->tax_percentage / 100);
+    }
+
+    public function getTotalAttribute(): float
+    {
+        return $this->subtotal + $this->tax_amount;
     }
 
     public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate): string

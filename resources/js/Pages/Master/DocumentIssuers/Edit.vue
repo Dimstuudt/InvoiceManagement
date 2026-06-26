@@ -92,6 +92,6 @@ import ImageUpload from '@/Components/ImageUpload.vue';
 import { Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({ issuer: Object });
-const form = useForm({ name: props.issuer.name, header_image: null, tax_id_name: props.issuer.tax_id_name, tax_id_address: props.issuer.tax_id_address, tax_id_number: props.issuer.tax_id_number });
-function submit() { form.post(route('master.document-issuers.update', props.issuer.id), { _method: 'put' }); }
+const form = useForm({ _method: 'put', name: props.issuer.name, header_image: null, tax_id_name: props.issuer.tax_id_name, tax_id_address: props.issuer.tax_id_address, tax_id_number: props.issuer.tax_id_number });
+function submit() { form.post(route('master.document-issuers.update', props.issuer.id)); }
 </script>

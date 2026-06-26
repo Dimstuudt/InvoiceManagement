@@ -20,22 +20,45 @@ class InvoiceController extends Controller
         $clients = Client::where('is_active', true)
             ->with('category')
             ->withCount([
-                'invoices as draft_count'  => fn($q) => $q->where('status', 'draft'),
-                'invoices as sent_count'   => fn($q) => $q->where('status', 'sent'),
-                'invoices as paid_count'   => fn($q) => $q->where('status', 'paid'),
-                'invoices as unpaid_count' => fn($q) => $q->where('status', 'unpaid'),
+                'invoices as draft_count'   => fn($q) => $q->where('status', 'draft'),
+                'invoices as sent_count'    => fn($q) => $q->where('status', 'sent'),
+                'invoices as paid_count'    => fn($q) => $q->where('status', 'paid'),
+                'invoices as unpaid_count'  => fn($q) => $q->where('status', 'unpaid'),
+                'invoices as overdue_count' => fn($q) => $q->whereNotIn('status', ['paid'])->where('due_date', '<', now()),
             ])
+            ->withMax('invoices', 'issue_date')
             ->orderBy('company_name')
             ->get();
 
-        // Hitung jumlah jenis produk (distinct project_category_id) per client
         $productCounts = Invoice::select('client_id', DB::raw('COUNT(DISTINCT project_category_id) as count'))
             ->groupBy('client_id')
             ->pluck('count', 'client_id');
 
-        $clients->each(fn($c) => $c->product_type_count = $productCounts[$c->id] ?? 0);
+        $unpaidAmounts = Invoice::select('client_id', DB::raw('SUM(invoice_items.amount) as total'))
+            ->join('invoice_items', 'invoices.id', '=', 'invoice_items.invoice_id')
+            ->where('status', 'unpaid')
+            ->groupBy('client_id')
+            ->pluck('total', 'client_id');
 
-        return Inertia::render('Invoices/Index', compact('clients'));
+        $totalAmounts = Invoice::select('client_id', DB::raw('SUM(invoice_items.amount) as total'))
+            ->join('invoice_items', 'invoices.id', '=', 'invoice_items.invoice_id')
+            ->groupBy('client_id')
+            ->pluck('total', 'client_id');
+
+        $clients->each(function ($c) use ($productCounts, $unpaidAmounts, $totalAmounts) {
+            $c->product_type_count = $productCounts[$c->id] ?? 0;
+            $c->unpaid_amount      = (float) ($unpaidAmounts[$c->id] ?? 0);
+            $c->total_amount       = (float) ($totalAmounts[$c->id] ?? 0);
+        });
+
+        $summary = [
+            'total_outstanding' => $unpaidAmounts->sum(),
+            'total_overdue'     => $clients->sum('overdue_count'),
+            'total_unpaid'      => $clients->sum('unpaid_count'),
+            'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->unpaid_count)),
+        ];
+
+        return Inertia::render('Invoices/Index', compact('clients', 'summary'));
     }
 
     public function all(Request $request)
@@ -79,7 +102,7 @@ class InvoiceController extends Controller
     {
         $client->load('category');
 
-        $invoices = Invoice::with(['projectCategory', 'user'])
+        $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user'])
             ->withSum('items', 'amount')
             ->where('client_id', $client->id)
             ->orderByDesc('issue_date')
@@ -125,6 +148,7 @@ class InvoiceController extends Controller
             'attention'           => 'nullable|string|max:255',
             'notes'               => 'nullable|string',
             'status'              => 'required|in:draft,sent,paid,unpaid',
+            'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'items'               => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
             'items.*.amount'      => 'required|numeric|min:0',
@@ -160,7 +184,11 @@ class InvoiceController extends Controller
         ]);
 
         return Inertia::render('Invoices/Show', [
-            'invoice' => array_merge($invoice->toArray(), ['total' => $invoice->total]),
+            'invoice' => array_merge($invoice->toArray(), [
+                'subtotal'   => $invoice->subtotal,
+                'tax_amount' => $invoice->tax_amount,
+                'total'      => $invoice->total,
+            ]),
         ]);
     }
 
@@ -221,6 +249,7 @@ class InvoiceController extends Controller
             'attention'           => 'nullable|string|max:255',
             'notes'               => 'nullable|string',
             'status'              => 'required|in:draft,sent,paid,unpaid',
+            'tax_percentage'      => 'nullable|numeric|min:0|max:100',
         ]);
 
         // Regenerate invoice number jika issue_date atau project_category berubah
@@ -326,6 +355,56 @@ class InvoiceController extends Controller
 
         return redirect()->route('invoices.show', $invoice->id)
             ->with('success', "Invoice berhasil dikirim ke {$validated['to']}.");
+    }
+
+    public function download(Invoice $invoice)
+    {
+        $invoice->load([
+            'client', 'projectCategory', 'documentIssuer',
+            'bankAccount', 'signature', 'items', 'user',
+        ]);
+
+        $html      = view('invoices.pdf', ['invoice' => $invoice, 'imgB64' => fn($url) => $this->urlToBase64($url)])->render();
+        $pdf       = base64_decode(app(\App\Services\PdfService::class)->generate($html));
+        $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
+
+        return response($pdf)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    public function printView(Invoice $invoice)
+    {
+        $invoice->load([
+            'client', 'projectCategory', 'documentIssuer',
+            'bankAccount', 'signature', 'items', 'user',
+        ]);
+
+        return view('invoices.pdf', [
+            'invoice'   => $invoice,
+            'imgB64'    => fn($url) => $this->urlToBase64($url),
+            'printMode' => true,
+        ]);
+    }
+
+    public function receipt(Invoice $invoice)
+    {
+        $invoice->load([
+            'client', 'projectCategory', 'documentIssuer',
+            'bankAccount', 'signature', 'items', 'user',
+        ]);
+
+        return view('invoices.receipt', [
+            'invoice' => $invoice,
+            'imgB64'  => fn($url) => $this->urlToBase64($url),
+        ]);
+    }
+
+    public function updateTax(Request $request, Invoice $invoice)
+    {
+        $request->validate(['tax_percentage' => 'nullable|numeric|min:0|max:100']);
+        $invoice->update(['tax_percentage' => $request->tax_percentage]);
+        return back()->with('success', 'Pajak diperbarui.');
     }
 
     public function toggleMark(Invoice $invoice)

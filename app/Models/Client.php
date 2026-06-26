@@ -28,6 +28,11 @@ class Client extends Model
         return $this->hasMany(ClientSocialMedia::class);
     }
 
+    public function emails()
+    {
+        return $this->hasMany(ClientEmail::class);
+    }
+
     public function invoices()
     {
         return $this->hasMany(Invoice::class)->orderByDesc('issue_date');

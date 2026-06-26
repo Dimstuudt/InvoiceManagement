@@ -75,6 +75,30 @@
             </button>
           </div>
 
+          <!-- Emails -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <div class="space-y-2">
+              <div v-for="(email, i) in form.emails" :key="i" class="flex gap-2">
+                <input v-model="form.emails[i]" type="email" placeholder="email@perusahaan.com"
+                  class="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                <button type="button" @click="removeEmail(i)" v-if="form.emails.length > 1"
+                  class="px-3 py-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <button type="button" @click="form.emails.push('')"
+              class="mt-2 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Tambah Email
+            </button>
+          </div>
+
           <!-- Social Media -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Social Media</label>
@@ -167,6 +191,7 @@ const form = useForm({
   director: props.client.director,
   pic: props.client.pic,
   phones: props.client.phones.length ? props.client.phones : [''],
+  emails: props.client.emails.length ? props.client.emails : [''],
   social_media: props.client.social_media.length ? props.client.social_media : [''],
   npwp_image: null,
   client_status: props.client.client_status,
@@ -175,6 +200,10 @@ const form = useForm({
 
 function removePhone(index) {
   form.phones.splice(index, 1);
+}
+
+function removeEmail(index) {
+  form.emails.splice(index, 1);
 }
 
 function removeSocialMedia(index) {

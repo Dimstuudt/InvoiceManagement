@@ -50,6 +50,8 @@ class ClientController extends Controller
             'is_active'          => 'boolean',
             'phones'             => 'nullable|array',
             'phones.*'           => 'nullable|string|max:20',
+            'emails'             => 'nullable|array',
+            'emails.*'           => 'nullable|email|max:255',
             'social_media'       => 'nullable|array',
             'social_media.*'     => 'nullable|string|max:255',
         ]);
@@ -63,6 +65,7 @@ class ClientController extends Controller
         $client = Client::create($data);
 
         $this->syncPhones($client, $request->phones ?? []);
+        $this->syncEmails($client, $request->emails ?? []);
         $this->syncSocialMedia($client, $request->social_media ?? []);
 
         return redirect()->route('clients.index')->with('success', 'Client berhasil ditambahkan.');
@@ -70,13 +73,14 @@ class ClientController extends Controller
 
     public function edit(Client $client)
     {
-        $client->load('phones', 'socialMedia');
+        $client->load('phones', 'emails', 'socialMedia');
 
         return Inertia::render('Clients/Edit', [
             'client'     => [
                 ...$client->toArray(),
                 'npwp_image_url' => $client->npwp_image ? Storage::url($client->npwp_image) : null,
                 'phones'         => $client->phones->pluck('phone_number')->toArray(),
+                'emails'         => $client->emails->pluck('email')->toArray(),
                 'social_media'   => $client->socialMedia->pluck('url')->toArray(),
             ],
             'categories' => ClientCategory::orderBy('name')->get(['id', 'name']),
@@ -97,6 +101,8 @@ class ClientController extends Controller
             'is_active'          => 'boolean',
             'phones'             => 'nullable|array',
             'phones.*'           => 'nullable|string|max:20',
+            'emails'             => 'nullable|array',
+            'emails.*'           => 'nullable|email|max:255',
             'social_media'       => 'nullable|array',
             'social_media.*'     => 'nullable|string|max:255',
         ]);
@@ -113,6 +119,7 @@ class ClientController extends Controller
         $client->update($data);
 
         $this->syncPhones($client, $request->phones ?? []);
+        $this->syncEmails($client, $request->emails ?? []);
         $this->syncSocialMedia($client, $request->social_media ?? []);
 
         return redirect()->route('clients.index')->with('success', 'Client berhasil diupdate.');
@@ -135,6 +142,15 @@ class ClientController extends Controller
         $filtered = array_values(array_filter($phones, fn($p) => trim($p) !== ''));
         foreach ($filtered as $phone) {
             $client->phones()->create(['phone_number' => trim($phone)]);
+        }
+    }
+
+    private function syncEmails(Client $client, array $emails): void
+    {
+        $client->emails()->delete();
+        $filtered = array_values(array_filter($emails, fn($e) => trim($e) !== ''));
+        foreach ($filtered as $email) {
+            $client->emails()->create(['email' => trim($email)]);
         }
     }
 

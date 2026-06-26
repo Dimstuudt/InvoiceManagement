@@ -5,28 +5,35 @@
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-lg font-semibold text-gray-800">Bank Accounts</h2>
-          <p class="text-sm text-gray-500 mt-0.5">{{ accounts.length }} akun terdaftar</p>
+          <h2 class="text-base font-semibold text-gray-900">Bank Accounts</h2>
+          <p class="text-sm text-gray-400 mt-0.5">{{ accounts.length }} akun terdaftar</p>
         </div>
         <Link :href="route('master.bank-accounts.create')"
-          class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
-          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
           </svg>
-          Tambah Bank
+          Tambah
         </Link>
       </div>
 
       <!-- Empty state -->
       <div v-if="accounts.length === 0"
-        class="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-200">
-        <div class="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-          <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        class="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
+          <svg class="w-6 h-6 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
           </svg>
         </div>
         <p class="text-sm font-medium text-gray-500">Belum ada bank account</p>
-        <p class="text-xs text-gray-400 mt-1">Tambahkan rekening bank pertama kamu</p>
+        <p class="text-xs text-gray-400 mt-1 mb-5">Tambahkan rekening bank pertama kamu</p>
+        <Link :href="route('master.bank-accounts.create')"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Tambah Bank
+        </Link>
       </div>
 
       <!-- Cards Grid -->
@@ -39,20 +46,18 @@
             <img v-if="acc.bank_logo_url"
               :src="acc.bank_logo_url"
               class="max-h-16 max-w-[60%] object-contain"
-              :alt="acc.bank_name" />
+              :alt="acc.bank_name"/>
             <div v-else
               class="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center">
-              <span class="text-xl font-bold text-gray-400">{{ acc.bank_name.charAt(0) }}</span>
+              <span class="text-xl font-bold text-gray-300">{{ acc.bank_name.charAt(0) }}</span>
             </div>
           </div>
 
           <!-- Content -->
           <div class="p-5 flex-1 flex flex-col">
-            <!-- Bank Name -->
-            <p class="text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1">{{ acc.bank_name }}</p>
+            <p class="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest mb-1">{{ acc.bank_name }}</p>
             <h3 class="text-sm font-semibold text-gray-900 mb-4 leading-snug">{{ acc.name }}</h3>
 
-            <!-- Account Number -->
             <div class="bg-gray-50 rounded-xl px-4 py-3 flex-1 flex items-center justify-between">
               <span class="text-xs text-gray-400">No. Rekening</span>
               <span class="text-sm font-mono font-semibold text-gray-800 tracking-wide">{{ acc.account_number }}</span>
@@ -61,11 +66,17 @@
             <!-- Actions -->
             <div class="flex gap-2 mt-4 pt-4 border-t border-gray-100">
               <Link :href="route('master.bank-accounts.edit', acc.id)"
-                class="flex-1 text-center py-2 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg border border-indigo-100 hover:border-indigo-200 transition-colors">
+                class="flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg border border-indigo-100 hover:border-indigo-200 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414A2 2 0 019 13z"/>
+                </svg>
                 Edit
               </Link>
               <button @click="destroy(acc)"
-                class="flex-1 py-2 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-red-100 hover:border-red-200 transition-colors">
+                class="flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-red-100 hover:border-red-200 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
                 Hapus
               </button>
             </div>
@@ -73,6 +84,7 @@
 
         </div>
       </div>
+
     </div>
   </AppLayout>
 </template>

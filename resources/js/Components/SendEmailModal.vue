@@ -12,7 +12,13 @@
           <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
             <div>
               <p class="text-sm font-semibold text-gray-800">Kirim Invoice via Email</p>
-              <p class="text-xs text-gray-400 font-mono mt-0.5">{{ invoice?.invoice_number }}</p>
+              <div class="flex items-center gap-2 mt-0.5">
+                <p class="text-xs text-gray-400 font-mono">{{ invoice?.invoice_number }}</p>
+                <span v-if="invoice?.interval_months"
+                  class="inline-flex items-center gap-0.5 text-xs font-medium text-violet-600 bg-violet-50 ring-1 ring-violet-200 px-1.5 py-0.5 rounded-md">
+                  ↻ {{ invoice.interval_months }} bln
+                </span>
+              </div>
             </div>
             <button @click="$emit('close')" class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

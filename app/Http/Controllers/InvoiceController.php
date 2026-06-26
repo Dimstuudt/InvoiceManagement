@@ -71,7 +71,7 @@ class InvoiceController extends Controller
         // Invoice yang issue_date = bulan berikutnya dari bulan referensi
         $next = Carbon::create($year, $month, 1)->addMonth();
 
-        $with = ['client.emails', 'projectCategory', 'user'];
+        $with = ['client.emails', 'projectCategory', 'user', 'bankAccount', 'documentIssuer', 'emailTemplate'];
 
         $priorityInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
@@ -156,6 +156,7 @@ class InvoiceController extends Controller
             'notes'               => 'nullable|string',
             'status'              => 'required|in:draft,sent,paid,unpaid',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
+            'interval_months'     => 'nullable|integer|min:1|max:12',
             'items'               => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
             'items.*.amount'      => 'required|numeric|min:0',
@@ -188,6 +189,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client.emails', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'emailTemplate',
+            'parent', 'children',
         ]);
 
         return Inertia::render('Invoices/Show', [
@@ -398,11 +400,73 @@ class InvoiceController extends Controller
         return back()->with('success', $invoice->is_marked ? 'Invoice ditandai.' : 'Tanda dihapus.');
     }
 
+    public function updateInterval(Request $request, Invoice $invoice)
+    {
+        $request->validate(['interval_months' => 'nullable|integer|min:1|max:12']);
+        $invoice->update(['interval_months' => $request->interval_months]);
+        return back()->with('success', 'Interval diperbarui.');
+    }
+
+    public function updateMeta(Request $request, Invoice $invoice)
+    {
+        $request->validate([
+            'attention' => 'nullable|string|max:255',
+            'notes'     => 'nullable|string',
+        ]);
+        $invoice->update($request->only('attention', 'notes'));
+        return back()->with('success', 'Disimpan.');
+    }
+
     public function updateStatus(Request $request, Invoice $invoice)
     {
         $request->validate(['status' => 'required|in:draft,sent,paid,unpaid']);
         $invoice->update(['status' => $request->status]);
+        $invoice->refresh();
+
+        if ($request->status === 'paid' && $invoice->interval_months && $invoice->children()->doesntExist()) {
+            $this->generateRecurring($invoice);
+            return back()->with('success', 'Invoice lunas. Invoice perpanjangan dibuat sebagai draft.');
+        }
+
         return back()->with('success', 'Status diperbarui.');
+    }
+
+    private function generateRecurring(Invoice $parent): void
+    {
+        $parent->load('items', 'projectCategory');
+
+        $issueDate = Carbon::parse($parent->due_date)->addDay();
+        $dueDate   = $issueDate->copy()->addMonths($parent->interval_months);
+
+        $number = Invoice::generateNumber($parent->projectCategory->code, $issueDate);
+
+        $child = Invoice::create([
+            'user_id'             => $parent->user_id,
+            'client_id'           => $parent->client_id,
+            'project_category_id' => $parent->project_category_id,
+            'document_issuer_id'  => $parent->document_issuer_id,
+            'bank_account_id'     => $parent->bank_account_id,
+            'signature_id'        => $parent->signature_id,
+            'email_template_id'   => $parent->email_template_id,
+            'with_signature'      => $parent->with_signature,
+            'attention'           => $parent->attention,
+            'notes'               => $parent->notes,
+            'invoice_number'      => $number,
+            'issue_date'          => $issueDate,
+            'due_date'            => $dueDate,
+            'status'              => 'draft',
+            'tax_percentage'      => $parent->tax_percentage,
+            'interval_months'     => $parent->interval_months,
+            'parent_invoice_id'   => $parent->id,
+        ]);
+
+        foreach ($parent->items as $item) {
+            $child->items()->create([
+                'description' => $item->description,
+                'amount'      => $item->amount,
+                'sort_order'  => $item->sort_order,
+            ]);
+        }
     }
 
     private function urlToBase64(?string $url): ?string

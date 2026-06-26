@@ -10,13 +10,15 @@ class Invoice extends Model
         'user_id', 'client_id', 'project_category_id', 'document_issuer_id',
         'bank_account_id', 'signature_id', 'email_template_id', 'with_signature', 'spk_number',
         'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked', 'tax_percentage',
+        'interval_months', 'parent_invoice_id',
     ];
 
     protected $casts = [
-        'issue_date'     => 'date',
-        'due_date'       => 'date',
-        'with_signature' => 'boolean',
-        'is_marked'      => 'boolean',
+        'issue_date'      => 'date',
+        'due_date'        => 'date',
+        'with_signature'  => 'boolean',
+        'is_marked'       => 'boolean',
+        'interval_months' => 'integer',
     ];
 
     public function user()            { return $this->belongsTo(User::class); }
@@ -27,6 +29,8 @@ class Invoice extends Model
     public function signature()       { return $this->belongsTo(Signature::class); }
     public function emailTemplate()   { return $this->belongsTo(EmailTemplate::class); }
     public function items()           { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order'); }
+    public function parent()          { return $this->belongsTo(Invoice::class, 'parent_invoice_id'); }
+    public function children()        { return $this->hasMany(Invoice::class, 'parent_invoice_id'); }
 
     public function getSubtotalAttribute(): float
     {

@@ -82,17 +82,6 @@
               </div>
             </div>
 
-            <!-- Attention + Notes -->
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Attention <span class="text-gray-400 font-normal text-xs ml-1">· opsional</span></label>
-                <input v-model="form.attention" type="text" placeholder="Kepada Yth. ..." class="field" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Notes <span class="text-gray-400 font-normal text-xs ml-1">· opsional</span></label>
-                <input v-model="form.notes" type="text" placeholder="Catatan tambahan" class="field" />
-              </div>
-            </div>
 
             <!-- Dokumen -->
             <div class="border-t border-gray-100 pt-5">
@@ -127,6 +116,29 @@
                 </option>
               </select>
               <p class="text-xs text-gray-400 mt-1.5">Template akan otomatis digunakan saat kirim email invoice ini.</p>
+            </div>
+
+            <!-- Interval Layanan -->
+            <div class="border-t border-gray-100 pt-5">
+              <div class="flex items-start gap-3">
+                <div class="flex-1">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Interval Layanan
+                    <span class="text-gray-400 font-normal text-xs ml-1">· opsional</span>
+                  </label>
+                  <select v-model="form.interval_months" class="field">
+                    <option :value="null">— One-time (tidak berulang) —</option>
+                    <option v-for="n in 12" :key="n" :value="n">{{ n }} bulan</option>
+                  </select>
+                </div>
+                <div v-if="form.interval_months" class="mt-7 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl shrink-0">
+                  <p class="text-xs text-indigo-600 font-medium whitespace-nowrap">
+                    Perpanjang otomatis tiap {{ form.interval_months }} bulan
+                  </p>
+                </div>
+              </div>
+              <p v-if="form.interval_months" class="text-xs text-gray-400 mt-1.5">
+                Saat invoice lunas, sistem akan otomatis membuat invoice perpanjangan sebagai draft.
+              </p>
             </div>
 
             <!-- Signature -->
@@ -235,13 +247,13 @@ const form = useForm({
   bank_account_id:     prefill.bank_account_id     ?? '',
   signature_id:        prefill.signature_id         ?? '',
   email_template_id:   prefill.email_template_id    ?? (props.emailTemplates?.find(t => t.is_default)?.id ?? ''),
+  interval_months:     prefill.interval_months      ?? null,
   with_signature:      prefill.with_signature       ?? false,
   spk_number:          '',
   status:              'draft',
   issue_date:          '',
   due_date:            '',
-  attention:           prefill.attention ?? '',
-  notes:               prefill.notes     ?? '',
+
   items: prefill.items?.length
     ? prefill.items.map(i => ({ description: i.description, amount: i.amount }))
     : [{ description: '', amount: '' }],

@@ -5,7 +5,7 @@
     <div class="no-print -mx-6 -mt-6 mb-0 bg-white border-b border-gray-100 px-6 py-2.5 flex items-center gap-2 min-w-0">
 
       <!-- Kembali -->
-      <Link :href="route('invoices.index')"
+      <Link :href="route(backRoute)"
         class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -27,7 +27,41 @@
           }">
           {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[invoice.status] }}
         </span>
+        <template v-if="invoice.status !== 'paid'">
+          <select :value="localInterval" @change="saveInterval($event.target.value)"
+            class="text-xs border border-indigo-200 bg-indigo-50 text-indigo-600 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
+            <option value="">↻ —</option>
+            <option v-for="n in 12" :key="n" :value="n">↻ {{ n }} bln</option>
+          </select>
+        </template>
+        <span v-else-if="invoice.interval_months"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-500 shrink-0">
+          ↻ {{ invoice.interval_months }} bln
+        </span>
       </div>
+
+      <!-- Genealogi: ikon kompak -->
+      <template v-if="invoice.parent || invoice.children?.length">
+        <div class="w-px h-5 bg-gray-200 shrink-0"/>
+        <div class="flex items-center gap-1 shrink-0">
+          <!-- Parent (warisan dari) -->
+          <Link v-if="invoice.parent" :href="route('invoices.show', invoice.parent.id)"
+            :title="`Warisan dari: ${invoice.parent.invoice_number}`"
+            class="p-1.5 rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+            </svg>
+          </Link>
+          <!-- Child (perpanjangan ke) -->
+          <Link v-if="invoice.children?.length" :href="route('invoices.show', invoice.children[0].id)"
+            :title="`Perpanjangan: ${invoice.children[0].invoice_number}`"
+            class="p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+            </svg>
+          </Link>
+        </div>
+      </template>
 
       <!-- Spacer -->
       <div class="flex-1"/>
@@ -61,14 +95,6 @@
         Edit
       </Link>
 
-      <Link :href="route('invoices.create', { from: invoice.id })"
-        class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition shrink-0">
-        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-        </svg>
-        Perpanjang
-      </Link>
-
       <div class="w-px h-5 bg-gray-200 shrink-0"/>
 
       <!-- GRUP 3: Tandai + Kirim Email -->
@@ -83,7 +109,7 @@
         {{ invoice.is_marked ? 'Ditandai' : 'Tandai' }}
       </button>
 
-      <button @click="emailModal = true"
+      <button v-if="invoice.status !== 'paid'" @click="emailModal = true"
         class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition shrink-0">
         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -160,9 +186,29 @@
                     : {{ invoice.client.address }}<span v-if="invoice.client.city">, {{ invoice.client.city }}</span>
                   </td>
                 </tr>
-                <tr v-if="invoice.attention">
-                  <td class="text-sm font-bold text-gray-900 pr-2 align-top whitespace-nowrap">Attention</td>
-                  <td class="text-sm text-gray-700 align-top">: {{ invoice.attention }}</td>
+                <tr>
+                  <td class="text-sm font-bold text-gray-900 pr-2 align-top whitespace-nowrap pt-0.5">Attention</td>
+                  <td class="text-sm text-gray-700 align-top pt-0.5">:
+                    <template v-if="invoice.status !== 'paid'">
+                      <input v-model="localAttention" @blur="saveMeta"
+                        placeholder="—"
+                        class="no-print ml-1 text-sm text-gray-700 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-400 focus:outline-none transition-colors w-48"/>
+                      <span class="print-only">{{ localAttention || '—' }}</span>
+                    </template>
+                    <span v-else class="ml-1">{{ localAttention || '—' }}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-sm font-bold text-gray-900 pr-2 align-top whitespace-nowrap pt-1">Notes</td>
+                  <td class="text-sm text-gray-700 align-top pt-1">:
+                    <template v-if="invoice.status !== 'paid'">
+                      <input v-model="localNotes" @blur="saveMeta"
+                        placeholder="—"
+                        class="no-print ml-1 text-sm text-gray-700 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-400 focus:outline-none transition-colors w-48"/>
+                      <span class="print-only">{{ localNotes || '—' }}</span>
+                    </template>
+                    <span v-else class="ml-1">{{ localNotes || '—' }}</span>
+                  </td>
                 </tr>
               </table>
             </div>
@@ -216,15 +262,17 @@
               <tr v-for="(item, i) in items" :key="i"
                 class="group border-b border-gray-200 hover:bg-blue-50/30 transition-colors">
                 <td class="px-4 py-2.5 align-middle">
-                  <input v-model="item.description" type="text"
+                  <input v-if="invoice.status !== 'paid'" v-model="item.description" type="text"
                     placeholder="Klik untuk mengedit..."
                     class="w-full text-sm text-gray-800 bg-transparent border-b border-transparent group-hover:border-blue-200 focus:border-blue-400 focus:outline-none py-0.5 transition-colors placeholder:text-gray-300"/>
+                  <span v-else class="text-sm text-gray-800">{{ item.description }}</span>
                 </td>
                 <td class="px-4 py-2.5 align-middle">
-                  <input v-model="item.amount" type="number" min="0"
+                  <input v-if="invoice.status !== 'paid'" v-model="item.amount" type="number" min="0"
                     class="w-full text-sm text-right font-mono text-gray-800 bg-transparent border-b border-transparent group-hover:border-blue-200 focus:border-blue-400 focus:outline-none py-0.5 transition-colors"/>
+                  <span v-else class="block text-sm text-right font-mono text-gray-800">{{ formatCurrency(item.amount) }}</span>
                 </td>
-                <td class="py-2.5 pl-2 align-middle no-print">
+                <td v-if="invoice.status !== 'paid'" class="py-2.5 pl-2 align-middle no-print">
                   <button type="button" @click="removeItem(i)" :disabled="items.length === 1"
                     class="opacity-0 group-hover:opacity-100 disabled:!opacity-0 text-gray-300 hover:text-red-400 transition-all">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,8 +283,8 @@
               </tr>
             </tbody>
             <tfoot>
-              <!-- Tax toggle – no-print -->
-              <tr class="no-print border-t border-gray-200">
+              <!-- Tax toggle – no-print, hanya tampil kalau bukan paid -->
+              <tr v-if="invoice.status !== 'paid'" class="no-print border-t border-gray-200">
                 <td colspan="3" class="px-4 py-2.5">
                   <div class="flex items-center gap-3">
                     <span class="text-xs text-gray-400 font-medium">Tambahkan Pajak</span>
@@ -283,8 +331,8 @@
             </tfoot>
           </table>
 
-          <!-- Add item -->
-          <button type="button" @click="addItem"
+          <!-- Add item – hanya tampil kalau bukan paid -->
+          <button v-if="invoice.status !== 'paid'" type="button" @click="addItem"
             class="no-print px-4 py-2 text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1.5 transition-colors">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -349,16 +397,40 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import SendEmailModal from '@/Components/SendEmailModal.vue'
 import { Link, router } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import Swal from 'sweetalert2'
 
 const props = defineProps({ invoice: Object, emailTemplates: Array })
 
-const emailModal = ref(false)
+const emailModal  = ref(false)
+const backRoute   = ref('invoices.index')
 
-const items       = ref(props.invoice.items.map(i => ({ ...i })))
-const savingItems = ref(false)
-const localTax    = ref(props.invoice.tax_percentage ?? null)
+onMounted(() => {
+  const from = new URLSearchParams(window.location.search).get('from')
+  if (from === 'schedule') backRoute.value = 'invoices.schedule'
+})
+
+const items          = ref(props.invoice.items.map(i => ({ ...i })))
+const savingItems    = ref(false)
+const localTax       = ref(props.invoice.tax_percentage ?? null)
+const localAttention = ref(props.invoice.attention ?? '')
+const localNotes     = ref(props.invoice.notes ?? '')
+const localInterval  = ref(props.invoice.interval_months ?? '')
+
+function saveInterval(val) {
+  localInterval.value = val === '' ? '' : parseInt(val)
+  router.patch(route('invoices.interval', props.invoice.id),
+    { interval_months: val === '' ? null : parseInt(val) },
+    { preserveScroll: true }
+  )
+}
+
+function saveMeta() {
+  router.patch(route('invoices.meta', props.invoice.id),
+    { attention: localAttention.value || null, notes: localNotes.value || null },
+    { preserveScroll: true }
+  )
+}
 
 const subtotal = computed(() =>
   items.value.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)

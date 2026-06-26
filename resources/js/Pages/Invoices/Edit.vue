@@ -72,17 +72,6 @@
               </div>
             </div>
 
-            <!-- Attention + Notes -->
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Attention <span class="text-gray-400 font-normal text-xs ml-1">· opsional</span></label>
-                <input v-model="form.attention" type="text" class="field" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Notes <span class="text-gray-400 font-normal text-xs ml-1">· opsional</span></label>
-                <input v-model="form.notes" type="text" class="field" />
-              </div>
-            </div>
 
             <!-- Dokumen -->
             <div class="border-t border-gray-100 pt-5">
@@ -164,8 +153,7 @@ const form = useForm({
   status:              props.invoice.status,
   issue_date:          props.invoice.issue_date,
   due_date:            props.invoice.due_date,
-  attention:           props.invoice.attention     ?? '',
-  notes:               props.invoice.notes         ?? '',
+
 });
 
 watch(() => form.issue_date, (val, old) => {

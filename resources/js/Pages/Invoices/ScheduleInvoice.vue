@@ -79,6 +79,14 @@
                 <td class="px-4 py-4">
                   <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
                   <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
+                  <span v-if="invoice.interval_months"
+                    class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-xs font-medium rounded-md">
+                    ↻ {{ invoice.interval_months }} bln
+                  </span>
+                  <span v-if="invoice.parent_invoice_id"
+                    class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-500 text-xs font-medium rounded-md">
+                    warisan
+                  </span>
                 </td>
                 <td class="px-4 py-4">
                   <p class="text-sm font-medium text-gray-800">{{ invoice.client?.company_name ?? '-' }}</p>
@@ -105,35 +113,37 @@
                 </td>
                 <td class="px-5 py-4">
                   <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
-                    <Link :href="route('invoices.show', invoice.id)"
+                    <Link :href="route('invoices.show', invoice.id) + '?from=schedule'"
                       class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
                       Lihat
                     </Link>
-                    <span v-if="invoice.is_marked"
-                      class="text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                      title="Matikan tanda centang dulu untuk mengedit">
-                      Edit
-                    </span>
-                    <Link v-else :href="route('invoices.edit', invoice.id)"
-                      class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap">
-                      Edit
-                    </Link>
-                    <button v-if="invoice.is_marked"
-                      @click="openEmailModal(invoice)"
-                      class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
-                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                    <!-- Paid / Unpaid -->
+                    <button v-if="invoice.status === 'sent'"
+                      @click="changeStatus(invoice, 'paid')"
+                      class="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-semibold whitespace-nowrap">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                       </svg>
-                      Kirim Email
+                      Paid
                     </button>
-                    <span v-else
-                      class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                      title="Tandai dulu untuk kirim email">
-                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                      </svg>
-                      Kirim Email
-                    </span>
+                    <template v-if="invoice.status !== 'paid'">
+                      <button v-if="invoice.is_marked"
+                        @click="openEmailModal(invoice)"
+                        class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                        Kirim Email
+                      </button>
+                      <span v-else
+                        class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
+                        title="Tandai dulu untuk kirim email">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                        Kirim Email
+                      </span>
+                    </template>
                     <button @click="deleteInvoice(invoice)"
                       class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
                       Hapus
@@ -189,6 +199,14 @@
               <td class="px-4 py-4">
                 <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
+                <span v-if="invoice.interval_months"
+                  class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-xs font-medium rounded-md">
+                  ↻ {{ invoice.interval_months }} bln
+                </span>
+                <span v-if="invoice.parent_invoice_id"
+                  class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-500 text-xs font-medium rounded-md">
+                  warisan
+                </span>
               </td>
               <td class="px-4 py-4">
                 <p class="text-sm font-medium text-gray-800">{{ invoice.client?.company_name ?? '-' }}</p>
@@ -205,22 +223,29 @@
               </td>
               <td class="px-4 py-4 text-right">
                 <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
+                <span v-if="invoice.tax_percentage"
+                  class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
+                  PPN {{ invoice.tax_percentage }}%
+                </span>
+                <span v-else class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs text-gray-300">
+                  No tax
+                </span>
               </td>
               <td class="px-5 py-4">
                 <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
-                  <Link :href="route('invoices.show', invoice.id)"
+                  <Link :href="route('invoices.show', invoice.id) + '?from=schedule'"
                     class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
                     Lihat
                   </Link>
-                  <span v-if="invoice.is_marked"
-                    class="text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                    title="Matikan tanda centang dulu untuk mengedit">
-                    Edit
-                  </span>
-                  <Link v-else :href="route('invoices.edit', invoice.id)"
-                    class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap">
-                    Edit
-                  </Link>
+                  <!-- Paid -->
+                  <button v-if="invoice.status === 'sent'"
+                    @click="changeStatus(invoice, 'paid')"
+                    class="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-semibold whitespace-nowrap">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Paid
+                  </button>
                   <button v-if="invoice.is_marked"
                     @click="openEmailModal(invoice)"
                     class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
@@ -322,6 +347,10 @@ const fmtCurrency = (v) => v != null
 
 function toggleMark(invoice) {
   router.patch(route('invoices.mark', invoice.id), {}, { preserveScroll: true });
+}
+
+function changeStatus(invoice, status) {
+  router.patch(route('invoices.status', invoice.id), { status }, { preserveScroll: true });
 }
 
 function deleteInvoice(invoice) {

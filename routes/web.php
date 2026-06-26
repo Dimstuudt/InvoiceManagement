@@ -44,6 +44,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('invoices/{invoice}/status', [InvoiceController::class, 'updateStatus'])->name('invoices.status');
     Route::patch('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items');
     Route::patch('invoices/{invoice}/mark', [InvoiceController::class, 'toggleMark'])->name('invoices.mark');
+    Route::patch('invoices/{invoice}/interval', [InvoiceController::class, 'updateInterval'])->name('invoices.interval');
+    Route::patch('invoices/{invoice}/meta', [InvoiceController::class, 'updateMeta'])->name('invoices.meta');
     Route::patch('invoices/{invoice}/tax', [InvoiceController::class, 'updateTax'])->name('invoices.tax');
     Route::get('invoices/{invoice}/receipt', [InvoiceController::class, 'receipt'])->name('invoices.receipt');
     Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');

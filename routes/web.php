@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Master\BankAccountController;
 use App\Http\Controllers\Master\ClientCategoryController;
 use App\Http\Controllers\Master\DocumentIssuerController;
@@ -23,6 +24,10 @@ Route::middleware('guest')->group(function () {
 // App
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
 
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');

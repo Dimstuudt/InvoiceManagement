@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BankAccount;
 use App\Models\Client;
 use App\Models\DocumentIssuer;
+use App\Models\EmailTemplate;
 use App\Models\Invoice;
 use App\Models\ProjectCategory;
 use App\Models\Signature;
@@ -61,7 +62,7 @@ class InvoiceController extends Controller
         return Inertia::render('Invoices/Index', compact('clients', 'summary'));
     }
 
-    public function all(Request $request)
+    public function schedule(Request $request)
     {
         $now  = Carbon::now();
         $month = $request->integer('month', $now->month);
@@ -70,7 +71,7 @@ class InvoiceController extends Controller
         // Invoice yang issue_date = bulan berikutnya dari bulan referensi
         $next = Carbon::create($year, $month, 1)->addMonth();
 
-        $with = ['client', 'projectCategory', 'user'];
+        $with = ['client.emails', 'projectCategory', 'user'];
 
         $priorityInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
@@ -90,25 +91,29 @@ class InvoiceController extends Controller
             ->orderByDesc('issue_date')
             ->get();
 
-        return Inertia::render('Invoices/AllInvoices', [
+        return Inertia::render('Invoices/ScheduleInvoice', [
             'priorityInvoices' => $priorityInvoices,
             'otherInvoices'    => $otherInvoices,
             'nextMonthLabel'   => $next->translatedFormat('F Y'),
             'filters'          => ['month' => $month, 'year' => $year],
+            'emailTemplates'   => EmailTemplate::orderBy('name')->get(['id', 'name', 'subject', 'body', 'is_default']),
         ]);
     }
 
     public function clientInvoices(Client $client)
     {
-        $client->load('category');
+        $client->load('category', 'emails');
 
-        $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user'])
+        $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user', 'emailTemplate'])
             ->withSum('items', 'amount')
             ->where('client_id', $client->id)
             ->orderByDesc('issue_date')
             ->get();
 
-        return Inertia::render('Invoices/ClientInvoices', compact('client', 'invoices'));
+        return Inertia::render('Invoices/ClientInvoices', [
+            'client'   => $client->toArray(),
+            'invoices' => $invoices,
+        ]);
     }
 
     public function create(Request $request)
@@ -129,6 +134,7 @@ class InvoiceController extends Controller
             'documentIssuers'  => DocumentIssuer::all(['id', 'name']),
             'bankAccounts'     => BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
             'signatures'       => Signature::all(['id', 'name', 'position']),
+            'emailTemplates'   => EmailTemplate::orderBy('name')->get(['id', 'name', 'is_default']),
             'fromInvoice'      => $fromInvoice,
         ]);
     }
@@ -141,6 +147,7 @@ class InvoiceController extends Controller
             'document_issuer_id'  => 'required|exists:document_issuers,id',
             'bank_account_id'     => 'required|exists:bank_accounts,id',
             'signature_id'        => 'nullable|exists:signatures,id',
+            'email_template_id'   => 'nullable|exists:email_templates,id',
             'with_signature'      => 'boolean',
             'spk_number'          => 'nullable|string|max:100',
             'issue_date'          => 'required|date',
@@ -179,16 +186,18 @@ class InvoiceController extends Controller
     public function show(Invoice $invoice)
     {
         $invoice->load([
-            'client', 'projectCategory', 'documentIssuer',
-            'bankAccount', 'signature', 'items', 'user',
+            'client.emails', 'projectCategory', 'documentIssuer',
+            'bankAccount', 'signature', 'items', 'user', 'emailTemplate',
         ]);
 
         return Inertia::render('Invoices/Show', [
             'invoice' => array_merge($invoice->toArray(), [
-                'subtotal'   => $invoice->subtotal,
-                'tax_amount' => $invoice->tax_amount,
-                'total'      => $invoice->total,
+                'subtotal'     => $invoice->subtotal,
+                'tax_amount'   => $invoice->tax_amount,
+                'total'        => $invoice->total,
+                'client_emails'=> $invoice->client?->emails->pluck('email')->toArray() ?? [],
             ]),
+            'emailTemplates' => EmailTemplate::orderBy('name')->get(['id', 'name', 'subject', 'body', 'is_default']),
         ]);
     }
 
@@ -283,38 +292,11 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice berhasil dihapus.');
     }
 
-    public function sendEmailForm(Invoice $invoice)
-    {
-        if (! $invoice->is_marked) {
-            return redirect()->route('invoices.show', $invoice->id)
-                ->with('error', 'Aktifkan tanda centang invoice terlebih dahulu sebelum mengirim email.');
-        }
-
-        $invoice->load(['client', 'projectCategory', 'documentIssuer', 'user']);
-
-        $defaultSubject = "Invoice {$invoice->invoice_number}";
-        if ($invoice->projectCategory) {
-            $defaultSubject .= " - {$invoice->projectCategory->name}";
-        }
-
-        $clientName = $invoice->client?->company_name ?? '';
-        $invoiceNumber = $invoice->invoice_number;
-        $dueDate = $invoice->due_date?->translatedFormat('d F Y') ?? '';
-        $total = number_format($invoice->total, 0, ',', '.');
-
-        $defaultBody = "Yth. {$clientName},\n\nBersama email ini kami kirimkan invoice {$invoiceNumber} dengan total tagihan sebesar Rp {$total}.\n\nMohon untuk melakukan pembayaran sebelum tanggal {$dueDate}.\n\nTerlampir file PDF invoice untuk referensi.\n\nTerima kasih atas kepercayaan Anda.\n\nHormat kami,\n{$invoice->user?->name}";
-
-        return Inertia::render('Invoices/SendEmail', [
-            'invoice'        => array_merge($invoice->toArray(), ['total' => $invoice->total]),
-            'defaultSubject' => $defaultSubject,
-            'defaultBody'    => $defaultBody,
-        ]);
-    }
-
     public function sendEmail(Request $request, Invoice $invoice)
     {
         $validated = $request->validate([
-            'to'      => 'required|email',
+            'emails'  => 'required|array|min:1',
+            'emails.*'=> 'required|email',
             'subject' => 'required|string|max:255',
             'body'    => 'required|string',
         ]);
@@ -330,6 +312,8 @@ class InvoiceController extends Controller
         $pdfBase64 = app(\App\Services\PdfService::class)->generate($html);
         $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
 
+        $toList = array_map(fn($e) => ['email' => $e], $validated['emails']);
+
         $response = \Illuminate\Support\Facades\Http::withHeaders([
             'api-key'      => config('services.brevo.key'),
             'Content-Type' => 'application/json',
@@ -338,7 +322,7 @@ class InvoiceController extends Controller
                 'name'  => config('services.brevo.sender_name'),
                 'email' => config('services.brevo.sender_email'),
             ],
-            'to'          => [['email' => $validated['to']]],
+            'to'          => $toList,
             'subject'     => $validated['subject'],
             'textContent' => $validated['body'],
             'attachment'  => [[
@@ -353,8 +337,9 @@ class InvoiceController extends Controller
 
         $invoice->update(['status' => 'sent', 'is_marked' => false]);
 
-        return redirect()->route('invoices.show', $invoice->id)
-            ->with('success', "Invoice berhasil dikirim ke {$validated['to']}.");
+        $emailList = implode(', ', $validated['emails']);
+
+        return back()->with('success', "Invoice berhasil dikirim ke {$emailList}.");
     }
 
     public function download(Invoice $invoice)

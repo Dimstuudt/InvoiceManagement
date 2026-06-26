@@ -118,6 +118,22 @@
                       class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap">
                       Edit
                     </Link>
+                    <button v-if="invoice.is_marked"
+                      @click="openEmailModal(invoice)"
+                      class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
+                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                      </svg>
+                      Kirim Email
+                    </button>
+                    <span v-else
+                      class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
+                      title="Tandai dulu untuk kirim email">
+                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                      </svg>
+                      Kirim Email
+                    </span>
                     <button @click="deleteInvoice(invoice)"
                       class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
                       Hapus
@@ -205,6 +221,22 @@
                     class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap">
                     Edit
                   </Link>
+                  <button v-if="invoice.is_marked"
+                    @click="openEmailModal(invoice)"
+                    class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                    </svg>
+                    Kirim Email
+                  </button>
+                  <span v-else
+                    class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
+                    title="Tandai dulu untuk kirim email">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                    </svg>
+                    Kirim Email
+                  </span>
                   <button @click="deleteInvoice(invoice)"
                     class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
                     Hapus
@@ -217,11 +249,21 @@
       </div>
 
     </div>
+
+  <SendEmailModal
+    :show="emailModal"
+    :invoice="emailModalInvoice"
+    :client-emails="emailModalEmails"
+    :email-templates="emailTemplates ?? []"
+    @close="emailModal = false"
+  />
+
   </AppLayout>
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import SendEmailModal from '@/Components/SendEmailModal.vue';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -230,7 +272,18 @@ const props = defineProps({
   otherInvoices:    Array,
   nextMonthLabel:   String,
   filters:          Object,
+  emailTemplates:   Array,
 });
+
+const emailModal        = ref(false);
+const emailModalInvoice = ref(null);
+const emailModalEmails  = ref([]);
+
+function openEmailModal(invoice) {
+  emailModalInvoice.value = invoice;
+  emailModalEmails.value  = invoice.client?.emails?.map(e => e.email) ?? [];
+  emailModal.value = true;
+}
 
 const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const currentYear = new Date().getFullYear();
@@ -240,7 +293,7 @@ const localMonth = ref(props.filters.month);
 const localYear  = ref(props.filters.year);
 
 function applyFilters() {
-  router.get(route('invoices.all'), {
+  router.get(route('invoices.schedule'), {
     month: localMonth.value,
     year:  localYear.value,
   }, { preserveState: true, replace: true });

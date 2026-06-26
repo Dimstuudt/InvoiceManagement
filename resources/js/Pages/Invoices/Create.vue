@@ -117,6 +117,18 @@
               </div>
             </div>
 
+            <!-- Email Template -->
+            <div v-if="emailTemplates?.length" class="border-t border-gray-100 pt-5">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Template Email</p>
+              <select v-model="form.email_template_id" class="field">
+                <option value="">— Tanpa Template —</option>
+                <option v-for="t in emailTemplates" :key="t.id" :value="t.id">
+                  {{ t.name }}{{ t.is_default ? ' (Default)' : '' }}
+                </option>
+              </select>
+              <p class="text-xs text-gray-400 mt-1.5">Template akan otomatis digunakan saat kirim email invoice ini.</p>
+            </div>
+
             <!-- Signature -->
             <div class="border-t border-gray-100 pt-5">
               <div class="flex items-center justify-between mb-4">
@@ -210,7 +222,7 @@ import { computed, watch } from 'vue';
 const props = defineProps({
   clients: Array, projectCategories: Array,
   documentIssuers: Array, bankAccounts: Array,
-  signatures: Array, fromInvoice: Object,
+  signatures: Array, emailTemplates: Array, fromInvoice: Object,
 });
 
 const prefill      = props.fromInvoice ?? {};
@@ -222,6 +234,7 @@ const form = useForm({
   document_issuer_id:  prefill.document_issuer_id  ?? '',
   bank_account_id:     prefill.bank_account_id     ?? '',
   signature_id:        prefill.signature_id         ?? '',
+  email_template_id:   prefill.email_template_id    ?? (props.emailTemplates?.find(t => t.is_default)?.id ?? ''),
   with_signature:      prefill.with_signature       ?? false,
   spk_number:          '',
   status:              'draft',

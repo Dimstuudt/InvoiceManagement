@@ -8,7 +8,7 @@ class Invoice extends Model
 {
     protected $fillable = [
         'user_id', 'client_id', 'project_category_id', 'document_issuer_id',
-        'bank_account_id', 'signature_id', 'with_signature', 'spk_number',
+        'bank_account_id', 'signature_id', 'email_template_id', 'with_signature', 'spk_number',
         'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked', 'tax_percentage',
     ];
 
@@ -25,6 +25,7 @@ class Invoice extends Model
     public function documentIssuer()  { return $this->belongsTo(DocumentIssuer::class); }
     public function bankAccount()     { return $this->belongsTo(BankAccount::class); }
     public function signature()       { return $this->belongsTo(Signature::class); }
+    public function emailTemplate()   { return $this->belongsTo(EmailTemplate::class); }
     public function items()           { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order'); }
 
     public function getSubtotalAttribute(): float

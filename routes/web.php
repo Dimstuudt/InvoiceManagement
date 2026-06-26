@@ -7,6 +7,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Master\BankAccountController;
 use App\Http\Controllers\Master\ClientCategoryController;
 use App\Http\Controllers\Master\DocumentIssuerController;
+use App\Http\Controllers\Master\EmailTemplateController;
 use App\Http\Controllers\Master\ProjectCategoryController;
 use App\Http\Controllers\Master\SignatureController;
 use App\Http\Controllers\UserController;
@@ -37,7 +38,7 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('clients', ClientController::class)->except(['show']);
 
-    Route::get('invoices/all', [InvoiceController::class, 'all'])->name('invoices.all');
+    Route::get('invoices/schedule', [InvoiceController::class, 'schedule'])->name('invoices.schedule');
     Route::get('invoices/clients/{client}', [InvoiceController::class, 'clientInvoices'])->name('invoices.client');
     Route::resource('invoices', InvoiceController::class);
     Route::patch('invoices/{invoice}/status', [InvoiceController::class, 'updateStatus'])->name('invoices.status');
@@ -47,7 +48,6 @@ Route::middleware('auth')->group(function () {
     Route::get('invoices/{invoice}/receipt', [InvoiceController::class, 'receipt'])->name('invoices.receipt');
     Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
     Route::get('invoices/{invoice}/print-view', [InvoiceController::class, 'printView'])->name('invoices.print-view');
-    Route::get('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmailForm'])->name('invoices.send-email.form');
     Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.send-email');
 
     // Master Data
@@ -57,5 +57,6 @@ Route::middleware('auth')->group(function () {
         Route::resource('document-issuers', DocumentIssuerController::class)->except(['show']);
         Route::resource('bank-accounts', BankAccountController::class)->except(['show']);
         Route::resource('signatures', SignatureController::class)->except(['show']);
+        Route::resource('email-templates', EmailTemplateController::class)->except(['show']);
     });
 });

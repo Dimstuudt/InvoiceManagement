@@ -83,20 +83,13 @@
         {{ invoice.is_marked ? 'Ditandai' : 'Tandai' }}
       </button>
 
-      <Link v-if="invoice.is_marked" :href="route('invoices.send-email.form', invoice.id)"
+      <button @click="emailModal = true"
         class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition shrink-0">
         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
         </svg>
         Kirim Email
-      </Link>
-      <span v-else title="Aktifkan tanda centang dulu untuk bisa mengirim email"
-        class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-300 rounded-lg cursor-not-allowed shrink-0">
-        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-        </svg>
-        Kirim Email
-      </span>
+      </button>
 
       <div class="w-px h-5 bg-gray-200 shrink-0"/>
 
@@ -341,15 +334,27 @@
     </div>
 
   </AppLayout>
+  <!-- Send Email Modal -->
+  <SendEmailModal
+    :show="emailModal"
+    :invoice="invoice"
+    :client-emails="invoice.client_emails ?? []"
+    :email-templates="emailTemplates ?? []"
+    @close="emailModal = false"
+  />
+
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
+import SendEmailModal from '@/Components/SendEmailModal.vue'
 import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import Swal from 'sweetalert2'
 
-const props = defineProps({ invoice: Object })
+const props = defineProps({ invoice: Object, emailTemplates: Array })
+
+const emailModal = ref(false)
 
 const items       = ref(props.invoice.items.map(i => ({ ...i })))
 const savingItems = ref(false)

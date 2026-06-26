@@ -218,7 +218,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, onMounted, onUnmounted } from 'vue';
 
-defineProps({ client: Object, invoices: Array });
+const props = defineProps({ client: Object, invoices: Array });
 
 const receiptUrl = ref(null);
 const activeMenu = ref(null);

@@ -160,53 +160,6 @@
               </div>
             </div>
 
-            <!-- Items -->
-            <div class="border-t border-gray-100 pt-5">
-              <div class="flex items-center justify-between mb-4">
-                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Item Invoice</p>
-                <button type="button" @click="addItem"
-                  class="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                  </svg>
-                  Tambah Item
-                </button>
-              </div>
-              <p v-if="form.errors.items" class="mb-3 text-xs text-red-500">{{ form.errors.items }}</p>
-
-              <div class="space-y-2">
-                <div class="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                  <div class="col-span-8">Deskripsi</div>
-                  <div class="col-span-4">Harga</div>
-                </div>
-                <div v-for="(item, i) in form.items" :key="i" class="grid grid-cols-12 gap-2 items-center">
-                  <div class="col-span-8">
-                    <input v-model="item.description" type="text" placeholder="Deskripsi pekerjaan"
-                      class="field" />
-                  </div>
-                  <div class="col-span-3">
-                    <input v-model="item.amount" type="number" min="0" placeholder="0"
-                      class="field font-mono" />
-                  </div>
-                  <div class="col-span-1 flex justify-center">
-                    <button type="button" @click="removeItem(i)" :disabled="form.items.length === 1"
-                      class="text-gray-300 hover:text-red-400 disabled:opacity-30 transition-colors">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-4 flex justify-end border-t border-gray-100 pt-4">
-                <div class="text-right">
-                  <p class="text-xs text-gray-400 mb-1">Total</p>
-                  <p class="text-lg font-semibold text-gray-900">{{ formatCurrency(total) }}</p>
-                </div>
-              </div>
-            </div>
-
           </div>
 
           <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
@@ -229,7 +182,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, useForm } from '@inertiajs/vue3';
-import { computed, watch } from 'vue';
+import { watch } from 'vue';
 
 const props = defineProps({
   clients: Array, projectCategories: Array,
@@ -254,9 +207,6 @@ const form = useForm({
   issue_date:          '',
   due_date:            '',
 
-  items: prefill.items?.length
-    ? prefill.items.map(i => ({ description: i.description, amount: i.amount }))
-    : [{ description: '', amount: '' }],
 });
 
 watch(() => form.issue_date, (val) => {
@@ -266,15 +216,6 @@ watch(() => form.issue_date, (val) => {
   form.due_date = d.toISOString().slice(0, 10);
 });
 
-const total = computed(() =>
-  form.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
-);
-
-const formatCurrency = v =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
-
-function addItem()     { form.items.push({ description: '', amount: '' }); }
-function removeItem(i) { if (form.items.length > 1) form.items.splice(i, 1); }
 function submit()      { form.post(route('invoices.store')); }
 </script>
 

@@ -5,7 +5,9 @@
     <div class="no-print -mx-6 -mt-6 mb-0 bg-white border-b border-gray-100 px-6 py-2.5 flex items-center gap-2 min-w-0">
 
       <!-- Kembali -->
-      <Link :href="route(backRoute)"
+      <Link :href="backRoute === 'invoices.client'
+        ? route('invoices.client', props.invoice.client_id)
+        : route(backRoute)"
         class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -109,7 +111,7 @@
         {{ invoice.is_marked ? 'Ditandai' : 'Tandai' }}
       </button>
 
-      <button v-if="invoice.status !== 'paid'" @click="emailModal = true"
+      <button v-if="invoice.status !== 'paid' && invoice.is_marked" @click="emailModal = true"
         class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition shrink-0">
         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -408,6 +410,7 @@ const backRoute   = ref('invoices.index')
 onMounted(() => {
   const from = new URLSearchParams(window.location.search).get('from')
   if (from === 'schedule') backRoute.value = 'invoices.schedule'
+  if (from === 'client')   backRoute.value = 'invoices.client'
 })
 
 const items          = ref(props.invoice.items.map(i => ({ ...i })))

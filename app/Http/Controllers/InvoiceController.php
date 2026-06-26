@@ -157,13 +157,10 @@ class InvoiceController extends Controller
             'status'              => 'required|in:draft,sent,paid,unpaid',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'interval_months'     => 'nullable|integer|min:1|max:12',
-            'items'               => 'required|array|min:1',
-            'items.*.description' => 'required|string|max:255',
-            'items.*.amount'      => 'required|numeric|min:0',
         ]);
 
-        $category    = ProjectCategory::findOrFail($validated['project_category_id']);
-        $issueDate   = Carbon::parse($validated['issue_date']);
+        $category      = ProjectCategory::findOrFail($validated['project_category_id']);
+        $issueDate     = Carbon::parse($validated['issue_date']);
         $invoiceNumber = Invoice::generateNumber($category->code, $issueDate);
 
         $invoice = Invoice::create([
@@ -173,15 +170,7 @@ class InvoiceController extends Controller
             'with_signature' => $request->boolean('with_signature'),
         ]);
 
-        foreach ($validated['items'] as $i => $item) {
-            $invoice->items()->create([
-                'description' => $item['description'],
-                'amount'      => $item['amount'],
-                'sort_order'  => $i,
-            ]);
-        }
-
-        return redirect()->route('invoices.index')->with('success', 'Invoice berhasil dibuat.');
+        return redirect()->route('invoices.show', $invoice)->with('success', 'Invoice dibuat. Silakan tambahkan item.');
     }
 
     public function show(Invoice $invoice)

@@ -9,7 +9,8 @@ class Invoice extends Model
     protected $fillable = [
         'user_id', 'client_id', 'project_category_id', 'document_issuer_id',
         'bank_account_id', 'signature_id', 'email_template_id', 'with_signature', 'spk_number',
-        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked', 'tax_percentage',
+        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked',
+        'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
         'interval_months', 'parent_invoice_id',
     ];
 
@@ -18,7 +19,9 @@ class Invoice extends Model
         'due_date'        => 'date',
         'with_signature'  => 'boolean',
         'is_marked'       => 'boolean',
+        'is_dpp'          => 'boolean',
         'interval_months' => 'integer',
+        'discount_value'  => 'float',
     ];
 
     public function user()            { return $this->belongsTo(User::class); }
@@ -34,18 +37,37 @@ class Invoice extends Model
 
     public function getSubtotalAttribute(): float
     {
-        return $this->items->sum('amount');
+        return (float) $this->items->sum(function ($item) {
+            return max(0.0, (float) $item->amount - (float) ($item->discount ?? 0));
+        });
+    }
+
+    public function getDiscountAmountAttribute(): float
+    {
+        if (! $this->discount_value) return 0;
+        if ($this->discount_type === 'percent') return $this->subtotal * ($this->discount_value / 100);
+        return (float) $this->discount_value;
+    }
+
+    public function getAfterDiscountAttribute(): float
+    {
+        return max(0, $this->subtotal - $this->discount_amount);
+    }
+
+    public function getDppBaseAttribute(): float
+    {
+        return $this->is_dpp ? $this->after_discount * (11 / 12) : $this->after_discount;
     }
 
     public function getTaxAmountAttribute(): float
     {
         if (! $this->tax_percentage) return 0;
-        return $this->subtotal * ($this->tax_percentage / 100);
+        return $this->dpp_base * ($this->tax_percentage / 100);
     }
 
     public function getTotalAttribute(): float
     {
-        return $this->subtotal + $this->tax_amount;
+        return $this->after_discount + $this->tax_amount;
     }
 
     public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate): string

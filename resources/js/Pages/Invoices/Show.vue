@@ -1,10 +1,9 @@
 <template>
   <AppLayout :title="invoice.invoice_number">
 
-    <!-- ACTION BAR -->
+    <!-- ── ACTION BAR ──────────────────────────────────────────────── -->
     <div class="no-print -mx-6 -mt-6 mb-0 bg-white border-b border-gray-100 px-6 py-2.5 flex items-center gap-2 min-w-0">
 
-      <!-- Kembali -->
       <Link :href="backRoute === 'invoices.client'
         ? route('invoices.client', props.invoice.client_id)
         : route(backRoute)"
@@ -17,7 +16,6 @@
 
       <div class="w-px h-5 bg-gray-200 shrink-0"/>
 
-      <!-- Nomor invoice + status -->
       <div class="flex items-center gap-2 min-w-0 shrink-0">
         <p class="font-mono text-sm font-semibold text-gray-800 truncate max-w-[240px]">{{ invoice.invoice_number }}</p>
         <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
@@ -42,11 +40,9 @@
         </span>
       </div>
 
-      <!-- Genealogi: ikon kompak -->
       <template v-if="invoice.parent || invoice.children?.length">
         <div class="w-px h-5 bg-gray-200 shrink-0"/>
         <div class="flex items-center gap-1 shrink-0">
-          <!-- Parent (warisan dari) -->
           <Link v-if="invoice.parent" :href="route('invoices.show', invoice.parent.id)"
             :title="`Warisan dari: ${invoice.parent.invoice_number}`"
             class="p-1.5 rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-colors">
@@ -54,7 +50,6 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
             </svg>
           </Link>
-          <!-- Child (perpanjangan ke) -->
           <Link v-if="invoice.children?.length" :href="route('invoices.show', invoice.children[0].id)"
             :title="`Perpanjangan: ${invoice.children[0].invoice_number}`"
             class="p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-colors">
@@ -65,22 +60,8 @@
         </div>
       </template>
 
-      <!-- Spacer -->
       <div class="flex-1"/>
 
-      <!-- GRUP 1: Simpan item (terpisah jelas, hanya muncul kalau bisa edit) -->
-      <template v-if="invoice.status !== 'paid' && !invoice.is_marked">
-        <button @click="saveItems" :disabled="savingItems"
-          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg transition shadow-sm shrink-0">
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-          </svg>
-          {{ savingItems ? 'Menyimpan...' : 'Simpan Item' }}
-        </button>
-        <div class="w-px h-5 bg-gray-200 shrink-0"/>
-      </template>
-
-      <!-- GRUP 2: Status + navigasi dokumen -->
       <select :value="invoice.status" @change="changeStatus($event.target.value)"
         class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
         <option value="draft">Draft</option>
@@ -99,7 +80,6 @@
 
       <div class="w-px h-5 bg-gray-200 shrink-0"/>
 
-      <!-- GRUP 3: Tandai + Kirim Email -->
       <button @click="toggleMark"
         :class="invoice.is_marked
           ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 border border-amber-300'
@@ -121,15 +101,6 @@
 
       <div class="w-px h-5 bg-gray-200 shrink-0"/>
 
-      <!-- GRUP 4: Output + Hapus -->
-      <button @click="printPage"
-        class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shadow-sm shrink-0">
-        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-        </svg>
-        Print
-      </button>
-
       <button @click="destroy"
         class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0">
         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -142,7 +113,7 @@
 
     <!-- NOTIF DITANDAI -->
     <div v-if="invoice.is_marked"
-      class="no-print -mx-6 mb-6 bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2.5">
+      class="no-print -mx-6 bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2.5">
       <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
       </svg>
@@ -153,189 +124,207 @@
         Hapus tanda
       </button>
     </div>
-    <div v-else class="mb-6"/>
 
-    <!-- PAPER PREVIEW AREA -->
-    <div class="invoice-bg -mx-6 -mb-6 min-h-screen py-8 px-6">
-      <div class="invoice-paper mx-auto bg-white shadow-2xl relative" id="invoice-doc">
+    <!-- ── POPUP WRAPPER ───────────────────────────────────────────── -->
+    <div class="-mx-6 -mb-6 min-h-screen py-8 px-6" style="background:#c8cccf">
+      <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl overflow-hidden">
 
-        <!-- CAP STATUS (layar saja, tidak ikut print) -->
-        <div class="stamp no-print" :class="`stamp-${effectiveStamp}`" aria-hidden="true">
-          {{ stampLabel[effectiveStamp] }}
+        <!-- POPUP HEADER -->
+        <div class="flex items-center justify-between px-8 py-3.5 border-b border-gray-100 bg-gray-50/80">
+          <div class="flex items-center gap-3 min-w-0">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="text-sm font-semibold text-gray-700 truncate">Invoice Detail:</span>
+            <span class="font-mono text-sm font-bold text-gray-900 truncate">{{ invoice.invoice_number }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold shrink-0"
+              :class="{
+                'bg-gray-100 text-gray-500': invoice.status === 'draft',
+                'bg-blue-50 text-blue-600 ring-1 ring-blue-200': invoice.status === 'sent',
+                'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.status === 'paid',
+                'bg-red-50 text-red-600 ring-1 ring-red-200': invoice.status === 'unpaid',
+              }">
+              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[invoice.status] }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <a :href="route('invoices.download', invoice.id)"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              Download
+            </a>
+            <button @click="openPrint"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+              </svg>
+              Print
+            </button>
+          </div>
         </div>
 
         <!-- KOP SURAT -->
         <div v-if="invoice.document_issuer?.header_image_url">
-          <img :src="invoice.document_issuer.header_image_url" class="w-full object-contain" style="max-height:160px" alt="Kop Surat"/>
+          <img :src="invoice.document_issuer.header_image_url"
+            class="w-full object-contain" style="max-height:140px;display:block" alt="Kop Surat"/>
         </div>
-        <div v-else-if="invoice.document_issuer" class="px-10 py-6 border-b-4 border-blue-700">
-          <p class="text-2xl font-black text-blue-800 uppercase tracking-wide">{{ invoice.document_issuer.name }}</p>
+        <div v-else-if="invoice.document_issuer"
+          class="px-8 py-5 bg-gradient-to-r from-blue-700 to-blue-600">
+          <p class="text-xl font-black text-white uppercase tracking-widest">{{ invoice.document_issuer.name }}</p>
         </div>
 
-        <!-- INVOICE TO -->
-        <div class="px-10 pt-6 pb-4">
-          <p class="text-xs text-gray-500 mb-1">Invoice To</p>
-          <p class="text-2xl font-black text-blue-400 uppercase mb-5 leading-tight text-center">{{ invoice.client?.company_name }}</p>
+        <!-- ── INFO ─────────────────────────────────────────────── -->
+        <div class="px-8 py-6 border-b border-gray-100">
+          <div class="grid grid-cols-3 gap-x-8 gap-y-5">
 
-          <!-- Dua kolom -->
-          <div class="flex gap-8">
-            <!-- Kiri: address -->
-            <div class="flex-1">
-              <table>
-                <tr v-if="invoice.client?.address">
-                  <td class="text-sm font-bold text-gray-900 pr-2 align-top pb-2 whitespace-nowrap">Address</td>
-                  <td class="text-sm text-gray-700 pb-2 align-top">
-                    : {{ invoice.client.address }}<span v-if="invoice.client.city">, {{ invoice.client.city }}</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="text-sm font-bold text-gray-900 pr-2 align-top whitespace-nowrap pt-0.5">Attention</td>
-                  <td class="text-sm text-gray-700 align-top pt-0.5">:
-                    <template v-if="invoice.status !== 'paid'">
-                      <input v-model="localAttention" @blur="saveMeta"
-                        placeholder="—"
-                        class="no-print ml-1 text-sm text-gray-700 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-400 focus:outline-none transition-colors w-48"/>
-                      <span class="print-only">{{ localAttention || '—' }}</span>
-                    </template>
-                    <span v-else class="ml-1">{{ localAttention || '—' }}</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="text-sm font-bold text-gray-900 pr-2 align-top whitespace-nowrap pt-1">Notes</td>
-                  <td class="text-sm text-gray-700 align-top pt-1">:
-                    <template v-if="invoice.status !== 'paid'">
-                      <input v-model="localNotes" @blur="saveMeta"
-                        placeholder="—"
-                        class="no-print ml-1 text-sm text-gray-700 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-400 focus:outline-none transition-colors w-48"/>
-                      <span class="print-only">{{ localNotes || '—' }}</span>
-                    </template>
-                    <span v-else class="ml-1">{{ localNotes || '—' }}</span>
-                  </td>
-                </tr>
-              </table>
+            <!-- Row 1: SPK | Invoice# | Project Category -->
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">SPK Number</p>
+              <input v-if="invoice.status !== 'paid'"
+                v-model="localSpkNumber" @blur="saveMeta"
+                placeholder="—"
+                class="text-sm text-gray-900 w-full border-b border-transparent hover:border-gray-300 focus:border-indigo-400 focus:outline-none bg-transparent transition-colors py-0.5"/>
+              <p v-else class="text-sm font-medium text-gray-900">{{ localSpkNumber || '—' }}</p>
             </div>
-            <!-- Kanan: meta invoice -->
-            <div class="shrink-0">
-              <table>
-                <tr>
-                  <td class="text-sm font-bold text-gray-900 pr-3 pb-1.5 whitespace-nowrap">No Invoice</td>
-                  <td class="text-sm text-gray-700 pb-1.5">: {{ invoice.invoice_number }}</td>
-                </tr>
-                <tr>
-                  <td class="text-sm font-bold text-gray-900 pr-3 pb-1.5 whitespace-nowrap">Invoice Date</td>
-                  <td class="text-sm text-gray-700 pb-1.5">: {{ fmtShort(invoice.issue_date) }}</td>
-                </tr>
-                <tr :class="isOverdue ? 'bg-red-50 rounded-lg' : ''">
-                  <td class="pr-3 pb-1.5 pt-1 whitespace-nowrap text-sm font-bold rounded-l-lg"
-                    :class="isOverdue ? 'text-red-500' : 'text-gray-900'">Due Date</td>
-                  <td class="pb-1.5 pt-1 pr-1.5 text-sm rounded-r-lg" :class="isOverdue ? 'text-red-500' : 'text-gray-700'">
-                    : {{ fmtShort(invoice.due_date) }}
-                    <span v-if="isOverdue"
-                      class="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-md">
-                      <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg> lewat {{ overdueDays }} hari
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="text-sm font-bold text-gray-900 pr-3 whitespace-nowrap">SPK No</td>
-                  <td class="text-sm text-gray-700">: {{ invoice.spk_number ?? '-' }}</td>
-                </tr>
-              </table>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Invoice Number</p>
+              <p class="text-sm font-mono font-bold text-gray-900">{{ invoice.invoice_number }}</p>
             </div>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Project / Category</p>
+              <p class="text-sm font-medium text-gray-900">{{ invoice.project_category?.name || '—' }}</p>
+            </div>
+
+            <!-- Row 2: Issue Date | Due Date | Recipient -->
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Issue Date</p>
+              <p class="text-sm font-medium text-gray-900">{{ fmt(invoice.issue_date) }}</p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Due Date</p>
+              <p class="text-sm font-medium" :class="isOverdue ? 'text-red-600' : 'text-gray-900'">
+                {{ fmt(invoice.due_date) }}
+                <span v-if="isOverdue" class="ml-1 text-xs font-normal">(lewat {{ overdueDays }} hari)</span>
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Recipient</p>
+              <p class="text-sm font-medium text-gray-900">{{ invoice.client?.company_name || '—' }}</p>
+            </div>
+
+            <!-- Row 3: Address (2 col) | Attention -->
+            <div class="col-span-2">
+              <p class="text-xs text-gray-400 font-medium mb-1">Address</p>
+              <p class="text-sm text-gray-900">
+                {{ invoice.client?.address || '—' }}<span v-if="invoice.client?.city">, {{ invoice.client.city }}</span>
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Attention</p>
+              <input v-if="invoice.status !== 'paid'"
+                v-model="localAttention" @blur="saveMeta"
+                placeholder="—"
+                class="text-sm text-gray-900 w-full border-b border-transparent hover:border-gray-300 focus:border-indigo-400 focus:outline-none bg-transparent transition-colors py-0.5"/>
+              <p v-else class="text-sm text-gray-900">{{ localAttention || '—' }}</p>
+            </div>
+
+            <!-- Row 4: Issuer | Bank Account | Signature -->
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Issuer</p>
+              <p class="text-sm font-medium text-gray-900">{{ invoice.document_issuer?.name || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Bank Account</p>
+              <p class="text-sm font-medium text-gray-900">
+                {{ invoice.bank_account?.bank_name || '—' }}
+                <span v-if="invoice.bank_account?.account_number" class="text-gray-400 font-mono text-xs font-normal">
+                  · {{ invoice.bank_account.account_number }}
+                </span>
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-400 font-medium mb-1">Signature</p>
+              <p class="text-sm font-medium text-gray-900">
+                {{ invoice.signature?.name || '—' }}
+                <span v-if="invoice.signature?.position" class="text-gray-400 font-normal text-xs">
+                  ({{ invoice.signature.position }})
+                </span>
+              </p>
+            </div>
+
           </div>
         </div>
 
-        <!-- ITEMS TABLE -->
-        <div class="mx-10 mt-2 mb-0 bg-gray-50 rounded-xl overflow-hidden border border-gray-200">
+        <!-- ── INVOICE ITEMS ────────────────────────────────────── -->
+        <div class="border-b border-gray-100">
+          <div class="px-8 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice Items</p>
+          </div>
           <table class="w-full">
             <thead>
-              <tr>
-                <th class="text-left text-sm font-bold text-blue-600 px-4 pt-2.5 pb-2">Description</th>
-                <th class="text-right text-sm font-bold text-blue-600 px-4 pt-2.5 pb-2 w-44">Price</th>
-                <th class="w-6 no-print"></th>
-              </tr>
-              <tr>
-                <td colspan="3" class="px-3 pb-0">
-                  <div class="border-b-2 border-blue-600"></div>
-                </td>
+              <tr class="border-b border-gray-100">
+                <th class="text-center text-xs font-semibold text-gray-400 px-4 py-3 w-12">No.</th>
+                <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Description</th>
+                <th class="text-right text-xs font-semibold text-gray-400 px-4 py-3 w-44">Amount</th>
+                <th class="text-right text-xs font-semibold text-gray-400 px-4 py-3 w-44">Discount</th>
+                <th class="text-right text-xs font-semibold text-gray-400 px-4 py-3 w-44">Total</th>
+                <th v-if="invoice.status !== 'paid'" class="w-12 px-4 py-3"/>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(item, i) in items" :key="i"
-                class="group border-b border-gray-200 hover:bg-blue-50/30 transition-colors">
-                <td class="px-4 py-2.5 align-middle">
+                class="border-b border-gray-100 hover:bg-gray-50/60 group transition-colors">
+                <td class="px-4 py-3 text-sm text-gray-400 text-center">{{ i + 1 }}</td>
+                <td class="px-4 py-3">
                   <input v-if="invoice.status !== 'paid'" v-model="item.description" type="text"
-                    placeholder="Klik untuk mengedit..."
-                    class="w-full text-sm text-gray-800 bg-transparent border-b border-transparent group-hover:border-blue-200 focus:border-blue-400 focus:outline-none py-0.5 transition-colors placeholder:text-gray-300"/>
-                  <span v-else class="text-sm text-gray-800">{{ item.description }}</span>
+                    placeholder="Deskripsi item..."
+                    class="w-full text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-indigo-400 focus:outline-none py-0.5 transition-colors placeholder:text-gray-300"/>
+                  <span v-else class="text-sm text-gray-900">{{ item.description }}</span>
                 </td>
-                <td class="px-4 py-2.5 align-middle">
-                  <input v-if="invoice.status !== 'paid'" v-model="item.amount" type="number" min="0"
-                    class="w-full text-sm text-right font-mono text-gray-800 bg-transparent border-b border-transparent group-hover:border-blue-200 focus:border-blue-400 focus:outline-none py-0.5 transition-colors"/>
-                  <span v-else class="block text-sm text-right font-mono text-gray-800">{{ formatCurrency(item.amount) }}</span>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1.5">
+                    <span class="text-xs text-gray-400 shrink-0">Rp</span>
+                    <input v-if="invoice.status !== 'paid'" v-model.number="item.amount" type="number" min="0"
+                      class="w-full text-sm text-right font-mono text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-indigo-400 focus:outline-none py-0.5 transition-colors"/>
+                    <span v-else class="text-sm font-mono text-gray-900">{{ formatNumber(item.amount) }}</span>
+                  </div>
                 </td>
-                <td v-if="invoice.status !== 'paid'" class="py-2.5 pl-2 align-middle no-print">
-                  <button type="button" @click="removeItem(i)" :disabled="items.length === 1"
+                <td class="px-4 py-3 text-right">
+                  <template v-if="invoice.status !== 'paid'">
+                    <div v-if="item.discount !== null" class="flex items-center justify-end gap-1">
+                      <span class="text-xs text-gray-400 shrink-0">Rp</span>
+                      <input v-model.number="item.discount" type="number" min="0"
+                        class="w-24 text-sm text-right font-mono text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-indigo-400 focus:outline-none py-0.5 transition-colors"/>
+                      <button @click="item.discount = null"
+                        class="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
+                    </div>
+                    <button v-else @click="item.discount = 0"
+                      class="text-xs text-gray-400 hover:text-indigo-500 transition-colors whitespace-nowrap">
+                      + Diskon
+                    </button>
+                  </template>
+                  <span v-else class="text-sm font-mono text-red-500">
+                    {{ item.discount ? '- Rp ' + formatNumber(item.discount) : '—' }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <span class="text-sm font-mono font-semibold text-gray-900">{{ formatCurrency(itemTotal(item)) }}</span>
+                </td>
+                <td v-if="invoice.status !== 'paid'" class="px-3 py-3 text-center">
+                  <button @click="removeItem(i)" :disabled="items.length === 1"
                     class="opacity-0 group-hover:opacity-100 disabled:!opacity-0 text-gray-300 hover:text-red-400 transition-all">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                     </svg>
                   </button>
                 </td>
               </tr>
             </tbody>
-            <tfoot>
-              <!-- Tax toggle – no-print, hanya tampil kalau bukan paid -->
-              <tr v-if="invoice.status !== 'paid'" class="no-print border-t border-gray-200">
-                <td colspan="3" class="px-4 py-2.5">
-                  <div class="flex items-center gap-3">
-                    <span class="text-xs text-gray-400 font-medium">Tambahkan Pajak</span>
-                    <button type="button"
-                      @click="toggleTax"
-                      class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
-                      :class="localTax !== null ? 'bg-indigo-600' : 'bg-gray-200'">
-                      <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow"
-                        :class="localTax !== null ? 'translate-x-[18px]' : 'translate-x-0.5'"/>
-                    </button>
-                    <template v-if="localTax !== null">
-                      <input v-model.number="localTax" type="number" min="0" max="100" step="0.01"
-                        class="w-20 text-xs font-mono px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-center"
-                        placeholder="11" />
-                      <span class="text-xs text-gray-400">%</span>
-                      <button @click="saveTax"
-                        class="text-xs px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
-                        Simpan
-                      </button>
-                    </template>
-                  </div>
-                </td>
-              </tr>
-              <tr class="border-t border-gray-200">
-                <td class="px-4 py-2 text-right text-sm text-gray-500" colspan="3">
-                  <span class="mr-8">Sub Total</span>
-                  <span class="font-mono text-gray-800">{{ formatCurrency(subtotal) }}</span>
-                </td>
-              </tr>
-              <tr v-if="localTax !== null">
-                <td class="px-4 py-1.5 text-right text-sm text-gray-500" colspan="3">
-                  <span class="mr-8">Pajak {{ localTax }}%</span>
-                  <span class="font-mono text-gray-800">{{ formatCurrency(taxAmount) }}</span>
-                </td>
-              </tr>
-              <tr>
-                <td colspan="3" class="px-4 pb-3 pt-1 text-right">
-                  <span class="inline-flex items-center gap-8 bg-blue-700 rounded-lg px-5 py-2.5 font-black text-white">
-                    <span class="uppercase tracking-wider text-sm">TOTAL</span>
-                    <span class="font-mono text-base">{{ formatCurrency(total) }}</span>
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
           </table>
-
-          <!-- Add item – hanya tampil kalau bukan paid -->
-          <button v-if="invoice.status !== 'paid'" type="button" @click="addItem"
-            class="no-print px-4 py-2 text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1.5 transition-colors">
+          <button v-if="invoice.status !== 'paid'" @click="addItem"
+            class="px-5 py-3 text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1.5 transition-colors w-full hover:bg-indigo-50/30">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
@@ -343,48 +332,127 @@
           </button>
         </div>
 
-        <!-- PAYMENT METHOD + SIGNATURE -->
-        <div class="flex items-start gap-6 px-10 pt-8 pb-8">
-
-          <!-- Payment Method -->
-          <div v-if="invoice.bank_account" class="flex-1">
-            <p class="text-sm font-bold text-gray-800 mb-3">Payment Method</p>
-            <p class="text-xs text-gray-500 leading-relaxed">
-              Pembayaran dapat dilakukan melalui transfer atau setoran<br/>tunai ke {{ invoice.bank_account.bank_name }}
-            </p>
-            <p class="text-sm font-bold text-gray-900 mt-1 mb-1">{{ invoice.document_issuer?.name ?? invoice.bank_account.bank_name }}</p>
-            <p class="text-sm font-semibold text-blue-700 font-mono mb-3">
-              {{ invoice.bank_account.account_number }}
-              <span class="font-normal text-gray-400 font-sans">(atas nama {{ invoice.bank_account.name }})</span>
-            </p>
-            <template v-if="invoice.document_issuer?.tax_id_number">
-              <p class="text-sm font-bold text-gray-900">NPWP : {{ invoice.document_issuer.tax_id_number }}</p>
-              <p class="text-sm font-bold text-gray-900">{{ invoice.document_issuer.name }}</p>
-            </template>
-            <p v-if="invoice.document_issuer?.tax_id_address" class="text-xs text-gray-500 mt-0.5">{{ invoice.document_issuer.tax_id_address }}</p>
+        <!-- ── INVOICE TOTALS ───────────────────────────────────── -->
+        <div class="border-b border-gray-100">
+          <div class="px-8 py-3 bg-gray-50 border-b border-gray-100">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice Totals</p>
           </div>
-          <div v-else class="flex-1"/>
+          <div class="px-8 py-5 space-y-3">
 
-          <!-- Signature -->
-          <div v-if="invoice.with_signature && invoice.signature" class="text-center shrink-0" style="min-width:200px">
-            <div class="flex items-center justify-center" style="height:80px">
-              <img v-if="invoice.signature.signature_image_url"
-                :src="invoice.signature.signature_image_url"
-                class="max-h-full object-contain" style="max-width:200px" alt="TTD"/>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-600">Sub Total (Items)</span>
+              <span class="text-sm font-mono font-semibold text-gray-900">{{ formatCurrency(subtotal) }}</span>
             </div>
-            <div class="border-b border-gray-500 mt-1 mb-2 mx-6"/>
-            <p class="font-bold text-gray-900 text-sm">{{ invoice.signature.name }}</p>
-            <p class="text-xs text-gray-500 mt-0.5">{{ invoice.signature.position }}</p>
-            <p v-if="invoice.document_issuer" class="text-xs text-gray-500 mt-0.5">{{ invoice.document_issuer.name }}</p>
+
+            <!-- Discount -->
+            <div class="flex items-center gap-3 py-0.5">
+              <input type="checkbox" id="discountCheck" v-model="localDiscount.enabled"
+                :disabled="invoice.status === 'paid'"
+                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0 disabled:cursor-not-allowed"/>
+              <label for="discountCheck" class="text-sm text-gray-600 cursor-pointer select-none w-36 shrink-0">Invoice Discount</label>
+              <template v-if="localDiscount.enabled">
+                <select v-model="localDiscount.type" :disabled="invoice.status === 'paid'"
+                  class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0 disabled:opacity-60">
+                  <option value="percent">%</option>
+                  <option value="amount">Rp</option>
+                </select>
+                <input v-model.number="localDiscount.value" type="number" min="0"
+                  :disabled="invoice.status === 'paid'"
+                  placeholder="0"
+                  class="w-32 text-sm text-right font-mono border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"/>
+                <span v-if="localDiscount.type === 'percent'" class="text-xs text-gray-400 shrink-0">%</span>
+                <span class="ml-auto text-sm font-mono font-semibold text-red-500 whitespace-nowrap">
+                  - {{ formatCurrency(discountAmount) }}
+                </span>
+              </template>
+              <span v-else class="ml-auto text-sm text-gray-400">—</span>
+            </div>
+
+            <!-- DPP -->
+            <div class="flex items-center gap-3 py-0.5">
+              <input type="checkbox" id="dppCheck" v-model="localIsDpp"
+                :disabled="invoice.status === 'paid'"
+                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0 disabled:cursor-not-allowed"/>
+              <label for="dppCheck" class="text-sm text-gray-600 cursor-pointer select-none shrink-0">DPP (11/12)</label>
+              <span v-if="localIsDpp" class="text-xs text-gray-400 ml-1">
+                Base: <span class="font-mono">{{ formatCurrency(dppBase) }}</span>
+              </span>
+              <span class="ml-auto text-sm text-gray-400">{{ localIsDpp ? '' : '—' }}</span>
+            </div>
+
+            <!-- VAT -->
+            <div class="flex items-center gap-3 py-0.5">
+              <input type="checkbox" id="vatCheck" v-model="localTaxEnabled"
+                :disabled="invoice.status === 'paid'"
+                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0 disabled:cursor-not-allowed"/>
+              <label for="vatCheck" class="text-sm text-gray-600 cursor-pointer select-none w-36 shrink-0">VAT (PPN)</label>
+              <template v-if="localTaxEnabled">
+                <input v-model.number="localTaxPct" type="number" min="0" max="100" step="0.01"
+                  :disabled="invoice.status === 'paid'"
+                  class="w-20 text-sm text-center font-mono border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"/>
+                <span class="text-sm text-gray-500 shrink-0">%</span>
+                <span class="ml-auto text-sm font-mono font-semibold text-gray-900 whitespace-nowrap">{{ formatCurrency(taxAmount) }}</span>
+              </template>
+              <span v-else class="ml-auto text-sm text-gray-400">—</span>
+            </div>
+
+            <!-- Grand Total -->
+            <div class="border-t border-gray-200 pt-4 flex items-center justify-between">
+              <span class="text-base font-bold text-gray-900">Grand Total</span>
+              <span class="text-2xl font-black font-mono text-blue-700">{{ formatCurrency(grandTotal) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── NOTES ────────────────────────────────────────────── -->
+        <div class="border-b border-gray-100">
+          <div class="px-8 py-3 bg-gray-50 border-b border-gray-100">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Notes</p>
+          </div>
+          <div class="px-8 py-5">
+            <textarea v-if="invoice.status !== 'paid'"
+              v-model="localNotes" @blur="saveMeta"
+              placeholder="Enter additional notes (optional)"
+              rows="3"
+              class="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white resize-none placeholder:text-gray-300 transition-colors"/>
+            <p v-else class="text-sm text-gray-700 leading-relaxed">{{ localNotes || '—' }}</p>
+          </div>
+        </div>
+
+        <!-- ── POPUP FOOTER ─────────────────────────────────────── -->
+        <div class="px-8 py-4 bg-gray-50 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <a :href="route('invoices.download', invoice.id)"
+              class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl transition shadow-sm">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              Download
+            </a>
+            <button @click="openPrint"
+              class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl transition shadow-sm">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+              </svg>
+              Print
+            </button>
           </div>
 
+          <button v-if="invoice.status !== 'paid' && !invoice.is_marked"
+            @click="save()" :disabled="saving"
+            class="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white rounded-xl transition shadow-sm disabled:opacity-60">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            {{ saving ? 'Menyimpan...' : 'Simpan Perubahan' }}
+          </button>
         </div>
 
       </div>
     </div>
 
   </AppLayout>
-  <!-- Send Email Modal -->
+
   <SendEmailModal
     :show="emailModal"
     :invoice="invoice"
@@ -392,20 +460,19 @@
     :email-templates="emailTemplates ?? []"
     @close="emailModal = false"
   />
-
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import SendEmailModal from '@/Components/SendEmailModal.vue'
 import { Link, router } from '@inertiajs/vue3'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import Swal from 'sweetalert2'
 
 const props = defineProps({ invoice: Object, emailTemplates: Array })
 
-const emailModal  = ref(false)
-const backRoute   = ref('invoices.index')
+const emailModal = ref(false)
+const backRoute  = ref('invoices.index')
 
 onMounted(() => {
   const from = new URLSearchParams(window.location.search).get('from')
@@ -413,52 +480,53 @@ onMounted(() => {
   if (from === 'client')   backRoute.value = 'invoices.client'
 })
 
-const items          = ref(props.invoice.items.map(i => ({ ...i })))
-const savingItems    = ref(false)
-const localTax       = ref(props.invoice.tax_percentage ?? null)
-const localAttention = ref(props.invoice.attention ?? '')
-const localNotes     = ref(props.invoice.notes ?? '')
-const localInterval  = ref(props.invoice.interval_months ?? '')
+// Items
+const items       = ref(props.invoice.items.map(i => ({ ...i, discount: i.discount ?? null })))
+const saving = ref(false)
 
-function saveInterval(val) {
-  localInterval.value = val === '' ? '' : parseInt(val)
-  router.patch(route('invoices.interval', props.invoice.id),
-    { interval_months: val === '' ? null : parseInt(val) },
-    { preserveScroll: true }
-  )
-}
+// Meta
+const localSpkNumber  = ref(props.invoice.spk_number ?? '')
+const localAttention  = ref(props.invoice.attention ?? '')
+const localNotes      = ref(props.invoice.notes ?? '')
+const localInterval   = ref(props.invoice.interval_months ?? '')
 
-function saveMeta() {
-  router.patch(route('invoices.meta', props.invoice.id),
-    { attention: localAttention.value || null, notes: localNotes.value || null },
-    { preserveScroll: true }
-  )
+// Totals
+const localDiscount = reactive({
+  enabled: !!(props.invoice.discount_type),
+  type:    props.invoice.discount_type || 'percent',
+  value:   props.invoice.discount_value ?? 0,
+})
+const localIsDpp      = ref(props.invoice.is_dpp ?? false)
+const localTaxEnabled = ref(props.invoice.tax_percentage !== null && props.invoice.tax_percentage !== undefined)
+const localTaxPct     = ref(props.invoice.tax_percentage ?? 11)
+
+// ── Computed ──────────────────────────────────────────────────────────────
+function itemTotal(item) {
+  return Math.max(0, (parseFloat(item.amount) || 0) - (parseFloat(item.discount) || 0))
 }
 
 const subtotal = computed(() =>
-  items.value.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
+  items.value.reduce((s, i) => s + itemTotal(i), 0)
+)
+
+const discountAmount = computed(() => {
+  if (!localDiscount.enabled || !localDiscount.value) return 0
+  if (localDiscount.type === 'percent') return subtotal.value * (localDiscount.value / 100)
+  return parseFloat(localDiscount.value) || 0
+})
+
+const afterDiscount = computed(() => Math.max(0, subtotal.value - discountAmount.value))
+
+const dppBase = computed(() =>
+  localIsDpp.value ? afterDiscount.value * (11 / 12) : afterDiscount.value
 )
 
 const taxAmount = computed(() => {
-  if (localTax.value === null || localTax.value === 0) return 0
-  return subtotal.value * (localTax.value / 100)
+  if (!localTaxEnabled.value || !localTaxPct.value) return 0
+  return dppBase.value * (localTaxPct.value / 100)
 })
 
-const total = computed(() => subtotal.value + taxAmount.value)
-
-const fmt = d => d
-  ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
-  : '—'
-
-const fmtShort = d => d
-  ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  : '-'
-
-const formatCurrency = v =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
-
-const statusLabel = { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }
-const stampLabel  = { draft: 'DRAFT', sent: 'SENT', paid: 'PAID', unpaid: 'UNPAID', overdue: 'JATUH TEMPO' }
+const grandTotal = computed(() => afterDiscount.value + taxAmount.value)
 
 const isOverdue = computed(() => {
   if (props.invoice.status === 'paid') return false
@@ -470,45 +538,60 @@ const overdueDays = computed(() => {
   return Math.floor(diff / 86400000)
 })
 
-const effectiveStamp = computed(() => {
-  if (isOverdue.value) return 'overdue'
-  return props.invoice.status
-})
-const statusClass = {
-  draft:  'bg-gray-100 text-gray-500',
-  sent:   'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
-  paid:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  unpaid: 'bg-red-50 text-red-600 ring-1 ring-red-200',
-}
-const statusDot = {
-  draft: 'bg-gray-400', sent: 'bg-blue-500',
-  paid: 'bg-emerald-500', unpaid: 'bg-red-500',
-}
+// ── Formatters ────────────────────────────────────────────────────────────
+const fmt = d => d
+  ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+  : '—'
 
-function toggleTax() {
-  localTax.value = localTax.value !== null ? null : 11
-  router.patch(route('invoices.tax', props.invoice.id),
-    { tax_percentage: localTax.value },
+const formatNumber = v =>
+  new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(v || 0)
+
+const formatCurrency = v =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v || 0)
+
+// ── Actions ───────────────────────────────────────────────────────────────
+function saveInterval(val) {
+  localInterval.value = val === '' ? '' : parseInt(val)
+  router.patch(route('invoices.interval', props.invoice.id),
+    { interval_months: val === '' ? null : parseInt(val) },
     { preserveScroll: true }
   )
 }
 
-function saveTax() {
-  router.patch(route('invoices.tax', props.invoice.id),
-    { tax_percentage: localTax.value },
+function saveMeta() {
+  router.patch(route('invoices.meta', props.invoice.id),
+    {
+      spk_number: localSpkNumber.value || null,
+      attention:  localAttention.value || null,
+      notes:      localNotes.value || null,
+    },
     { preserveScroll: true }
   )
 }
 
-function addItem()     { items.value.push({ description: '', amount: 0 }) }
+function addItem()     { items.value.push({ description: '', amount: 0, discount: null }) }
 function removeItem(i) { if (items.value.length > 1) items.value.splice(i, 1) }
 
-function saveItems() {
-  savingItems.value = true
-  router.patch(route('invoices.items', props.invoice.id),
-    { items: items.value },
-    { preserveScroll: true, onFinish: () => savingItems.value = false }
-  )
+function buildPayload() {
+  return {
+    items:          items.value.map(i => ({ description: i.description, amount: i.amount, discount: i.discount || null })),
+    tax_percentage: localTaxEnabled.value ? localTaxPct.value : null,
+    discount_type:  localDiscount.enabled ? localDiscount.type : null,
+    discount_value: localDiscount.enabled ? localDiscount.value : null,
+    is_dpp:         localIsDpp.value,
+    spk_number:     localSpkNumber.value || null,
+    attention:      localAttention.value || null,
+    notes:          localNotes.value || null,
+  }
+}
+
+function save(onSuccess) {
+  saving.value = true
+  router.patch(route('invoices.save', props.invoice.id), buildPayload(), {
+    preserveScroll: true,
+    onSuccess:  () => { if (onSuccess) onSuccess() },
+    onFinish:   () => { saving.value = false },
+  })
 }
 
 function changeStatus(status) {
@@ -517,6 +600,14 @@ function changeStatus(status) {
 
 function toggleMark() {
   router.patch(route('invoices.mark', props.invoice.id), {}, { preserveScroll: true })
+}
+
+function openPrint() {
+  if (props.invoice.status === 'paid') {
+    window.open(route('invoices.print-view', props.invoice.id), '_blank')
+    return
+  }
+  save(() => window.open(route('invoices.print-view', props.invoice.id), '_blank'))
 }
 
 function destroy() {
@@ -534,73 +625,8 @@ function destroy() {
     })
   })
 }
-
-function printPage() {
-  const doc = document.getElementById('invoice-doc')
-  const heightMm = Math.ceil(doc.scrollHeight * 0.264583) + 3
-  const s = document.createElement('style')
-  s.id = '__ph__'
-  s.textContent = `@page { size: 210mm ${heightMm}mm; margin: 0; }`
-  document.head.appendChild(s)
-  window.print()
-  document.getElementById('__ph__')?.remove()
-}
 </script>
 
 <style>
-.invoice-bg    { background: #e8eaed; }
-.invoice-paper { width: 794px; border-radius: 0; }
-
-.stamp {
-  position: absolute;
-  top: 160px;
-  right: 72px;
-  transform: rotate(-22deg);
-  padding: 10px 22px;
-  border: 5px solid;
-  border-radius: 6px;
-  font-size: 2rem;
-  font-weight: 900;
-  letter-spacing: 0.28em;
-  font-family: 'Courier New', Courier, monospace;
-  opacity: 0.18;
-  pointer-events: none;
-  user-select: none;
-  z-index: 5;
-  line-height: 1;
-}
-.stamp-draft  { border-color: #6b7280; color: #6b7280; }
-.stamp-sent   { border-color: #2563eb; color: #2563eb; }
-.stamp-paid   { border-color: #16a34a; color: #16a34a; }
-.stamp-unpaid { border-color: #dc2626; color: #dc2626; }
-.stamp-overdue { border-color: #b91c1c; color: #b91c1c; font-size: 1.5rem; letter-spacing: 0.15em; }
-
-@page { size: A4 portrait; margin: 0; }
-
-@media print {
-  .no-print { display: none !important; }
-  body * { visibility: hidden !important; }
-  #invoice-doc, #invoice-doc * { visibility: visible !important; }
-  #invoice-doc {
-    position: absolute !important;
-    top: 0 !important; left: 0 !important;
-    width: 100% !important;
-    box-shadow: none !important;
-    background: white !important;
-  }
-  .invoice-bg {
-    min-height: 0 !important;
-    height: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-  }
-  html { height: auto !important; }
-  body {
-    height: 0 !important;
-    overflow: visible !important;
-    background: white !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
+@media print { .no-print { display: none !important; } }
 </style>

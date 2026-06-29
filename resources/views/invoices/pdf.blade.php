@@ -103,31 +103,72 @@
         @endforeach
       </tbody>
       <tfoot>
-        <tr style="border-top:1px solid #e5e7eb">
-          <td colspan="2" style="padding:0.6rem 1rem;text-align:right;font-size:0.875rem;color:#6b7280">
-            Sub Total &nbsp;&nbsp;&nbsp;
-            <span style="font-family:'Courier New',monospace;color:#1f2937">Rp {{ number_format($invoice->subtotal, 2, ',', '.') }}</span>
-          </td>
-        </tr>
-        @if($invoice->tax_percentage)
         <tr>
-          <td colspan="2" style="padding:0.1rem 1rem;text-align:right;font-size:0.875rem;color:#6b7280">
-            Pajak {{ $invoice->tax_percentage }}% &nbsp;&nbsp;&nbsp;
-            <span style="font-family:'Courier New',monospace;color:#1f2937">Rp {{ number_format($invoice->tax_amount, 2, ',', '.') }}</span>
-          </td>
-        </tr>
-        @endif
-        <tr>
-          <td colspan="2" style="padding:0.25rem 0.75rem 0.75rem 0.75rem;text-align:right">
-            <span style="display:inline-flex;align-items:center;gap:2rem;background:#1d4ed8;border-radius:0.5rem;padding:0.6rem 1.25rem;font-weight:900;color:white">
-              <span style="font-size:0.875rem;letter-spacing:0.05em;text-transform:uppercase">TOTAL</span>
-              <span style="font-size:1rem;font-family:'Courier New',monospace">Rp {{ number_format($invoice->total, 2, ',', '.') }}</span>
-            </span>
+          <td colspan="2" style="padding:0.5rem 1rem 0.75rem 1rem">
+            <table style="width:320px;border-collapse:collapse;margin-left:auto">
+
+              {{-- Sub Total --}}
+              <tr style="border-top:1px solid #e5e7eb">
+                <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">Sub Total</td>
+                <td style="padding:0.45rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">
+                  Rp {{ number_format($invoice->subtotal, 2, ',', '.') }}
+                </td>
+              </tr>
+
+              {{-- Diskon --}}
+              @if($invoice->discount_value)
+              <tr>
+                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+                  Diskon{{ $invoice->discount_type === 'percent' ? ' (' . $invoice->discount_value . '%)' : '' }}
+                </td>
+                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#dc2626;white-space:nowrap">
+                  - Rp {{ number_format($invoice->discount_amount, 2, ',', '.') }}
+                </td>
+              </tr>
+              @endif
+
+              {{-- DPP --}}
+              @if($invoice->is_dpp)
+              <tr>
+                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">DPP (11/12)</td>
+                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">
+                  Rp {{ number_format($invoice->dpp_base, 2, ',', '.') }}
+                </td>
+              </tr>
+              @endif
+
+              {{-- PPN --}}
+              @if($invoice->tax_percentage)
+              <tr>
+                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">PPN {{ $invoice->tax_percentage }}%</td>
+                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">
+                  Rp {{ number_format($invoice->tax_amount, 2, ',', '.') }}
+                </td>
+              </tr>
+              @endif
+
+              {{-- Grand Total --}}
+              <tr style="border-top:2px solid #1d4ed8">
+                <td style="padding:0.6rem 0.75rem 0.6rem 0;font-size:0.875rem;font-weight:900;color:#1d4ed8;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap">TOTAL</td>
+                <td style="padding:0.6rem 0;font-size:1rem;font-weight:900;text-align:right;font-family:'Courier New',monospace;color:#1d4ed8;white-space:nowrap">
+                  Rp {{ number_format($invoice->total, 2, ',', '.') }}
+                </td>
+              </tr>
+
+            </table>
           </td>
         </tr>
       </tfoot>
     </table>
   </div>
+
+  {{-- NOTES --}}
+  @if($invoice->notes)
+  <div style="margin:1rem 2.5rem 0 2.5rem;padding:0.75rem 1rem;background:#f9fafb;border-radius:0.5rem;border:1px solid #e5e7eb">
+    <p style="font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.35rem">Catatan / Notes</p>
+    <p style="font-size:0.875rem;color:#374151;white-space:pre-line;line-height:1.5">{{ $invoice->notes }}</p>
+  </div>
+  @endif
 
   {{-- PAYMENT + SIGNATURE --}}
   <div style="display:flex;align-items:flex-start;gap:2rem;padding:2rem 2.5rem 2rem 2.5rem">

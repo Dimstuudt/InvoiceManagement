@@ -183,13 +183,57 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Show', [
             'invoice' => array_merge($invoice->toArray(), [
-                'subtotal'     => $invoice->subtotal,
-                'tax_amount'   => $invoice->tax_amount,
-                'total'        => $invoice->total,
-                'client_emails'=> $invoice->client?->emails->pluck('email')->toArray() ?? [],
+                'subtotal'        => $invoice->subtotal,
+                'discount_amount' => $invoice->discount_amount,
+                'after_discount'  => $invoice->after_discount,
+                'dpp_base'        => $invoice->dpp_base,
+                'tax_amount'      => $invoice->tax_amount,
+                'total'           => $invoice->total,
+                'client_emails'   => $invoice->client?->emails->pluck('email')->toArray() ?? [],
             ]),
             'emailTemplates' => EmailTemplate::orderBy('name')->get(['id', 'name', 'subject', 'body', 'is_default']),
         ]);
+    }
+
+    public function saveAll(Request $request, Invoice $invoice)
+    {
+        $request->validate([
+            'items'               => 'required|array|min:1',
+            'items.*.description' => 'required|string|max:255',
+            'items.*.amount'      => 'required|numeric|min:0',
+            'items.*.discount'    => 'nullable|numeric|min:0',
+            'tax_percentage'      => 'nullable|numeric|min:0|max:100',
+            'discount_type'       => 'nullable|in:percent,amount',
+            'discount_value'      => 'nullable|numeric|min:0',
+            'is_dpp'              => 'boolean',
+            'spk_number'          => 'nullable|string|max:100',
+            'attention'           => 'nullable|string|max:255',
+            'notes'               => 'nullable|string',
+        ]);
+
+        $invoice->items()->delete();
+        foreach ($request->items as $i => $item) {
+            $invoice->items()->create([
+                'description' => $item['description'],
+                'amount'      => $item['amount'],
+                'discount'    => isset($item['discount']) && $item['discount'] > 0 ? $item['discount'] : null,
+                'sort_order'  => $i,
+            ]);
+        }
+
+        $dv = $request->input('discount_value');
+
+        $invoice->update([
+            'tax_percentage' => $request->input('tax_percentage'),
+            'discount_type'  => $dv > 0 ? $request->input('discount_type') : null,
+            'discount_value' => $dv > 0 ? $dv : null,
+            'is_dpp'         => $request->boolean('is_dpp'),
+            'spk_number'     => $request->input('spk_number'),
+            'attention'      => $request->input('attention'),
+            'notes'          => $request->input('notes'),
+        ]);
+
+        return back()->with('success', 'Invoice disimpan.');
     }
 
     public function updateItems(Request $request, Invoice $invoice)
@@ -198,6 +242,10 @@ class InvoiceController extends Controller
             'items'               => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
             'items.*.amount'      => 'required|numeric|min:0',
+            'items.*.discount'    => 'nullable|numeric|min:0',
+            'spk_number'          => 'nullable|string|max:100',
+            'attention'           => 'nullable|string|max:255',
+            'notes'               => 'nullable|string',
         ]);
 
         $invoice->items()->delete();
@@ -205,11 +253,41 @@ class InvoiceController extends Controller
             $invoice->items()->create([
                 'description' => $item['description'],
                 'amount'      => $item['amount'],
+                'discount'    => isset($item['discount']) && $item['discount'] > 0 ? $item['discount'] : null,
                 'sort_order'  => $i,
             ]);
         }
 
+        $invoice->update($request->only('spk_number', 'attention', 'notes'));
+
         return back()->with('success', 'Item invoice diperbarui.');
+    }
+
+    public function updateTotals(Request $request, Invoice $invoice)
+    {
+        $request->validate([
+            'tax_percentage' => 'nullable|numeric|min:0|max:100',
+            'discount_type'  => 'nullable|in:percent,amount',
+            'discount_value' => 'nullable|numeric|min:0',
+            'is_dpp'         => 'boolean',
+            'spk_number'     => 'nullable|string|max:100',
+            'attention'      => 'nullable|string|max:255',
+            'notes'          => 'nullable|string',
+        ]);
+
+        $dv = $request->input('discount_value');
+
+        $invoice->update([
+            'tax_percentage' => $request->input('tax_percentage'),
+            'discount_type'  => $dv > 0 ? $request->input('discount_type') : null,
+            'discount_value' => $dv > 0 ? $dv : null,
+            'is_dpp'         => $request->boolean('is_dpp'),
+            'spk_number'     => $request->input('spk_number'),
+            'attention'      => $request->input('attention'),
+            'notes'          => $request->input('notes'),
+        ]);
+
+        return back()->with('success', 'Total invoice diperbarui.');
     }
 
     public function edit(Invoice $invoice)
@@ -399,10 +477,11 @@ class InvoiceController extends Controller
     public function updateMeta(Request $request, Invoice $invoice)
     {
         $request->validate([
-            'attention' => 'nullable|string|max:255',
-            'notes'     => 'nullable|string',
+            'spk_number' => 'nullable|string|max:100',
+            'attention'  => 'nullable|string|max:255',
+            'notes'      => 'nullable|string',
         ]);
-        $invoice->update($request->only('attention', 'notes'));
+        $invoice->update($request->only('spk_number', 'attention', 'notes'));
         return back()->with('success', 'Disimpan.');
     }
 
@@ -445,6 +524,9 @@ class InvoiceController extends Controller
             'due_date'            => $dueDate,
             'status'              => 'draft',
             'tax_percentage'      => $parent->tax_percentage,
+            'discount_type'       => $parent->discount_type,
+            'discount_value'      => $parent->discount_value,
+            'is_dpp'              => $parent->is_dpp,
             'interval_months'     => $parent->interval_months,
             'parent_invoice_id'   => $parent->id,
         ]);
@@ -453,6 +535,7 @@ class InvoiceController extends Controller
             $child->items()->create([
                 'description' => $item->description,
                 'amount'      => $item->amount,
+                'discount'    => $item->discount,
                 'sort_order'  => $item->sort_order,
             ]);
         }

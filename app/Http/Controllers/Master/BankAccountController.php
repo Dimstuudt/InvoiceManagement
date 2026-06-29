@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\BankAccount;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -40,7 +41,8 @@ class BankAccountController extends Controller
             $data['bank_logo'] = $request->file('bank_logo')->store('banks', 'public');
         }
 
-        BankAccount::create($data);
+        $account = BankAccount::create($data);
+        ActivityLogger::log('bank_account.created', $account);
 
         return redirect()->route('master.bank-accounts.index')->with('success', 'Bank account berhasil ditambahkan.');
     }
@@ -74,12 +76,15 @@ class BankAccountController extends Controller
         }
 
         $bankAccount->update($data);
+        ActivityLogger::log('bank_account.updated', $bankAccount);
 
         return redirect()->route('master.bank-accounts.index')->with('success', 'Bank account berhasil diupdate.');
     }
 
     public function destroy(BankAccount $bankAccount)
     {
+        ActivityLogger::log('bank_account.deleted', $bankAccount);
+
         if ($bankAccount->bank_logo) {
             Storage::disk('public')->delete($bankAccount->bank_logo);
         }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientCategory;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -68,6 +69,8 @@ class ClientController extends Controller
         $this->syncEmails($client, $request->emails ?? []);
         $this->syncSocialMedia($client, $request->social_media ?? []);
 
+        ActivityLogger::log('client.created', $client);
+
         return redirect()->route('clients.index')->with('success', 'Client berhasil ditambahkan.');
     }
 
@@ -122,11 +125,15 @@ class ClientController extends Controller
         $this->syncEmails($client, $request->emails ?? []);
         $this->syncSocialMedia($client, $request->social_media ?? []);
 
+        ActivityLogger::log('client.updated', $client);
+
         return redirect()->route('clients.index')->with('success', 'Client berhasil diupdate.');
     }
 
     public function destroy(Client $client)
     {
+        ActivityLogger::log('client.deleted', $client);
+
         if ($client->npwp_image) {
             Storage::disk('public')->delete($client->npwp_image);
         }

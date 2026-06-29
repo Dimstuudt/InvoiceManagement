@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClientCategory;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -28,7 +29,8 @@ class ClientCategoryController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        ClientCategory::create($request->only('name', 'description'));
+        $category = ClientCategory::create($request->only('name', 'description'));
+        ActivityLogger::log('client_category.created', $category);
 
         return redirect()->route('master.client-categories.index')->with('success', 'Kategori klien berhasil ditambahkan.');
     }
@@ -48,12 +50,14 @@ class ClientCategoryController extends Controller
         ]);
 
         $clientCategory->update($request->only('name', 'description'));
+        ActivityLogger::log('client_category.updated', $clientCategory);
 
         return redirect()->route('master.client-categories.index')->with('success', 'Kategori klien berhasil diupdate.');
     }
 
     public function destroy(ClientCategory $clientCategory)
     {
+        ActivityLogger::log('client_category.deleted', $clientCategory);
         $clientCategory->delete();
 
         return redirect()->route('master.client-categories.index')->with('success', 'Kategori klien berhasil dihapus.');

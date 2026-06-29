@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\EmailTemplate;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -34,7 +35,8 @@ class EmailTemplateController extends Controller
             EmailTemplate::where('is_default', true)->update(['is_default' => false]);
         }
 
-        EmailTemplate::create($data);
+        $template = EmailTemplate::create($data);
+        ActivityLogger::log('email_template.created', $template);
 
         return redirect()->route('master.email-templates.index')
             ->with('success', 'Template email berhasil ditambahkan.');
@@ -63,6 +65,7 @@ class EmailTemplateController extends Controller
         }
 
         $emailTemplate->update($data);
+        ActivityLogger::log('email_template.updated', $emailTemplate);
 
         return redirect()->route('master.email-templates.index')
             ->with('success', 'Template email berhasil diperbarui.');
@@ -70,6 +73,7 @@ class EmailTemplateController extends Controller
 
     public function destroy(EmailTemplate $emailTemplate)
     {
+        ActivityLogger::log('email_template.deleted', $emailTemplate);
         $emailTemplate->delete();
 
         return redirect()->route('master.email-templates.index')

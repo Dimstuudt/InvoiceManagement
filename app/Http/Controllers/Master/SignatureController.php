@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\Signature;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -39,7 +40,8 @@ class SignatureController extends Controller
             $data['signature_image'] = $request->file('signature_image')->store('signatures', 'public');
         }
 
-        Signature::create($data);
+        $signature = Signature::create($data);
+        ActivityLogger::log('signature.created', $signature);
 
         return redirect()->route('master.signatures.index')->with('success', 'Signature berhasil ditambahkan.');
     }
@@ -72,12 +74,15 @@ class SignatureController extends Controller
         }
 
         $signature->update($data);
+        ActivityLogger::log('signature.updated', $signature);
 
         return redirect()->route('master.signatures.index')->with('success', 'Signature berhasil diupdate.');
     }
 
     public function destroy(Signature $signature)
     {
+        ActivityLogger::log('signature.deleted', $signature);
+
         if ($signature->signature_image) {
             Storage::disk('public')->delete($signature->signature_image);
         }

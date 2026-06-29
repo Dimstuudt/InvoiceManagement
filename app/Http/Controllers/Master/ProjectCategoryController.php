@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProjectCategory;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -29,7 +30,8 @@ class ProjectCategoryController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        ProjectCategory::create($request->only('name', 'code', 'description'));
+        $category = ProjectCategory::create($request->only('name', 'code', 'description'));
+        ActivityLogger::log('project_category.created', $category);
 
         return redirect()->route('master.project-categories.index')->with('success', 'Kategori proyek berhasil ditambahkan.');
     }
@@ -50,12 +52,14 @@ class ProjectCategoryController extends Controller
         ]);
 
         $projectCategory->update($request->only('name', 'code', 'description'));
+        ActivityLogger::log('project_category.updated', $projectCategory);
 
         return redirect()->route('master.project-categories.index')->with('success', 'Kategori proyek berhasil diupdate.');
     }
 
     public function destroy(ProjectCategory $projectCategory)
     {
+        ActivityLogger::log('project_category.deleted', $projectCategory);
         $projectCategory->delete();
 
         return redirect()->route('master.project-categories.index')->with('success', 'Kategori proyek berhasil dihapus.');

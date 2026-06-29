@@ -405,8 +405,25 @@ const standaloneInvoices = computed(() => groups.value.filter(g => !g.isRecurrin
 
 // ── Financial helpers ───────────────────────────────────────
 function invoiceTotal(inv) {
-  const base = parseFloat(inv.items_sum_amount) || 0;
-  return inv.tax_percentage ? base + base * (inv.tax_percentage / 100) : base;
+  // subtotal = sum of item.amount - item.discount per item
+  const itemsSum = parseFloat(inv.items_sum_amount) || 0
+  const itemsDiscountSum = parseFloat(inv.items_sum_discount) || 0
+  const subtotal = Math.max(0, itemsSum - itemsDiscountSum)
+
+  // invoice-level discount
+  let afterDiscount = subtotal
+  if (inv.discount_value) {
+    const disc = inv.discount_type === 'percent'
+      ? subtotal * (inv.discount_value / 100)
+      : parseFloat(inv.discount_value)
+    afterDiscount = Math.max(0, subtotal - disc)
+  }
+
+  // DPP + tax
+  const dppBase = inv.is_dpp ? afterDiscount * (11 / 12) : afterDiscount
+  const tax = inv.tax_percentage ? dppBase * (inv.tax_percentage / 100) : 0
+
+  return afterDiscount + tax
 }
 function chainTotal(group)     { return group.invoices.reduce((s, inv) => s + invoiceTotal(inv), 0); }
 function chainPaidTotal(group) { return group.invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + invoiceTotal(inv), 0); }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use Anhskohbo\NoCaptcha\Facades\NoCaptcha;
 use App\Http\Controllers\Controller;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -41,11 +42,14 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        ActivityLogger::log('user.login');
+
         return redirect()->intended(route('dashboard'));
     }
 
     public function destroy(Request $request)
     {
+        ActivityLogger::log('user.logout');
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

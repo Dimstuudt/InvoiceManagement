@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\InvoiceController;
@@ -33,6 +34,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
+
+    Route::get('logs', [ActivityLogController::class, 'index'])->name('logs.index');
 
     Route::resource('users', UserController::class)->except(['show'])->middleware('admin');
 

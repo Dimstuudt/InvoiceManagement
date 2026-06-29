@@ -9,9 +9,9 @@ use App\Models\EmailTemplate;
 use App\Models\Invoice;
 use App\Models\ProjectCategory;
 use App\Models\Signature;
+use App\Support\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class InvoiceController extends Controller
@@ -19,7 +19,7 @@ class InvoiceController extends Controller
     public function index()
     {
         $clients = Client::where('is_active', true)
-            ->with('category')
+            ->with(['category', 'invoices' => fn($q) => $q->with('items')])
             ->withCount([
                 'invoices as draft_count'   => fn($q) => $q->where('status', 'draft'),
                 'invoices as sent_count'    => fn($q) => $q->where('status', 'sent'),
@@ -31,29 +31,14 @@ class InvoiceController extends Controller
             ->orderBy('company_name')
             ->get();
 
-        $productCounts = Invoice::select('client_id', DB::raw('COUNT(DISTINCT project_category_id) as count'))
-            ->groupBy('client_id')
-            ->pluck('count', 'client_id');
-
-        $unpaidAmounts = Invoice::select('client_id', DB::raw('SUM(invoice_items.amount) as total'))
-            ->join('invoice_items', 'invoices.id', '=', 'invoice_items.invoice_id')
-            ->where('status', 'unpaid')
-            ->groupBy('client_id')
-            ->pluck('total', 'client_id');
-
-        $totalAmounts = Invoice::select('client_id', DB::raw('SUM(invoice_items.amount) as total'))
-            ->join('invoice_items', 'invoices.id', '=', 'invoice_items.invoice_id')
-            ->groupBy('client_id')
-            ->pluck('total', 'client_id');
-
-        $clients->each(function ($c) use ($productCounts, $unpaidAmounts, $totalAmounts) {
-            $c->product_type_count = $productCounts[$c->id] ?? 0;
-            $c->unpaid_amount      = (float) ($unpaidAmounts[$c->id] ?? 0);
-            $c->total_amount       = (float) ($totalAmounts[$c->id] ?? 0);
+        $clients->each(function ($c) {
+            $c->product_type_count = $c->invoices->pluck('project_category_id')->unique()->filter()->count();
+            $c->unpaid_amount      = (float) $c->invoices->where('status', 'unpaid')->sum(fn($inv) => $inv->total);
+            $c->total_amount       = (float) $c->invoices->sum(fn($inv) => $inv->total);
         });
 
         $summary = [
-            'total_outstanding' => $unpaidAmounts->sum(),
+            'total_outstanding' => $clients->sum('unpaid_amount'),
             'total_overdue'     => $clients->sum('overdue_count'),
             'total_unpaid'      => $clients->sum('unpaid_count'),
             'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->unpaid_count)),
@@ -106,6 +91,7 @@ class InvoiceController extends Controller
 
         $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user', 'emailTemplate'])
             ->withSum('items', 'amount')
+            ->withSum('items', 'discount')
             ->where('client_id', $client->id)
             ->orderByDesc('issue_date')
             ->get();
@@ -170,6 +156,8 @@ class InvoiceController extends Controller
             'with_signature' => $request->boolean('with_signature'),
         ]);
 
+        ActivityLogger::log('invoice.created', $invoice, ['client' => $invoice->client?->company_name]);
+
         return redirect()->route('invoices.show', $invoice)->with('success', 'Invoice dibuat. Silakan tambahkan item.');
     }
 
@@ -232,6 +220,8 @@ class InvoiceController extends Controller
             'attention'      => $request->input('attention'),
             'notes'          => $request->input('notes'),
         ]);
+
+        ActivityLogger::log('invoice.saved', $invoice);
 
         return back()->with('success', 'Invoice disimpan.');
     }
@@ -352,11 +342,14 @@ class InvoiceController extends Controller
             'with_signature' => $request->boolean('with_signature'),
         ]);
 
+        ActivityLogger::log('invoice.updated', $invoice);
+
         return redirect()->route('invoices.show', $invoice)->with('success', 'Invoice berhasil diperbarui.');
     }
 
     public function destroy(Invoice $invoice)
     {
+        ActivityLogger::log('invoice.deleted', $invoice);
         $invoice->delete();
         return back()->with('success', 'Invoice berhasil dihapus.');
     }
@@ -406,6 +399,8 @@ class InvoiceController extends Controller
 
         $invoice->update(['status' => 'sent', 'is_marked' => false]);
 
+        ActivityLogger::log('invoice.email_sent', $invoice, ['to' => $validated['emails']]);
+
         $emailList = implode(', ', $validated['emails']);
 
         return back()->with('success', "Invoice berhasil dikirim ke {$emailList}.");
@@ -422,6 +417,8 @@ class InvoiceController extends Controller
         $pdf       = base64_decode(app(\App\Services\PdfService::class)->generate($html));
         $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
 
+        ActivityLogger::log('invoice.downloaded', $invoice);
+
         return response($pdf)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
@@ -433,6 +430,8 @@ class InvoiceController extends Controller
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user',
         ]);
+
+        ActivityLogger::log('invoice.printed', $invoice);
 
         return view('invoices.pdf', [
             'invoice'   => $invoice,
@@ -464,6 +463,7 @@ class InvoiceController extends Controller
     public function toggleMark(Invoice $invoice)
     {
         $invoice->update(['is_marked' => ! $invoice->is_marked]);
+        ActivityLogger::log($invoice->is_marked ? 'invoice.marked' : 'invoice.unmarked', $invoice);
         return back()->with('success', $invoice->is_marked ? 'Invoice ditandai.' : 'Tanda dihapus.');
     }
 
@@ -471,6 +471,9 @@ class InvoiceController extends Controller
     {
         $request->validate(['interval_months' => 'nullable|integer|min:1|max:12']);
         $invoice->update(['interval_months' => $request->interval_months]);
+        ActivityLogger::log('invoice.interval_changed', $invoice, [
+            'interval' => $request->interval_months,
+        ]);
         return back()->with('success', 'Interval diperbarui.');
     }
 
@@ -482,14 +485,21 @@ class InvoiceController extends Controller
             'notes'      => 'nullable|string',
         ]);
         $invoice->update($request->only('spk_number', 'attention', 'notes'));
+        ActivityLogger::log('invoice.meta_updated', $invoice);
         return back()->with('success', 'Disimpan.');
     }
 
     public function updateStatus(Request $request, Invoice $invoice)
     {
         $request->validate(['status' => 'required|in:draft,sent,paid,unpaid']);
+        $oldStatus = $invoice->status;
         $invoice->update(['status' => $request->status]);
         $invoice->refresh();
+
+        ActivityLogger::log('invoice.status_changed', $invoice, [
+            'from' => $oldStatus,
+            'to'   => $request->status,
+        ]);
 
         if ($request->status === 'paid' && $invoice->interval_months && $invoice->children()->doesntExist()) {
             $this->generateRecurring($invoice);
@@ -539,6 +549,8 @@ class InvoiceController extends Controller
                 'sort_order'  => $item->sort_order,
             ]);
         }
+
+        ActivityLogger::log('invoice.recurring_created', $child, ['parent' => $parent->invoice_number]);
     }
 
     private function urlToBase64(?string $url): ?string

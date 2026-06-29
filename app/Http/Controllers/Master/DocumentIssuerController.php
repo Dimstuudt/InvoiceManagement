@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\DocumentIssuer;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -41,7 +42,8 @@ class DocumentIssuerController extends Controller
             $data['header_image'] = $request->file('header_image')->store('issuers', 'public');
         }
 
-        DocumentIssuer::create($data);
+        $issuer = DocumentIssuer::create($data);
+        ActivityLogger::log('document_issuer.created', $issuer);
 
         return redirect()->route('master.document-issuers.index')->with('success', 'Document issuer berhasil ditambahkan.');
     }
@@ -76,12 +78,15 @@ class DocumentIssuerController extends Controller
         }
 
         $documentIssuer->update($data);
+        ActivityLogger::log('document_issuer.updated', $documentIssuer);
 
         return redirect()->route('master.document-issuers.index')->with('success', 'Document issuer berhasil diupdate.');
     }
 
     public function destroy(DocumentIssuer $documentIssuer)
     {
+        ActivityLogger::log('document_issuer.deleted', $documentIssuer);
+
         if ($documentIssuer->header_image) {
             Storage::disk('public')->delete($documentIssuer->header_image);
         }

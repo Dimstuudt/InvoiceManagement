@@ -503,7 +503,7 @@ class InvoiceController extends Controller
 
         if ($request->status === 'paid' && $invoice->interval_months && $invoice->children()->doesntExist()) {
             $this->generateRecurring($invoice);
-            return back()->with('success', 'Invoice lunas. Invoice perpanjangan dibuat sebagai draft.');
+            return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
         }
 
         return back()->with('success', 'Status diperbarui.');
@@ -513,8 +513,10 @@ class InvoiceController extends Controller
     {
         $parent->load('items', 'projectCategory');
 
-        $issueDate = Carbon::parse($parent->due_date)->addDay();
-        $dueDate   = $issueDate->copy()->addMonths($parent->interval_months);
+        // issue = issue_date parent + interval (maju N bulan dari tanggal mulai)
+        $issueDate = Carbon::parse($parent->issue_date)->addMonths($parent->interval_months);
+        // due = issue baru + interval - 1 hari
+        $dueDate = $issueDate->copy()->addMonths($parent->interval_months)->subDay();
 
         $number = Invoice::generateNumber($parent->projectCategory->code, $issueDate);
 

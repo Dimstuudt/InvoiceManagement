@@ -131,64 +131,78 @@
               <!-- Vertical line -->
               <div class="absolute left-[34px] top-0 bottom-0 w-px bg-gray-100 pointer-events-none"/>
 
-              <div v-for="(invoice, idx) in group.invoices" :key="invoice.id"
-                class="relative flex items-center gap-3 px-5 py-3 border-t border-gray-50 hover:bg-gray-50/60 transition-colors group">
-
-                <!-- Status dot -->
-                <div class="relative z-10 w-7 h-7 rounded-full flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm"
-                  :class="dotClass(invoice)">
-                  <svg v-if="invoice.status === 'paid'" class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                  </svg>
-                  <div v-else class="w-2 h-2 rounded-full bg-white"/>
-                </div>
-
-                <!-- Invoice number + dates -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <p class="font-mono text-sm font-semibold text-gray-800 truncate">{{ invoice.invoice_number }}</p>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
-                      :class="statusClass(invoice.status)">
-                      {{ statusLabel(invoice.status) }}
-                    </span>
-                    <span v-if="isPastDue(invoice)"
-                      class="text-xs font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md shrink-0">
-                      lewat {{ daysPastDue(invoice) }} hari
-                    </span>
+              <template v-for="(invoice, idx) in group.invoices" :key="invoice.id">
+                <!-- Gap badge antar invoice -->
+                <div v-if="idx > 0" class="relative flex items-center gap-3 px-5 py-1 border-t border-gray-50/80">
+                  <div class="w-7 flex justify-center shrink-0">
+                    <div class="w-px h-full bg-gray-100"/>
                   </div>
-                  <p class="text-xs text-gray-400 mt-0.5">
-                    {{ fmtDateShort(invoice.issue_date) }} → {{ fmtDateShort(invoice.due_date) }}
-                  </p>
+                  <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                    ↻ {{ monthGap(group.invoices[idx - 1], invoice) }} bln
+                  </span>
                 </div>
 
-                <!-- Amount -->
-                <div class="text-right shrink-0">
-                  <p class="text-sm font-semibold text-gray-800">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
-                  <p v-if="invoice.tax_percentage" class="text-xs text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
-                </div>
+                <div class="relative flex items-center gap-3 px-5 py-3 border-t border-gray-50 hover:bg-gray-50/60 transition-colors group">
 
-                <!-- Actions (show on hover) -->
-                <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
-                  <Link :href="route('invoices.show', invoice.id) + '?from=client'" title="Lihat"
-                    class="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 transition-colors">
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  <!-- Status dot -->
+                  <div class="relative z-10 w-7 h-7 rounded-full flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm"
+                    :class="dotClass(invoice)">
+                    <svg v-if="invoice.status === 'paid'" class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                     </svg>
-                  </Link>
-                  <button @click.stop="toggleMenu($event, invoice)" title="Lainnya"
-                    class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
-                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                    </svg>
-                  </button>
-                  <button @click="deleteInvoice(invoice)" title="Hapus"
-                    class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                  </button>
+                    <div v-else class="w-2 h-2 rounded-full bg-white"/>
+                  </div>
+
+                  <!-- Invoice number + dates -->
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <Link :href="route('invoices.show', invoice.id) + '?from=client'"
+                        class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
+                        {{ invoice.invoice_number }}
+                      </Link>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
+                        :class="statusClass(invoice.status)">
+                        {{ statusLabel(invoice.status) }}
+                      </span>
+                      <span v-if="isPastDue(invoice)"
+                        class="text-xs font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md shrink-0">
+                        lewat {{ daysPastDue(invoice) }} hari
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                      {{ fmtDateShort(invoice.issue_date) }} → {{ fmtDateShort(invoice.due_date) }}
+                    </p>
+                  </div>
+
+                  <!-- Amount -->
+                  <div class="text-right shrink-0">
+                    <p class="text-sm font-semibold text-gray-800">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
+                    <p v-if="invoice.tax_percentage" class="text-xs text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
+                  </div>
+
+                  <!-- Actions (show on hover) -->
+                  <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
+                    <Link :href="route('invoices.show', invoice.id) + '?from=client'" title="Lihat"
+                      class="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                      </svg>
+                    </Link>
+                    <button @click.stop="toggleMenu($event, invoice)" title="Lainnya"
+                      class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+                      </svg>
+                    </button>
+                    <button @click="deleteInvoice(invoice)" title="Hapus"
+                      class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
 
           </div>
@@ -488,6 +502,16 @@ function chainIconClass(group) {
   const last = group.invoices.at(-1);
   if (last?.status === 'paid')        return 'bg-emerald-100 text-emerald-600';
   return 'bg-indigo-100 text-indigo-500';
+}
+
+// ── Month gap between two consecutive invoices ──────────────
+function monthGap(newer, older) {
+  // Use newer invoice's interval_months if set (inherited from when it was generated)
+  if (newer.interval_months) return newer.interval_months
+  // Fallback: compute from issue_date diff
+  const d1 = new Date(newer.issue_date)
+  const d2 = new Date(older.issue_date)
+  return Math.max(1, Math.round(((d1.getFullYear() - d2.getFullYear()) * 12 + (d1.getMonth() - d2.getMonth()))))
 }
 
 // ── Actions ─────────────────────────────────────────────────

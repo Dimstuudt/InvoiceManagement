@@ -142,8 +142,11 @@
       <div class="border-t border-gray-700 p-4 flex-shrink-0">
         <Link :href="route('profile.show')" @click="closeSidebarOnMobile"
           class="flex items-center gap-3 rounded-xl hover:bg-gray-800 p-1.5 -mx-1.5 transition-colors group">
-          <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-            {{ userInitial }}
+          <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-medium flex-shrink-0 overflow-hidden">
+            <img v-if="$page.props.auth.user.avatar_url"
+              :src="$page.props.auth.user.avatar_url"
+              class="w-full h-full object-cover" alt="avatar"/>
+            <span v-else>{{ userInitial }}</span>
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-sm font-medium text-white truncate">{{ $page.props.auth.user.name }}</p>

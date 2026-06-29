@@ -5,10 +5,27 @@
       <!-- Avatar + Info -->
       <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div class="flex items-center gap-5">
-          <div class="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0">
-            <span class="text-2xl font-bold text-white">{{ user.name.charAt(0).toUpperCase() }}</span>
+
+          <!-- Avatar clickable -->
+          <div class="relative group shrink-0 cursor-pointer" @click="triggerAvatarInput">
+            <div class="w-16 h-16 rounded-2xl overflow-hidden bg-indigo-600 flex items-center justify-center">
+              <img v-if="avatarPreview || user.avatar_url"
+                :src="avatarPreview || user.avatar_url"
+                class="w-full h-full object-cover" alt="avatar"/>
+              <span v-else class="text-2xl font-bold text-white">{{ user.name.charAt(0).toUpperCase() }}</span>
+            </div>
+            <!-- hover overlay -->
+            <div class="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <input ref="avatarInput" type="file" accept="image/png,image/jpeg,image/webp"
+              class="hidden" @change="onAvatarSelected"/>
           </div>
-          <div>
+
+          <div class="flex-1 min-w-0">
             <h2 class="text-base font-semibold text-gray-900">{{ user.name }}</h2>
             <p class="text-sm text-gray-400 mt-0.5">{{ user.email }}</p>
             <span class="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-md text-xs font-semibold"
@@ -17,8 +34,22 @@
                 : 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200'">
               {{ user.role === 'admin' ? 'Administrator' : 'User' }}
             </span>
+
+            <!-- Avatar action buttons (only visible after selecting file) -->
+            <div v-if="avatarFile" class="flex items-center gap-2 mt-2">
+              <button @click="uploadAvatar" :disabled="avatarForm.processing"
+                class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors">
+                {{ avatarForm.processing ? 'Menyimpan...' : 'Simpan Foto' }}
+              </button>
+              <button @click="cancelAvatar"
+                class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium rounded-lg transition-colors">
+                Batal
+              </button>
+            </div>
+            <p v-else class="text-xs text-gray-400 mt-1">Klik foto untuk mengganti</p>
           </div>
-          <div class="ml-auto text-right">
+
+          <div class="ml-auto text-right shrink-0">
             <p class="text-xs text-gray-400">Bergabung sejak</p>
             <p class="text-sm font-medium text-gray-600 mt-0.5">{{ fmtDate(user.created_at) }}</p>
           </div>
@@ -110,23 +141,54 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { useForm, usePage } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({ user: Object });
 
+// ── Avatar ──────────────────────────────────────────────
+const avatarInput  = ref(null);
+const avatarFile   = ref(null);
+const avatarPreview = ref(null);
+
+const avatarForm = useForm({ avatar: null });
+
+function triggerAvatarInput() {
+  avatarInput.value?.click();
+}
+
+function onAvatarSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  avatarFile.value  = file;
+  avatarPreview.value = URL.createObjectURL(file);
+  avatarForm.avatar  = file;
+}
+
+function uploadAvatar() {
+  avatarForm.post(route('profile.avatar'), {
+    forceFormData: true,
+    onSuccess: () => {
+      avatarFile.value   = null;
+      avatarPreview.value = null;
+      avatarForm.reset();
+    },
+  });
+}
+
+function cancelAvatar() {
+  avatarFile.value    = null;
+  avatarPreview.value = null;
+  avatarForm.reset();
+  if (avatarInput.value) avatarInput.value.value = '';
+}
+
+// ── Info ─────────────────────────────────────────────────
 const infoSuccess = ref(false);
-const pwSuccess = ref(false);
 
 const infoForm = useForm({
   name:  props.user.name,
   email: props.user.email,
-});
-
-const pwForm = useForm({
-  current_password:      '',
-  password:              '',
-  password_confirmation: '',
 });
 
 function submitInfo() {
@@ -138,6 +200,15 @@ function submitInfo() {
   });
 }
 
+// ── Password ──────────────────────────────────────────────
+const pwSuccess = ref(false);
+
+const pwForm = useForm({
+  current_password:      '',
+  password:              '',
+  password_confirmation: '',
+});
+
 function submitPassword() {
   pwForm.patch(route('profile.password'), {
     onSuccess: () => {
@@ -148,6 +219,7 @@ function submitPassword() {
   });
 }
 
+// ── Helpers ───────────────────────────────────────────────
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
   : '—';

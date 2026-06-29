@@ -23,7 +23,13 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'avatar',
     ];
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar ? \Illuminate\Support\Facades\Storage::url($this->avatar) : null;
+    }
 
     public function isAdmin(): bool
     {

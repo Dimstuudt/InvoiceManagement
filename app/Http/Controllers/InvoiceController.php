@@ -448,7 +448,7 @@ class InvoiceController extends Controller
     {
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
-            'bankAccount', 'signature', 'items', 'user',
+            'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
         ]);
 
         return view('invoices.receipt', [

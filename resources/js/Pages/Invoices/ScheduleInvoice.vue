@@ -31,6 +31,20 @@
           <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
         </select>
         <span class="text-[10px] text-gray-400">→ prioritas issue <span class="font-semibold text-indigo-500">{{ nextMonthLabel }}</span></span>
+        <div class="relative ml-auto">
+          <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+            fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 10.607z"/>
+          </svg>
+          <input v-model="search" type="text" placeholder="Cari nomor invoice..."
+            class="pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 text-gray-700 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition w-56"/>
+          <button v-if="search" @click="search = ''"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- PRIORITY SECTION -->
@@ -40,12 +54,12 @@
             <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block"/>
             <span class="text-sm font-semibold text-gray-700">Akan dikirim {{ nextMonthLabel }}</span>
           </div>
-          <span class="text-xs text-gray-400">{{ priorityInvoices.length }} invoice</span>
+          <span class="text-xs text-gray-400">{{ filteredPriority.length }} invoice</span>
         </div>
 
-        <div v-if="priorityInvoices.length === 0"
+        <div v-if="filteredPriority.length === 0"
           class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-8 text-center">
-          <p class="text-sm text-indigo-300">Tidak ada invoice yang akan dikirim di {{ nextMonthLabel }}.</p>
+          <p class="text-sm text-indigo-300">{{ search ? `Tidak ditemukan "${search}"` : 'Tidak ada invoice yang akan dikirim di ' + nextMonthLabel + '.' }}</p>
         </div>
 
         <div v-else class="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
@@ -62,7 +76,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-indigo-50/50">
-              <tr v-for="invoice in priorityInvoices" :key="invoice.id"
+              <tr v-for="invoice in filteredPriority" :key="invoice.id"
                 :class="invoice.is_marked ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-indigo-50/30'"
                 class="transition-colors group">
                 <!-- Checkbox -->
@@ -164,8 +178,8 @@
       </div>
 
       <!-- OTHER SECTION -->
-      <div v-if="otherInvoices.length === 0" class="text-center py-6">
-        <p class="text-sm text-gray-300">Tidak ada invoice lainnya.</p>
+      <div v-if="filteredOther.length === 0" class="text-center py-6">
+        <p class="text-sm text-gray-300">{{ search ? `Tidak ditemukan "${search}"` : 'Tidak ada invoice lainnya.' }}</p>
       </div>
 
       <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -182,7 +196,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            <tr v-for="invoice in otherInvoices" :key="invoice.id"
+            <tr v-for="invoice in filteredOther" :key="invoice.id"
               :class="invoice.is_marked ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50/50'"
               class="transition-colors group">
               <!-- Checkbox -->
@@ -290,7 +304,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import SendEmailModal from '@/Components/SendEmailModal.vue';
 import { Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
   priorityInvoices: Array,
@@ -316,6 +330,13 @@ const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
 const localMonth = ref(props.filters.month);
 const localYear  = ref(props.filters.year);
+const search     = ref('');
+
+const matchSearch = (inv) => !search.value ||
+  inv.invoice_number.toLowerCase().includes(search.value.toLowerCase())
+
+const filteredPriority = computed(() => props.priorityInvoices.filter(matchSearch))
+const filteredOther    = computed(() => props.otherInvoices.filter(matchSearch))
 
 function applyFilters() {
   router.get(route('invoices.schedule'), {

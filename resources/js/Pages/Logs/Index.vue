@@ -270,6 +270,13 @@ const badgeClass = (action) => BADGE[COLOR(action)] ?? BADGE.indigo
 const dotClass   = (action) => DOT[COLOR(action)]   ?? DOT.indigo
 
 // ── Description generator ─────────────────────────────────────────────────
+const MONTH_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']
+const fmtMonth = (dateStr) => {
+  if (!dateStr) return '?'
+  const [y, m] = dateStr.split('-')
+  return `${MONTH_ID[parseInt(m) - 1]} ${y}`
+}
+
 function describe(log) {
   const s  = log.subject_label ?? ''
   const d  = log.detail ?? {}
@@ -288,11 +295,29 @@ function describe(log) {
     case 'invoice.printed':           return `${s} dibuka untuk print`
     case 'invoice.interval_changed':  return `Interval ${s} diubah ke ${d.interval ?? '?'} bulan`
     case 'invoice.meta_updated':      return `SPK / catatan ${s} diperbarui`
+    case 'invoice.items_updated':     return `Item invoice ${s} diperbarui`
+    case 'invoice.totals_updated':    return `Total & diskon ${s} diperbarui`
+    case 'invoice.tax_updated':       return `Pajak ${s} diubah ke ${d.tax ?? '?'}%`
+    case 'invoice.frozen':            return `Invoice ${s} dibekukan`
+    case 'invoice.carried':           return `Invoice ${s} di-carry ke periode berikutnya`
+    case 'invoice.resumed':           return `Invoice ${s} dilanjutkan dari status frozen`
+    case 'invoice.exported': {
+      const from       = fmtMonth(d.from)
+      const to         = fmtMonth(d.to)
+      const statusText = d.statuses === 'all' ? 'semua status' : d.statuses
+      return `Export ${d.count ?? 0} invoice · ${from} s/d ${to} · filter: ${statusText}`
+    }
     case 'client.created':            return `Client ${s} ditambahkan`
     case 'client.updated':            return `Data client ${s} diperbarui`
     case 'client.deleted':            return `Client ${s} dihapus`
     case 'user.login':                return 'Login berhasil'
     case 'user.logout':               return 'Logout dari aplikasi'
+    case 'user.created':              return `User ${s} ditambahkan`
+    case 'user.updated':              return `Data user ${s} diperbarui`
+    case 'user.deleted':              return `User ${s} dihapus`
+    case 'profile.updated':           return 'Profil diperbarui'
+    case 'profile.avatar_updated':    return 'Avatar profil diperbarui'
+    case 'profile.password_changed':  return 'Password diubah'
     default:
       return s ? `${log.action_label}: ${s}` : log.action_label
   }

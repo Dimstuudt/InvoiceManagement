@@ -461,6 +461,132 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function export(Request $request)
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from') . '-01')->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to') . '-01')->endOfMonth()
+            : now()->endOfMonth();
+
+        $validStatuses = ['draft', 'sent', 'paid', 'unpaid', 'frozen', 'carried'];
+        $statuses = array_values(array_filter(
+            (array) $request->input('status', []),
+            fn($s) => in_array($s, $validStatuses)
+        ));
+
+        $query = Invoice::with(['client', 'projectCategory', 'items'])
+            ->whereBetween('issue_date', [$from->toDateString(), $to->toDateString()]);
+
+        if (!empty($statuses)) {
+            $query->whereIn('status', $statuses);
+        }
+
+        $invoices = $query->orderBy('issue_date')->orderBy('invoice_number')->get();
+
+        $statusLabels = [
+            'draft'   => 'Draft',
+            'sent'    => 'Terkirim',
+            'paid'    => 'Lunas',
+            'unpaid'  => 'Belum Dibayar',
+            'frozen'  => 'Dibekukan',
+            'carried' => 'Carry',
+        ];
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Laporan Invoice');
+
+        // Header style
+        $headerStyle = [
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+            'fill'      => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']],
+            'alignment' => ['vertical' => 'center'],
+        ];
+
+        $headers = [
+            'A' => ['No',               6],
+            'B' => ['Nomor Invoice',    24],
+            'C' => ['Client',           28],
+            'D' => ['Kategori Proyek',  20],
+            'E' => ['Tanggal Issue',    14],
+            'F' => ['Jatuh Tempo',      14],
+            'G' => ['Status',           14],
+            'H' => ['Subtotal (Rp)',    18],
+            'I' => ['Diskon (Rp)',      16],
+            'J' => ['DPP (Rp)',         16],
+            'K' => ['Pajak (%)',        10],
+            'L' => ['Pajak (Rp)',       16],
+            'M' => ['Total (Rp)',       18],
+        ];
+
+        foreach ($headers as $col => [$label, $width]) {
+            $sheet->setCellValue("{$col}1", $label);
+            $sheet->getStyle("{$col}1")->applyFromArray($headerStyle);
+            $sheet->getColumnDimension($col)->setWidth($width);
+        }
+        $sheet->getRowDimension(1)->setRowHeight(22);
+
+        // Number format
+        $numFmt = '#,##0';
+        $altFill = ['fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'EEEEFF']]];
+
+        foreach ($invoices as $i => $inv) {
+            $row  = $i + 2;
+            $odd  = $i % 2 !== 0;
+
+            $sheet->setCellValue("A{$row}", $i + 1);
+            $sheet->setCellValue("B{$row}", $inv->invoice_number);
+            $sheet->setCellValue("C{$row}", $inv->client?->company_name ?? '-');
+            $sheet->setCellValue("D{$row}", $inv->projectCategory?->name ?? '-');
+            $sheet->setCellValue("E{$row}", $inv->issue_date->format('d/m/Y'));
+            $sheet->setCellValue("F{$row}", $inv->due_date->format('d/m/Y'));
+            $sheet->setCellValue("G{$row}", $statusLabels[$inv->status] ?? $inv->status);
+            $sheet->setCellValue("H{$row}", (int) $inv->subtotal);
+            $sheet->setCellValue("I{$row}", (int) $inv->discount_amount);
+            $sheet->setCellValue("J{$row}", (int) $inv->dpp_base);
+            $sheet->setCellValue("K{$row}", $inv->tax_percentage ?? 0);
+            $sheet->setCellValue("L{$row}", (int) $inv->tax_amount);
+            $sheet->setCellValue("M{$row}", (int) $inv->total);
+
+            foreach (['H', 'I', 'J', 'L', 'M'] as $numCol) {
+                $sheet->getStyle("{$numCol}{$row}")->getNumberFormat()->setFormatCode($numFmt);
+            }
+
+            if ($odd) {
+                $sheet->getStyle("A{$row}:M{$row}")->applyFromArray($altFill);
+            }
+        }
+
+        // Freeze header row
+        $sheet->freezePane('A2');
+
+        // Auto filter
+        $lastRow = count($invoices) + 1;
+        $sheet->setAutoFilter("A1:M{$lastRow}");
+
+        // Bold total column
+        $sheet->getStyle("M1:M{$lastRow}")->getFont()->setBold(true);
+
+        $filename = 'laporan-invoice-' . $from->format('Y-m') . '-sd-' . $to->format('Y-m') . '.xlsx';
+        $tmpPath  = sys_get_temp_dir() . '/' . $filename;
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($tmpPath);
+
+        ActivityLogger::log('invoice.exported', null, [
+            'from'     => $from->toDateString(),
+            'to'       => $to->toDateString(),
+            'statuses' => empty($statuses) ? 'all' : implode(',', $statuses),
+            'count'    => $invoices->count(),
+        ]);
+
+        return response()->download($tmpPath, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend();
+    }
+
     public function updateTax(Request $request, Invoice $invoice)
     {
         $request->validate(['tax_percentage' => 'nullable|numeric|min:0|max:100']);

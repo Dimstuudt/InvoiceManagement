@@ -254,6 +254,8 @@ class InvoiceController extends Controller
 
         $invoice->update($request->only('spk_number', 'attention', 'notes'));
 
+        ActivityLogger::log('invoice.items_updated', $invoice);
+
         return back()->with('success', 'Item invoice diperbarui.');
     }
 
@@ -280,6 +282,8 @@ class InvoiceController extends Controller
             'attention'      => $request->input('attention'),
             'notes'          => $request->input('notes'),
         ]);
+
+        ActivityLogger::log('invoice.totals_updated', $invoice);
 
         return back()->with('success', 'Total invoice diperbarui.');
     }
@@ -461,6 +465,7 @@ class InvoiceController extends Controller
     {
         $request->validate(['tax_percentage' => 'nullable|numeric|min:0|max:100']);
         $invoice->update(['tax_percentage' => $request->tax_percentage]);
+        ActivityLogger::log('invoice.tax_updated', $invoice, ['tax' => $request->tax_percentage]);
         return back()->with('success', 'Pajak diperbarui.');
     }
 

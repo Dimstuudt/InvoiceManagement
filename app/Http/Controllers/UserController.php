@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
@@ -30,12 +31,14 @@ class UserController extends Controller
             'role'                  => 'required|in:admin,user',
         ]);
 
-        User::create([
+        $user = User::create([
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => Hash::make($request->password),
             'role'     => $request->role,
         ]);
+
+        ActivityLogger::log('user.created', $user);
 
         return redirect()->route('users.index')->with('success', 'User berhasil ditambahkan.');
     }
@@ -63,6 +66,8 @@ class UserController extends Controller
             ...($request->filled('password') ? ['password' => Hash::make($request->password)] : []),
         ]);
 
+        ActivityLogger::log('user.updated', $user);
+
         return redirect()->route('users.index')->with('success', 'User berhasil diupdate.');
     }
 
@@ -72,6 +77,7 @@ class UserController extends Controller
             return back()->with('error', 'Tidak bisa menghapus akun sendiri.');
         }
 
+        ActivityLogger::log('user.deleted', $user);
         $user->delete();
 
         return redirect()->route('users.index')->with('success', 'User berhasil dihapus.');

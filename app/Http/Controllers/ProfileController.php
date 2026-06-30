@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -36,6 +37,8 @@ class ProfileController extends Controller
         $path = $request->file('avatar')->store('avatars', 'public');
         $user->update(['avatar' => $path]);
 
+        ActivityLogger::log('profile.avatar_updated');
+
         return back()->with('success', 'Avatar berhasil diperbarui.');
     }
 
@@ -49,6 +52,8 @@ class ProfileController extends Controller
         ]);
 
         $user->update($request->only('name', 'email'));
+
+        ActivityLogger::log('profile.updated');
 
         return back()->with('success', 'Profil berhasil diperbarui.');
     }
@@ -65,6 +70,8 @@ class ProfileController extends Controller
         auth()->user()->update([
             'password' => Hash::make($request->password),
         ]);
+
+        ActivityLogger::log('profile.password_changed');
 
         return back()->with('success', 'Password berhasil diubah.');
     }

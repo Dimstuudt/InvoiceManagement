@@ -4,20 +4,32 @@
       <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl overflow-hidden">
 
         <!-- ── ACTION BAR ──────────────────────────────────────────── -->
-        <div class="flex items-center gap-2 px-5 py-2.5 bg-white border-b border-gray-100 min-w-0">
+        <div class="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-gray-100">
 
-          <div class="flex items-center gap-2 min-w-0 shrink-0">
-            <p class="font-mono text-sm font-semibold text-gray-800 truncate max-w-[220px]">{{ invoice.invoice_number }}</p>
+          <!-- Kembali (kiri, icon only) -->
+          <Link :href="backHref" title="Kembali"
+            class="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition shrink-0">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </Link>
+
+          <div class="w-px h-5 bg-gray-200 shrink-0"/>
+
+          <!-- Invoice info -->
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <p class="font-mono text-sm font-semibold text-gray-800 truncate">{{ invoice.invoice_number }}</p>
             <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
               :class="{
                 'bg-gray-100 text-gray-500': invoice.status === 'draft',
                 'bg-blue-50 text-blue-600 ring-1 ring-blue-200': invoice.status === 'sent',
                 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.status === 'paid',
                 'bg-red-50 text-red-600 ring-1 ring-red-200': invoice.status === 'unpaid',
+                'bg-sky-100 text-sky-600 ring-1 ring-sky-200': invoice.status === 'frozen',
               }">
-              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[invoice.status] }}
+              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen' }[invoice.status] }}
             </span>
-            <template v-if="invoice.status !== 'paid'">
+            <template v-if="invoice.status !== 'paid' && invoice.status !== 'frozen'">
               <select :value="localInterval" @change="saveInterval($event.target.value)"
                 class="text-xs border border-indigo-200 bg-indigo-50 text-indigo-600 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
                 <option value="">↻ —</option>
@@ -28,86 +40,108 @@
               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-500 shrink-0">
               ↻ {{ invoice.interval_months }} bln
             </span>
-          </div>
 
-          <template v-if="invoice.parent || invoice.children?.length">
-            <div class="w-px h-5 bg-gray-200 shrink-0"/>
-            <div class="flex items-center gap-1 shrink-0">
+            <!-- Parent / child nav -->
+            <template v-if="invoice.parent || invoice.children?.length">
+              <div class="w-px h-5 bg-gray-200 shrink-0"/>
               <Link v-if="invoice.parent" :href="route('invoices.show', invoice.parent.id)"
                 :title="`Warisan dari: ${invoice.parent.invoice_number}`"
-                class="p-1.5 rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-colors">
+                class="p-1 rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-colors shrink-0">
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
                 </svg>
               </Link>
               <Link v-if="invoice.children?.length" :href="route('invoices.show', invoice.children[0].id)"
                 :title="`Perpanjangan: ${invoice.children[0].invoice_number}`"
-                class="p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-colors">
+                class="p-1 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-colors shrink-0">
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
                 </svg>
               </Link>
+            </template>
+          </div>
+
+          <!-- Aksi utama (kanan) -->
+          <div class="flex items-center gap-1.5 shrink-0">
+
+            <!-- Status select -->
+            <select v-if="invoice.status !== 'frozen'" :value="invoice.status" @change="changeStatus($event.target.value)"
+              class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+
+            <!-- Perbarui (frozen) -->
+            <button v-if="invoice.status === 'frozen' && !invoice.children?.length"
+              @click="resumeModal = true"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+              </svg>
+              Perbarui
+            </button>
+
+            <!-- Edit -->
+            <Link v-if="invoice.status !== 'paid' && invoice.status !== 'frozen' && !invoice.is_marked"
+              :href="route('invoices.edit', invoice.id)"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414A2 2 0 019 13z"/>
+              </svg>
+              Edit
+            </Link>
+
+            <!-- Kirim Email -->
+            <button v-if="invoice.status !== 'paid' && invoice.is_marked" @click="emailModal = true"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+              Kirim Email
+            </button>
+
+            <!-- Dropdown ··· (Freeze, Tandai, Hapus) -->
+            <div class="relative" ref="moreMenuRef">
+              <button @click="moreMenuOpen = !moreMenuOpen"
+                class="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
+                </svg>
+              </button>
+              <div v-if="moreMenuOpen"
+                class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                <!-- Freeze -->
+                <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id"
+                  @click="freezeInvoice(); moreMenuOpen = false"
+                  class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-sky-600 hover:bg-sky-50 transition-colors text-left">
+                  <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364"/>
+                  </svg>
+                  Freeze
+                </button>
+                <!-- Tandai -->
+                <button @click="toggleMark(); moreMenuOpen = false"
+                  class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                  <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  {{ invoice.is_marked ? 'Hapus Tanda' : 'Tandai' }}
+                </button>
+                <div class="my-1 border-t border-gray-100"/>
+                <!-- Hapus -->
+                <button @click="destroy(); moreMenuOpen = false"
+                  class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
+                  <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                  Hapus
+                </button>
+              </div>
             </div>
-          </template>
 
-          <div class="flex-1"/>
-
-          <select :value="invoice.status" @change="changeStatus($event.target.value)"
-            class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
-            <option value="draft">Draft</option>
-            <option value="sent">Sent</option>
-            <option value="paid">Paid</option>
-            <option value="unpaid">Unpaid</option>
-          </select>
-
-          <Link v-if="invoice.status !== 'paid' && !invoice.is_marked" :href="route('invoices.edit', invoice.id)"
-            class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition shrink-0">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414A2 2 0 019 13z"/>
-            </svg>
-            Edit
-          </Link>
-
-          <div class="w-px h-5 bg-gray-200 shrink-0"/>
-
-          <button @click="toggleMark"
-            :class="invoice.is_marked
-              ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 border border-amber-300'
-              : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-500'"
-            class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition shrink-0">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-            </svg>
-            {{ invoice.is_marked ? 'Ditandai' : 'Tandai' }}
-          </button>
-
-          <button v-if="invoice.status !== 'paid' && invoice.is_marked" @click="emailModal = true"
-            class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition shrink-0">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-            Kirim Email
-          </button>
-
-          <div class="w-px h-5 bg-gray-200 shrink-0"/>
-
-          <button @click="destroy"
-            class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-            </svg>
-            Hapus
-          </button>
-
-          <div class="w-px h-5 bg-gray-200 shrink-0"/>
-
-          <Link :href="backHref"
-            class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-            </svg>
-            Kembali
-          </Link>
+          </div>
         </div>
 
         <!-- NOTIF DITANDAI -->
@@ -122,6 +156,18 @@
           <button @click="toggleMark" class="ml-auto text-xs text-amber-600 hover:text-amber-800 underline font-medium shrink-0">
             Hapus tanda
           </button>
+        </div>
+
+        <!-- NOTIF FROZEN -->
+        <div v-if="invoice.status === 'frozen'"
+          class="bg-sky-50 border-b border-sky-200 px-6 py-2.5 flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-sky-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364"/>
+          </svg>
+          <p class="text-xs text-sky-700 font-medium">
+            <span v-if="invoice.children?.length">Invoice ini sudah dilanjutkan — lihat invoice berikutnya di atas.</span>
+            <span v-else>Invoice ini sedang dibekukan. Klik <strong>Perbarui</strong> untuk melanjutkan dengan tanggal baru.</span>
+          </p>
         </div>
 
         <!-- ── POPUP HEADER ────────────────────────────────────────── -->
@@ -446,18 +492,67 @@
     :email-templates="emailTemplates ?? []"
     @close="emailModal = false"
   />
+
+  <!-- Modal Perbarui (resume dari frozen) -->
+  <Teleport to="body">
+    <div v-if="resumeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 class="text-sm font-bold text-gray-900 mb-1">Lanjutkan Invoice</h3>
+        <p class="text-xs text-gray-400 mb-5">Tentukan tanggal mulai dan durasi perpanjangan.</p>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Mulai</label>
+            <input type="date" v-model="resumeForm.issue_date"
+              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Perpanjangan (bulan)</label>
+            <select v-model="resumeForm.interval_months"
+              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option v-for="n in 36" :key="n" :value="n">{{ n }} bulan</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-6">
+          <button @click="resumeModal = false"
+            class="flex-1 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            Batal
+          </button>
+          <button @click="submitResume"
+            class="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors">
+            Lanjutkan
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import SendEmailModal from '@/Components/SendEmailModal.vue'
 import { Link, router } from '@inertiajs/vue3'
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import Swal from 'sweetalert2'
 
 const props = defineProps({ invoice: Object, emailTemplates: Array })
 
-const emailModal = ref(false)
+const emailModal   = ref(false)
+const resumeModal  = ref(false)
+const moreMenuOpen = ref(false)
+const moreMenuRef  = ref(null)
+
+function closeMoreMenu(e) {
+  if (moreMenuRef.value && !moreMenuRef.value.contains(e.target)) moreMenuOpen.value = false
+}
+onMounted(() => document.addEventListener('click', closeMoreMenu))
+onUnmounted(() => document.removeEventListener('click', closeMoreMenu))
+const resumeForm  = reactive({
+  issue_date:      '',
+  interval_months: props.invoice.interval_months ?? 1,
+})
 
 const backHref = computed(() => {
   const back = new URLSearchParams(window.location.search).get('back')
@@ -567,6 +662,20 @@ function openPrint() {
 
 function changeStatus(status) {
   router.patch(route('invoices.status', props.invoice.id), { status }, { preserveScroll: true })
+}
+
+function freezeInvoice() {
+  router.post(route('invoices.freeze', props.invoice.id), {}, { preserveScroll: true })
+}
+
+function submitResume() {
+  if (!resumeForm.issue_date) return
+  router.post(route('invoices.resume', props.invoice.id), {
+    issue_date:      resumeForm.issue_date,
+    interval_months: resumeForm.interval_months,
+  }, {
+    onSuccess: () => { resumeModal.value = false },
+  })
 }
 
 function toggleMark() {

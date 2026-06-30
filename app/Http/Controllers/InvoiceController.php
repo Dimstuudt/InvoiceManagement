@@ -25,7 +25,7 @@ class InvoiceController extends Controller
                 'invoices as sent_count'    => fn($q) => $q->where('status', 'sent'),
                 'invoices as paid_count'    => fn($q) => $q->where('status', 'paid'),
                 'invoices as unpaid_count'  => fn($q) => $q->where('status', 'unpaid'),
-                'invoices as overdue_count' => fn($q) => $q->whereNotIn('status', ['paid'])->where('due_date', '<', now()),
+                'invoices as overdue_count' => fn($q) => $q->whereNotIn('status', ['paid', 'frozen'])->where('due_date', '<', now()),
             ])
             ->withMax('invoices', 'issue_date')
             ->orderBy('company_name')
@@ -61,6 +61,7 @@ class InvoiceController extends Controller
         $priorityInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
             ->where('user_id', auth()->id())
+            ->where('status', '!=', 'frozen')
             ->whereYear('issue_date',  $next->year)
             ->whereMonth('issue_date', $next->month)
             ->orderBy('due_date')
@@ -69,6 +70,7 @@ class InvoiceController extends Controller
         $otherInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
             ->where('user_id', auth()->id())
+            ->where('status', '!=', 'frozen')
             ->where(fn($q) => $q
                 ->whereYear('issue_date', '!=', $next->year)
                 ->orWhereMonth('issue_date', '!=', $next->month)
@@ -507,6 +509,71 @@ class InvoiceController extends Controller
         }
 
         return back()->with('success', 'Status diperbarui.');
+    }
+
+    public function freeze(Invoice $invoice)
+    {
+        abort_if(!in_array($invoice->status, ['draft', 'sent']), 403, 'Hanya draft atau sent yang bisa dibekukan.');
+        $invoice->update(['status' => 'frozen']);
+        ActivityLogger::log('invoice.frozen', $invoice);
+        return back()->with('success', 'Invoice dibekukan.');
+    }
+
+    public function resume(Request $request, Invoice $invoice)
+    {
+        if ($invoice->status !== 'frozen') {
+            return back()->with('error', 'Invoice tidak dalam status frozen.');
+        }
+
+        if ($invoice->children()->exists()) {
+            return back()->with('error', 'Perpanjangan sudah dilanjutkan sebelumnya.');
+        }
+
+        $request->validate([
+            'issue_date'      => 'required|date',
+            'interval_months' => 'required|integer|min:1|max:36',
+        ]);
+
+        $invoice->load('items', 'projectCategory');
+
+        $issueDate = Carbon::parse($request->issue_date);
+        $dueDate   = $issueDate->copy()->addMonths($request->interval_months)->subDay();
+        $number    = Invoice::generateNumber($invoice->projectCategory->code, $issueDate);
+
+        $child = Invoice::create([
+            'user_id'             => $invoice->user_id,
+            'client_id'           => $invoice->client_id,
+            'project_category_id' => $invoice->project_category_id,
+            'document_issuer_id'  => $invoice->document_issuer_id,
+            'bank_account_id'     => $invoice->bank_account_id,
+            'signature_id'        => $invoice->signature_id,
+            'email_template_id'   => $invoice->email_template_id,
+            'with_signature'      => $invoice->with_signature,
+            'attention'           => $invoice->attention,
+            'notes'               => $invoice->notes,
+            'invoice_number'      => $number,
+            'issue_date'          => $issueDate,
+            'due_date'            => $dueDate,
+            'status'              => 'draft',
+            'tax_percentage'      => $invoice->tax_percentage,
+            'discount_type'       => $invoice->discount_type,
+            'discount_value'      => $invoice->discount_value,
+            'is_dpp'              => $invoice->is_dpp,
+            'interval_months'     => $request->interval_months,
+            'parent_invoice_id'   => $invoice->id,
+        ]);
+
+        foreach ($invoice->items as $item) {
+            $child->items()->create([
+                'description' => $item->description,
+                'amount'      => $item->amount,
+                'discount'    => $item->discount,
+                'sort_order'  => $item->sort_order,
+            ]);
+        }
+
+        ActivityLogger::log('invoice.resumed', $child, ['from_frozen' => $invoice->invoice_number]);
+        return back()->with('success', 'Invoice dilanjutkan. Draft baru telah dibuat.');
     }
 
     private function generateRecurring(Invoice $parent): void

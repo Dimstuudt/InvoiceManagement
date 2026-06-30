@@ -65,6 +65,85 @@
           </div>
         </div>
 
+        <!-- Tips Panel -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <button @click="tipsOpen = !tipsOpen"
+            class="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50 transition-colors">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
+              </svg>
+              <span class="text-xs font-semibold text-gray-600">Cara pakai fitur</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-300 transition-transform" :class="tipsOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          <div v-if="tipsOpen" class="border-t border-gray-50 px-5 py-4 grid sm:grid-cols-2 gap-4">
+
+            <!-- Tip: Quick actions -->
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-3.5 h-3.5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-700">Aksi cepat</p>
+                <p class="text-xs text-gray-400 mt-0.5 leading-relaxed">Arahkan kursor ke baris invoice untuk memunculkan tombol aksi:
+                  <span class="font-medium text-emerald-600">Paid</span> (tandai lunas),
+                  <span class="font-medium text-sky-600">Freeze</span> (bekukan), atau
+                  <span class="font-medium text-indigo-600">Perbarui</span> (lanjutkan yang beku).
+                </p>
+              </div>
+            </div>
+
+            <!-- Tip: Freeze -->
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-3.5 h-3.5 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-700">Freeze — tunda perpanjangan</p>
+                <p class="text-xs text-gray-400 mt-0.5 leading-relaxed">Klik <span class="font-medium text-sky-600">Freeze</span> di invoice Draft/Sent untuk membekukannya. Invoice tidak akan dihitung jatuh tempo. Saat client mau lanjut, klik <span class="font-medium text-indigo-600">Perbarui</span> — pilih tanggal mulai baru dan durasi perpanjangan.</p>
+              </div>
+            </div>
+
+            <!-- Tip: Chain -->
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-700">Perpanjangan otomatis</p>
+                <p class="text-xs text-gray-400 mt-0.5 leading-relaxed">Saat invoice recurring di-Paid, sistem otomatis membuat draft invoice berikutnya sesuai interval yang sudah diset (↻ N bln). Timeline menampilkan jarak antar periode dengan badge <span class="font-medium text-indigo-500">↻ N bln</span>.</p>
+              </div>
+            </div>
+
+            <!-- Tip: Status -->
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-700">Arti status</p>
+                <div class="flex flex-wrap gap-1.5 mt-1.5">
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Draft</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Sent</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Paid</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600">Unpaid</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-600">Frozen</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         <!-- ── ALL INVOICES (unified tabs) ───────────────────────────── -->
         <div v-if="recurringGroups.length > 0 || standaloneInvoices.length > 0">
           <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -174,7 +253,17 @@
                               <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
                               <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
                             </div>
-                            <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <!-- Quick actions -->
+                              <button v-if="invoice.status === 'sent'" @click="markPaid(invoice)" title="Tandai lunas" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
+                                Paid
+                              </button>
+                              <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id" @click="freezeInvoice(invoice)" title="Bekukan — tunda perpanjangan tanpa menghapus invoice" class="px-2 py-1 text-[10px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors">
+                                Freeze
+                              </button>
+                              <button v-if="invoice.status === 'frozen' && !invoice.children?.length" @click="openResume(invoice)" title="Lanjutkan dengan tanggal baru" class="px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">
+                                Perbarui
+                              </button>
                               <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
                                 <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                               </button>
@@ -296,19 +385,54 @@
       </div>
     </Teleport>
 
+    <!-- Modal Perbarui (resume frozen) -->
+    <Teleport to="body">
+      <div v-if="resumeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+          <h3 class="text-sm font-bold text-gray-900 mb-1">Lanjutkan Invoice</h3>
+          <p class="text-xs text-gray-400 mb-5">Tentukan tanggal mulai dan durasi perpanjangan berikutnya.</p>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Mulai</label>
+              <input type="date" v-model="resumeForm.issue_date" :min="resumeMinDate"
+                class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Perpanjangan (bulan)</label>
+              <select v-model="resumeForm.interval_months"
+                class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option v-for="n in 36" :key="n" :value="n">{{ n }} bulan</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-6">
+            <button @click="resumeModal = false"
+              class="flex-1 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+              Batal
+            </button>
+            <button @click="submitResume"
+              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors">
+              Lanjutkan
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </AppLayout>
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, router } from '@inertiajs/vue3';
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue';
 import Swal from 'sweetalert2';
 
 const props = defineProps({ client: Object, invoices: Array });
 
 // ── Tabs ────────────────────────────────────────────────────
 const activeTab     = ref(0)
+const tipsOpen      = ref(false)
 const activeInvoice = (group) => group.invoices[0] ?? null
 
 // ── Menu / Modal state ──────────────────────────────────────
@@ -393,12 +517,12 @@ function invoiceTotal(inv) {
 
   return afterDiscount + tax
 }
-function chainTotal(group)     { return group.invoices.reduce((s, inv) => s + invoiceTotal(inv), 0); }
+function chainTotal(group)     { return group.invoices.filter(i => i.status !== 'frozen').reduce((s, inv) => s + invoiceTotal(inv), 0); }
 function chainPaidTotal(group) { return group.invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + invoiceTotal(inv), 0); }
 
 const summary = computed(() => {
   const paid    = props.invoices.filter(i => i.status === 'paid');
-  const pending = props.invoices.filter(i => i.status !== 'paid');
+  const pending = props.invoices.filter(i => !['paid','frozen'].includes(i.status));
   return {
     paid:         paid.reduce((s, i) => s + invoiceTotal(i), 0),
     paidCount:    paid.length,
@@ -424,21 +548,23 @@ const fmtCurrency = v => v != null
   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
   : '-';
 
-const isPastDue    = inv => inv.status !== 'paid' && new Date(inv.due_date) < new Date(new Date().toDateString());
+const isPastDue    = inv => !['paid','frozen'].includes(inv.status) && new Date(inv.due_date) < new Date(new Date().toDateString());
 const daysPastDue  = inv => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000);
 const hasOverdue   = group => group.invoices.some(isPastDue);
 
 // ── Status display ──────────────────────────────────────────
-const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[s] ?? s);
+const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen' }[s] ?? s);
 const statusClass = s => ({
   draft:  'bg-gray-100 text-gray-500',
   sent:   'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
   paid:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
   unpaid: 'bg-red-50 text-red-600 ring-1 ring-red-200',
+  frozen: 'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
 }[s] ?? 'bg-gray-100 text-gray-500');
 
 const dotClass = inv => {
-  if (isPastDue(inv))            return 'bg-red-500';
+  if (inv.status === 'frozen') return 'bg-sky-400';
+  if (isPastDue(inv))          return 'bg-red-500';
   return { draft: 'bg-gray-300', sent: 'bg-blue-400', paid: 'bg-emerald-500', unpaid: 'bg-red-400' }[inv.status] ?? 'bg-gray-300';
 };
 
@@ -473,6 +599,38 @@ function monthGap(newer, older) {
 }
 
 // ── Actions ─────────────────────────────────────────────────
+function markPaid(invoice) {
+  router.patch(route('invoices.status', invoice.id), { status: 'paid' }, { preserveScroll: true })
+}
+
+function freezeInvoice(invoice) {
+  router.post(route('invoices.freeze', invoice.id), {}, { preserveScroll: true })
+}
+
+const resumeModal   = ref(false)
+const resumeMinDate = ref('')
+const resumeForm    = reactive({ issue_date: '', interval_months: 1 })
+const resumeTarget  = ref(null)
+
+function openResume(invoice) {
+  resumeTarget.value            = invoice
+  resumeMinDate.value           = invoice.issue_date ? invoice.issue_date.substring(0, 10) : ''
+  resumeForm.issue_date         = ''
+  resumeForm.interval_months    = invoice.interval_months ?? 1
+  resumeModal.value             = true
+}
+
+function submitResume() {
+  if (!resumeForm.issue_date || !resumeTarget.value) return
+  router.post(route('invoices.resume', resumeTarget.value.id), {
+    issue_date:      resumeForm.issue_date,
+    interval_months: resumeForm.interval_months,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => { resumeModal.value = false },
+  })
+}
+
 function deleteInvoice(invoice) {
   Swal.fire({
     title: 'Hapus invoice ini?',

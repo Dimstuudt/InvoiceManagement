@@ -39,7 +39,7 @@ class ActivityLogController extends Controller
             }
         }
 
-        $logs = $query->paginate(50)->withQueryString();
+        $logs = $query->paginate(25)->withQueryString();
 
         $logs->through(fn($log) => [
             'id'            => $log->id,

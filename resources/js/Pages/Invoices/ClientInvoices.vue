@@ -65,243 +65,176 @@
           </div>
         </div>
 
-        <!-- ── RECURRING CHAINS ────────────────────────────────────── -->
-        <div v-if="recurringGroups.length > 0" class="space-y-3">
+        <!-- ── ALL INVOICES (unified tabs) ───────────────────────────── -->
+        <div v-if="recurringGroups.length > 0 || standaloneInvoices.length > 0">
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-          <div class="flex items-center gap-2 px-1">
-            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Layanan Berulang</p>
-            <span class="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-semibold">
-              {{ recurringGroups.length }}
-            </span>
-          </div>
+            <!-- Tab bar -->
+            <div class="flex overflow-x-auto border-b border-gray-100 scrollbar-none">
 
-          <div v-for="group in recurringGroups" :key="group.root.id"
-            class="bg-white rounded-2xl border shadow-sm overflow-hidden"
-            :class="chainBorderClass(group)">
+              <!-- Recurring tabs -->
+              <button v-for="(group, i) in recurringGroups" :key="group.root.id"
+                @click="activeTab = i"
+                class="flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                :class="activeTab === i
+                  ? 'border-indigo-500 text-indigo-600 bg-indigo-50/60'
+                  : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
+                <span class="w-2 h-2 rounded-full shrink-0"
+                  :class="hasOverdue(group) ? 'bg-red-400' : activeInvoice(group)?.status === 'sent' ? 'bg-blue-400' : activeInvoice(group)?.status === 'paid' ? 'bg-emerald-400' : 'bg-gray-300'"/>
+                {{ recurringTabLabels[i] }}
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  :class="activeTab === i ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'">
+                  {{ group.invoices.length }}
+                </span>
+              </button>
 
-            <!-- Chain header -->
-            <div class="px-5 py-4 flex items-center justify-between gap-4"
-              :class="chainHeaderClass(group)">
-              <div class="flex items-center gap-3 min-w-0">
-                <!-- Icon -->
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  :class="chainIconClass(group)">
-                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                  </svg>
-                </div>
-                <div class="min-w-0">
+              <!-- Mandiri tab (selalu paling kanan, hanya tampil kalau ada) -->
+              <button v-if="standaloneInvoices.length > 0"
+                @click="activeTab = recurringGroups.length"
+                class="flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                :class="activeTab === recurringGroups.length
+                  ? 'border-gray-500 text-gray-700 bg-gray-50/60'
+                  : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
+                Invoice Mandiri
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  :class="activeTab === recurringGroups.length ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-400'">
+                  {{ standaloneInvoices.length }}
+                </span>
+              </button>
+            </div>
+
+            <!-- ── Tab content: Recurring ── -->
+            <template v-if="activeTab < recurringGroups.length && recurringGroups[activeTab]">
+              <div :key="'rec-' + activeTab">
+                <!-- Summary bar -->
+                <div class="px-5 py-3 flex items-center justify-between gap-4 border-b border-gray-50"
+                  :class="chainHeaderClass(recurringGroups[activeTab])">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <p class="font-semibold text-sm text-gray-900">
-                      {{ group.root.project_category?.name ?? '—' }}
-                    </p>
-                    <span v-if="group.invoices[0]?.interval_months"
-                      class="inline-flex items-center gap-1 text-xs font-medium text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full shrink-0">
-                      ↻ tiap {{ group.invoices[0].interval_months }} bulan
+                    <span v-if="recurringGroups[activeTab].invoices[0]?.interval_months"
+                      class="text-xs font-medium text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
+                      ↻ tiap {{ recurringGroups[activeTab].invoices[0].interval_months }} bulan
                     </span>
-                    <span v-if="hasOverdue(group)"
-                      class="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full shrink-0">
-                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                      </svg>
+                    <span class="text-xs text-gray-400">
+                      {{ recurringGroups[activeTab].invoices.length }} periode &bull; mulai {{ fmtDate(recurringGroups[activeTab].root.issue_date) }}
+                    </span>
+                    <span v-if="hasOverdue(recurringGroups[activeTab])"
+                      class="text-xs font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
                       Jatuh tempo
                     </span>
                   </div>
-                  <p class="text-xs text-gray-400 mt-0.5">
-                    {{ group.invoices.length }} periode &bull; mulai {{ fmtDate(group.root.issue_date) }}
-                  </p>
-                </div>
-              </div>
-
-              <!-- Total chain -->
-              <div class="text-right shrink-0">
-                <p class="text-base font-bold text-gray-900">{{ fmtCurrency(chainTotal(group)) }}</p>
-                <p class="text-xs text-gray-400 mt-0.5">
-                  <span class="text-emerald-600 font-semibold">{{ fmtCurrency(chainPaidTotal(group)) }}</span>
-                  &nbsp;terbayar
-                </p>
-              </div>
-            </div>
-
-            <!-- Invoice timeline rows -->
-            <div class="relative">
-              <!-- Vertical line -->
-              <div class="absolute left-[34px] top-0 bottom-0 w-px bg-gray-100 pointer-events-none"/>
-
-              <template v-for="(invoice, idx) in group.invoices" :key="invoice.id">
-                <!-- Gap badge antar invoice -->
-                <div v-if="idx > 0" class="relative flex items-center gap-3 px-5 py-1 border-t border-gray-50/80">
-                  <div class="w-7 flex justify-center shrink-0">
-                    <div class="w-px h-full bg-gray-100"/>
-                  </div>
-                  <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
-                    ↻ {{ monthGap(group.invoices[idx - 1], invoice) }} bln
-                  </span>
-                </div>
-
-                <div class="relative flex items-center gap-3 px-5 py-3 border-t border-gray-50 hover:bg-gray-50/60 transition-colors group">
-
-                  <!-- Status dot -->
-                  <div class="relative z-10 w-7 h-7 rounded-full flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm"
-                    :class="dotClass(invoice)">
-                    <svg v-if="invoice.status === 'paid'" class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                    </svg>
-                    <div v-else class="w-2 h-2 rounded-full bg-white"/>
-                  </div>
-
-                  <!-- Invoice number + dates -->
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <Link :href="route('invoices.show', invoice.id) + '?from=client'"
-                        class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
-                        {{ invoice.invoice_number }}
-                      </Link>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
-                        :class="statusClass(invoice.status)">
-                        {{ statusLabel(invoice.status) }}
-                      </span>
-                      <span v-if="isPastDue(invoice)"
-                        class="text-xs font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md shrink-0">
-                        lewat {{ daysPastDue(invoice) }} hari
-                      </span>
-                    </div>
-                    <p class="text-xs text-gray-400 mt-0.5">
-                      {{ fmtDateShort(invoice.issue_date) }} → {{ fmtDateShort(invoice.due_date) }}
+                  <div class="text-right shrink-0">
+                    <p class="text-sm font-bold text-gray-900">{{ fmtCurrency(chainTotal(recurringGroups[activeTab])) }}</p>
+                    <p class="text-[10px] text-gray-400 mt-0.5">
+                      <span class="text-emerald-600 font-semibold">{{ fmtCurrency(chainPaidTotal(recurringGroups[activeTab])) }}</span> terbayar
                     </p>
                   </div>
+                </div>
 
-                  <!-- Amount -->
+                <!-- Timeline -->
+                <div>
+                  <template v-for="(invoice, idx) in recurringGroups[activeTab].invoices" :key="invoice.id">
+                    <div v-if="idx > 0" class="flex items-center border-t border-gray-50">
+                      <div class="w-[57px] flex justify-center shrink-0">
+                        <div class="w-px h-5 bg-gray-100"/>
+                      </div>
+                      <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                        ↻ {{ monthGap(recurringGroups[activeTab].invoices[idx - 1], invoice) }} bln
+                      </span>
+                    </div>
+                    <div class="flex items-start border-t border-gray-50 hover:bg-gray-50/60 transition-colors group">
+                      <div class="flex flex-col items-center w-[57px] shrink-0 pt-3.5 self-stretch">
+                        <div class="w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm shrink-0 z-10" :class="dotClass(invoice)">
+                          <svg v-if="invoice.status === 'paid'" class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                          </svg>
+                          <div v-else class="w-1.5 h-1.5 rounded-full bg-white"/>
+                        </div>
+                        <div v-if="idx < recurringGroups[activeTab].invoices.length - 1" class="flex-1 w-px bg-gray-100 mt-1"/>
+                      </div>
+                      <div class="flex-1 min-w-0 py-3 pr-4">
+                        <div class="flex items-start justify-between gap-3">
+                          <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                              <Link :href="route('invoices.show', invoice.id) + '?from=client'"
+                                class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
+                                {{ invoice.invoice_number }}
+                              </Link>
+                              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0" :class="statusClass(invoice.status)">
+                                {{ statusLabel(invoice.status) }}
+                              </span>
+                              <span v-if="isPastDue(invoice)" class="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
+                                lewat {{ daysPastDue(invoice) }} hari
+                              </span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">{{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span> {{ fmtDateShort(invoice.due_date) }}</p>
+                            <p class="text-[10px] text-gray-300 mt-0.5">Dibuat {{ fmtDateTime(invoice.created_at) }}</p>
+                          </div>
+                          <div class="flex items-center gap-1 shrink-0">
+                            <div class="text-right mr-1">
+                              <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
+                              <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
+                            </div>
+                            <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                              </button>
+                              <button @click="deleteInvoice(invoice)" class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- ── Tab content: Invoice Mandiri ── -->
+            <template v-if="activeTab === recurringGroups.length">
+              <div key="mandiri">
+                <div v-if="standaloneInvoices.length === 0" class="px-5 py-10 text-center text-sm text-gray-300">
+                  Tidak ada invoice mandiri.
+                </div>
+                <div v-for="invoice in standaloneInvoices" :key="invoice.id"
+                  class="flex items-center gap-4 px-5 py-3.5 border-t border-gray-50 transition-colors group"
+                  :class="isPastDue(invoice) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50/50'">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold shrink-0" :class="statusClass(invoice.status)">
+                    {{ statusLabel(invoice.status) }}
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <Link :href="route('invoices.show', invoice.id) + '?from=client'"
+                      class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline block truncate">
+                      {{ invoice.invoice_number }}
+                    </Link>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                      {{ invoice.project_category?.name ?? '—' }} &bull;
+                      {{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span>
+                      <span :class="isPastDue(invoice) ? 'text-red-500 font-medium' : ''">{{ fmtDateShort(invoice.due_date) }}</span>
+                      <span v-if="isPastDue(invoice)" class="ml-1 text-red-500 font-semibold">· lewat {{ daysPastDue(invoice) }} hari</span>
+                    </p>
+                    <p class="text-[10px] text-gray-300 mt-0.5">Dibuat {{ fmtDateTime(invoice.created_at) }}</p>
+                  </div>
                   <div class="text-right shrink-0">
                     <p class="text-sm font-semibold text-gray-800">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
-                    <p v-if="invoice.tax_percentage" class="text-xs text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
+                    <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
                   </div>
-
-                  <!-- Actions (show on hover) -->
-                  <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
-                    <Link :href="route('invoices.show', invoice.id) + '?from=client'" title="Lihat"
-                      class="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 transition-colors">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                      </svg>
-                    </Link>
-                    <button @click.stop="toggleMenu($event, invoice)" title="Lainnya"
-                      class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
-                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                      </svg>
+                  <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                     </button>
-                    <button @click="deleteInvoice(invoice)" title="Hapus"
-                      class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                      </svg>
+                    <button @click="deleteInvoice(invoice)" class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                     </button>
                   </div>
                 </div>
-              </template>
-            </div>
+              </div>
+            </template>
 
           </div>
         </div>
 
-        <!-- ── STANDALONE INVOICES ─────────────────────────────────── -->
-        <div v-if="standaloneInvoices.length > 0" class="space-y-3">
-
-          <div class="flex items-center gap-2 px-1">
-            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice Mandiri</p>
-            <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">
-              {{ standaloneInvoices.length }}
-            </span>
-          </div>
-
-          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table class="w-full">
-              <thead>
-                <tr class="border-b border-gray-100 bg-gray-50/60">
-                  <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Status</th>
-                  <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Invoice # / Project</th>
-                  <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Tanggal</th>
-                  <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Issuer</th>
-                  <th class="text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Total</th>
-                  <th class="px-5 py-3"/>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-50">
-                <tr v-for="invoice in standaloneInvoices" :key="invoice.id"
-                  :class="isPastDue(invoice) ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-gray-50/50'"
-                  class="transition-colors group">
-
-                  <td class="px-5 py-4">
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium"
-                      :class="statusClass(invoice.status)">
-                      {{ statusLabel(invoice.status) }}
-                    </span>
-                  </td>
-
-                  <td class="px-4 py-4">
-                    <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
-                    <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
-                  </td>
-
-                  <td class="px-4 py-4">
-                    <p class="text-sm text-gray-700">{{ fmtDate(invoice.issue_date) }}</p>
-                    <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
-                      → {{ fmtDate(invoice.due_date) }}
-                    </p>
-                    <span v-if="isPastDue(invoice)"
-                      class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-md">
-                      lewat {{ daysPastDue(invoice) }} hari
-                    </span>
-                  </td>
-
-                  <td class="px-4 py-4">
-                    <p class="text-sm text-gray-700 whitespace-nowrap">{{ invoice.document_issuer?.name ?? '—' }}</p>
-                  </td>
-
-                  <td class="px-4 py-4 text-right">
-                    <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">
-                      {{ fmtCurrency(invoiceTotal(invoice)) }}
-                    </p>
-                    <span v-if="invoice.tax_percentage"
-                      class="inline-flex items-center mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
-                      +PPN {{ invoice.tax_percentage }}%
-                    </span>
-                  </td>
-
-                  <td class="px-4 py-4">
-                    <div class="flex items-center gap-1 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
-                      <Link :href="route('invoices.show', invoice.id) + '?from=client'" title="Lihat"
-                        class="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 transition-colors">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                        </svg>
-                      </Link>
-                      <button @click.stop="toggleMenu($event, invoice)" title="Lainnya"
-                        class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                        </svg>
-                      </button>
-                      <button @click="deleteInvoice(invoice)" title="Hapus"
-                        class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
 
       </template>
     </div>
@@ -374,6 +307,10 @@ import Swal from 'sweetalert2';
 
 const props = defineProps({ client: Object, invoices: Array });
 
+// ── Tabs ────────────────────────────────────────────────────
+const activeTab     = ref(0)
+const activeInvoice = (group) => group.invoices[0] ?? null
+
 // ── Menu / Modal state ──────────────────────────────────────
 const receiptUrl  = ref(null);
 const activeMenu  = ref(null);
@@ -414,8 +351,25 @@ const groups = computed(() => {
   });
 });
 
-const recurringGroups   = computed(() => groups.value.filter(g => g.isRecurring));
+const recurringGroups    = computed(() => groups.value.filter(g => g.isRecurring));
 const standaloneInvoices = computed(() => groups.value.filter(g => !g.isRecurring).map(g => g.root));
+
+const recurringTabLabels = computed(() => {
+  const count = {}
+  for (const g of recurringGroups.value) {
+    const name = g.root.project_category?.name ?? '—'
+    count[name] = (count[name] ?? 0) + 1
+  }
+  const seen = {}
+  return recurringGroups.value.map(g => {
+    const name = g.root.project_category?.name ?? '—'
+    if (count[name] > 1) {
+      seen[name] = (seen[name] ?? 0) + 1
+      return `${name} (${seen[name]})`
+    }
+    return name
+  })
+})
 
 // ── Financial helpers ───────────────────────────────────────
 function invoiceTotal(inv) {
@@ -460,6 +414,10 @@ const fmtDate = d => d
 
 const fmtDateShort = d => d
   ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' })
+  : '-';
+
+const fmtDateTime = d => d
+  ? new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '-';
 
 const fmtCurrency = v => v != null

@@ -227,11 +227,24 @@
                   <template v-for="(invoice, idx) in recurringGroups[activeTab].invoices" :key="invoice.id">
                     <div v-if="idx > 0" class="flex items-center border-t border-gray-50">
                       <div class="w-[57px] flex justify-center shrink-0">
-                        <div class="w-px h-5 bg-gray-100"/>
+                        <div class="w-px h-5"
+                          :class="recurringGroups[activeTab].invoices[idx - 1].carried_from_id === invoice.id ? 'bg-orange-300' : 'bg-gray-100'"/>
                       </div>
-                      <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
-                        ↻ {{ monthGap(recurringGroups[activeTab].invoices[idx - 1], invoice) }} bln
-                      </span>
+                      <!-- Badge Carry -->
+                      <template v-if="recurringGroups[activeTab].invoices[idx - 1].carried_from_id === invoice.id">
+                        <span class="flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+                          <svg class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
+                          </svg>
+                          Carry
+                        </span>
+                      </template>
+                      <!-- Badge interval normal -->
+                      <template v-else>
+                        <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                          ↻ {{ monthGap(recurringGroups[activeTab].invoices[idx - 1], invoice) }} bln
+                        </span>
+                      </template>
                     </div>
                     <div class="flex items-start border-t border-gray-50 hover:bg-gray-50/60 transition-colors group">
                       <div class="flex flex-col items-center w-[57px] shrink-0 pt-3.5 self-stretch">
@@ -241,7 +254,10 @@
                           </svg>
                           <div v-else class="w-1.5 h-1.5 rounded-full bg-white"/>
                         </div>
-                        <div v-if="idx < recurringGroups[activeTab].invoices.length - 1" class="flex-1 w-px bg-gray-100 mt-1"/>
+                        <!-- Garis vertikal ke bawah — oranye kalau invoice berikutnya di-carry dari sini -->
+                        <div v-if="idx < recurringGroups[activeTab].invoices.length - 1"
+                          class="flex-1 w-px mt-1"
+                          :class="invoice.carried_from_id === recurringGroups[activeTab].invoices[idx + 1]?.id ? 'bg-orange-300' : 'bg-gray-100'"/>
                       </div>
                       <div class="flex-1 min-w-0 py-3 pr-4">
                         <div class="flex items-start justify-between gap-3">

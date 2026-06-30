@@ -155,7 +155,7 @@
                         <div class="flex items-start justify-between gap-3">
                           <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 flex-wrap">
-                              <Link :href="route('invoices.show', invoice.id) + '?from=client'"
+                              <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
                                 class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
                                 {{ invoice.invoice_number }}
                               </Link>
@@ -204,7 +204,7 @@
                     {{ statusLabel(invoice.status) }}
                   </span>
                   <div class="flex-1 min-w-0">
-                    <Link :href="route('invoices.show', invoice.id) + '?from=client'"
+                    <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
                       class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline block truncate">
                       {{ invoice.invoice_number }}
                     </Link>

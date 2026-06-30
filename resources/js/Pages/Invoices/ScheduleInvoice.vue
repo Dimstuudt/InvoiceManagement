@@ -113,7 +113,7 @@
                 </td>
                 <td class="px-5 py-4">
                   <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
-                    <Link :href="route('invoices.show', invoice.id) + '?from=schedule'"
+                    <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
                       class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
                       Lihat
                     </Link>
@@ -233,7 +233,7 @@
               </td>
               <td class="px-5 py-4">
                 <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
-                  <Link :href="route('invoices.show', invoice.id) + '?from=schedule'"
+                  <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
                     class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
                     Lihat
                   </Link>

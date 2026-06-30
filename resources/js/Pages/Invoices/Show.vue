@@ -101,13 +101,12 @@
 
           <div class="w-px h-5 bg-gray-200 shrink-0"/>
 
-          <Link :href="backRoute === 'invoices.client'
-            ? route('invoices.client', invoice.client_id)
-            : route(backRoute)"
-            class="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          <Link :href="backHref"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
             </svg>
+            Kembali
           </Link>
         </div>
 
@@ -459,12 +458,10 @@ import Swal from 'sweetalert2'
 const props = defineProps({ invoice: Object, emailTemplates: Array })
 
 const emailModal = ref(false)
-const backRoute  = ref('invoices.index')
 
-onMounted(() => {
-  const from = new URLSearchParams(window.location.search).get('from')
-  if (from === 'schedule') backRoute.value = 'invoices.schedule'
-  if (from === 'client')   backRoute.value = 'invoices.client'
+const backHref = computed(() => {
+  const back = new URLSearchParams(window.location.search).get('back')
+  return back ? decodeURIComponent(back) : route('invoices.index')
 })
 
 const items  = ref(props.invoice.items.map(i => ({ ...i, discount: i.discount ?? null })))

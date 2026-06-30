@@ -43,7 +43,7 @@ class ActivityLogController extends Controller
 
         $logs->through(fn($log) => [
             'id'            => $log->id,
-            'user'          => $log->user ? ['id' => $log->user->id, 'name' => $log->user->name] : null,
+            'user'          => $log->user ? ['id' => $log->user->id, 'name' => $log->user->name, 'avatar_url' => $log->user->avatar_url] : null,
             'action'        => $log->action,
             'action_label'  => ActivityLogger::actionLabel($log->action),
             'action_group'  => ActivityLogger::actionGroup($log->action),

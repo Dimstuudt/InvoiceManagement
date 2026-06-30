@@ -73,8 +73,9 @@
                 <!-- Top row: user + badge -->
                 <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                   <div class="flex items-center gap-2 min-w-0">
-                    <div class="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-[10px] font-bold shrink-0">
-                      {{ log.user ? log.user.name[0].toUpperCase() : '?' }}
+                    <div class="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                      <img v-if="log.user?.avatar_url" :src="log.user.avatar_url" :alt="log.user.name" class="w-full h-full object-cover"/>
+                      <span v-else class="text-indigo-600 text-[10px] font-bold">{{ log.user ? log.user.name[0].toUpperCase() : '?' }}</span>
                     </div>
                     <span class="text-sm font-semibold text-slate-800 leading-tight truncate">
                       {{ log.user?.name ?? 'System' }}

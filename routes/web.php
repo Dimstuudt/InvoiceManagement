@@ -59,6 +59,7 @@ Route::middleware('auth')->group(function () {
     Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.send-email');
     Route::post('invoices/{invoice}/freeze', [InvoiceController::class, 'freeze'])->name('invoices.freeze');
     Route::post('invoices/{invoice}/resume', [InvoiceController::class, 'resume'])->name('invoices.resume');
+    Route::post('invoices/{invoice}/carry', [InvoiceController::class, 'carry'])->name('invoices.carry');
 
     // Master Data
     Route::prefix('master')->name('master.')->group(function () {

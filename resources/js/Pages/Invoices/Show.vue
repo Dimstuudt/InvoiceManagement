@@ -26,10 +26,11 @@
                 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.status === 'paid',
                 'bg-red-50 text-red-600 ring-1 ring-red-200': invoice.status === 'unpaid',
                 'bg-sky-100 text-sky-600 ring-1 ring-sky-200': invoice.status === 'frozen',
+                'bg-orange-50 text-orange-600 ring-1 ring-orange-200': invoice.status === 'carried',
               }">
-              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen' }[invoice.status] }}
+              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen', carried: 'Carried' }[invoice.status] }}
             </span>
-            <template v-if="invoice.status !== 'paid' && invoice.status !== 'frozen'">
+            <template v-if="!['paid','frozen','carried'].includes(invoice.status)">
               <select :value="localInterval" @change="saveInterval($event.target.value)"
                 class="text-xs border border-indigo-200 bg-indigo-50 text-indigo-600 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
                 <option value="">↻ —</option>
@@ -65,7 +66,7 @@
           <div class="flex items-center gap-1.5 shrink-0">
 
             <!-- Status select -->
-            <select v-if="invoice.status !== 'frozen'" :value="invoice.status" @change="changeStatus($event.target.value)"
+            <select v-if="!['frozen','carried'].includes(invoice.status)" :value="invoice.status" @change="changeStatus($event.target.value)"
               class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
               <option value="draft">Draft</option>
               <option value="sent">Sent</option>
@@ -84,7 +85,7 @@
             </button>
 
             <!-- Edit -->
-            <Link v-if="invoice.status !== 'paid' && invoice.status !== 'frozen' && !invoice.is_marked"
+            <Link v-if="!['paid','frozen','carried'].includes(invoice.status) && !invoice.is_marked"
               :href="route('invoices.edit', invoice.id)"
               class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -94,7 +95,7 @@
             </Link>
 
             <!-- Kirim Email -->
-            <button v-if="invoice.status !== 'paid' && invoice.is_marked" @click="emailModal = true"
+            <button v-if="!['paid','carried'].includes(invoice.status) && invoice.is_marked" @click="emailModal = true"
               class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -112,6 +113,15 @@
               </button>
               <div v-if="moreMenuOpen"
                 class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                <!-- Carry (utang ke periode berikutnya) -->
+                <button v-if="['sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.children?.length"
+                  @click="carryInvoice(); moreMenuOpen = false"
+                  class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors text-left">
+                  <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15M5 5l-3 7 3 7"/>
+                  </svg>
+                  Carry (Utang)
+                </button>
                 <!-- Freeze -->
                 <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id"
                   @click="freezeInvoice(); moreMenuOpen = false"
@@ -156,6 +166,17 @@
           <button @click="toggleMark" class="ml-auto text-xs text-amber-600 hover:text-amber-800 underline font-medium shrink-0">
             Hapus tanda
           </button>
+        </div>
+
+        <!-- NOTIF CARRIED -->
+        <div v-if="invoice.status === 'carried'"
+          class="bg-orange-50 border-b border-orange-200 px-6 py-2.5 flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-orange-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
+          </svg>
+          <p class="text-xs text-orange-700 font-medium">
+            Invoice ini di-carry — tunggakan akan masuk ke invoice berikutnya. Lunas otomatis saat invoice berikutnya dibayar.
+          </p>
         </div>
 
         <!-- NOTIF FROZEN -->
@@ -431,9 +452,24 @@
             </div>
 
             <div class="border-t border-gray-200 pt-4 flex items-center justify-between">
-              <span class="text-base font-bold text-gray-900">Grand Total</span>
+              <span class="text-base font-bold text-gray-900">{{ invoice.carried_from ? 'Total Invoice' : 'Grand Total' }}</span>
               <span class="text-2xl font-black font-mono text-blue-700">{{ formatCurrency(grandTotal) }}</span>
             </div>
+
+            <!-- Tunggakan dari carried invoice -->
+            <template v-if="invoice.carried_from">
+              <div class="flex items-center justify-between pt-2">
+                <div>
+                  <span class="text-sm text-gray-600">Tunggakan</span>
+                  <span class="ml-2 text-xs font-mono text-orange-600 font-medium">{{ invoice.carried_from.invoice_number }}</span>
+                </div>
+                <span class="text-sm font-mono font-semibold text-orange-600">+ {{ formatCurrency(invoice.carried_total) }}</span>
+              </div>
+              <div class="border-t-2 border-orange-200 pt-3 mt-2 flex items-center justify-between">
+                <span class="text-base font-bold text-gray-900">Total Bayar</span>
+                <span class="text-2xl font-black font-mono text-orange-600">{{ formatCurrency(grandTotal + (invoice.carried_total ?? 0)) }}</span>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -471,7 +507,7 @@
             </button>
           </div>
 
-          <button v-if="invoice.status !== 'paid' && !invoice.is_marked"
+          <button v-if="!['paid','carried'].includes(invoice.status) && !invoice.is_marked"
             @click="save()" :disabled="saving"
             class="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white rounded-xl transition shadow-sm disabled:opacity-60">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -595,7 +631,7 @@ const taxAmount     = computed(() => localTaxEnabled.value && localTaxPct.value 
 const grandTotal    = computed(() => afterDiscount.value + taxAmount.value)
 
 const isOverdue = computed(() => {
-  if (props.invoice.status === 'paid') return false
+  if (['paid','frozen','carried'].includes(props.invoice.status)) return false
   return new Date(props.invoice.due_date) < new Date(new Date().toDateString())
 })
 const overdueDays = computed(() => {
@@ -666,6 +702,10 @@ function changeStatus(status) {
 
 function freezeInvoice() {
   router.post(route('invoices.freeze', props.invoice.id), {}, { preserveScroll: true })
+}
+
+function carryInvoice() {
+  router.post(route('invoices.carry', props.invoice.id), {}, { preserveScroll: true })
 }
 
 function submitResume() {

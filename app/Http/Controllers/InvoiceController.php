@@ -168,7 +168,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client.emails', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'emailTemplate',
-            'parent', 'children',
+            'parent', 'children', 'carriedFrom.items',
         ]);
 
         return Inertia::render('Invoices/Show', [
@@ -179,6 +179,8 @@ class InvoiceController extends Controller
                 'dpp_base'        => $invoice->dpp_base,
                 'tax_amount'      => $invoice->tax_amount,
                 'total'           => $invoice->total,
+                'carried_total'   => $invoice->carried_total,
+                'total_payable'   => $invoice->grand_total,
                 'client_emails'   => $invoice->client?->emails->pluck('email')->toArray() ?? [],
             ]),
             'emailTemplates' => EmailTemplate::orderBy('name')->get(['id', 'name', 'subject', 'body', 'is_default']),
@@ -366,7 +368,7 @@ class InvoiceController extends Controller
         ]);
 
         $invoice->load(['client', 'projectCategory', 'documentIssuer',
-                        'bankAccount', 'signature', 'items', 'user']);
+                        'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items']);
 
         $html = view('invoices.pdf', [
             'invoice' => $invoice,
@@ -412,7 +414,7 @@ class InvoiceController extends Controller
     {
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
-            'bankAccount', 'signature', 'items', 'user',
+            'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
         ]);
 
         $html      = view('invoices.pdf', ['invoice' => $invoice, 'imgB64' => fn($url) => $this->urlToBase64($url)])->render();
@@ -430,7 +432,7 @@ class InvoiceController extends Controller
     {
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
-            'bankAccount', 'signature', 'items', 'user',
+            'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
         ]);
 
         ActivityLogger::log('invoice.printed', $invoice);
@@ -503,12 +505,73 @@ class InvoiceController extends Controller
             'to'   => $request->status,
         ]);
 
-        if ($request->status === 'paid' && $invoice->interval_months && $invoice->children()->doesntExist()) {
-            $this->generateRecurring($invoice);
-            return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
+        if ($request->status === 'paid') {
+            $this->payCarriedAncestors($invoice);
+
+            if ($invoice->interval_months && $invoice->children()->doesntExist()) {
+                $this->generateRecurring($invoice);
+                return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
+            }
         }
 
         return back()->with('success', 'Status diperbarui.');
+    }
+
+    public function carry(Invoice $invoice)
+    {
+        if (!in_array($invoice->status, ['sent', 'unpaid'])) {
+            return back()->with('error', 'Hanya invoice sent atau unpaid yang bisa di-carry.');
+        }
+        if (!$invoice->interval_months) {
+            return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
+        }
+        if ($invoice->children()->exists()) {
+            return back()->with('error', 'Invoice sudah memiliki perpanjangan.');
+        }
+
+        $invoice->load('items', 'projectCategory');
+
+        $issueDate = Carbon::parse($invoice->issue_date)->addMonths($invoice->interval_months);
+        $dueDate   = $issueDate->copy()->addMonths($invoice->interval_months)->subDay();
+        $number    = Invoice::generateNumber($invoice->projectCategory->code, $issueDate);
+
+        $child = Invoice::create([
+            'user_id'             => $invoice->user_id,
+            'client_id'           => $invoice->client_id,
+            'project_category_id' => $invoice->project_category_id,
+            'document_issuer_id'  => $invoice->document_issuer_id,
+            'bank_account_id'     => $invoice->bank_account_id,
+            'signature_id'        => $invoice->signature_id,
+            'email_template_id'   => $invoice->email_template_id,
+            'with_signature'      => $invoice->with_signature,
+            'attention'           => $invoice->attention,
+            'notes'               => $invoice->notes,
+            'invoice_number'      => $number,
+            'issue_date'          => $issueDate,
+            'due_date'            => $dueDate,
+            'status'              => 'draft',
+            'tax_percentage'      => $invoice->tax_percentage,
+            'discount_type'       => $invoice->discount_type,
+            'discount_value'      => $invoice->discount_value,
+            'is_dpp'              => $invoice->is_dpp,
+            'interval_months'     => $invoice->interval_months,
+            'parent_invoice_id'   => $invoice->id,
+            'carried_from_id'     => $invoice->id,
+        ]);
+
+        foreach ($invoice->items as $item) {
+            $child->items()->create([
+                'description' => $item->description,
+                'amount'      => $item->amount,
+                'discount'    => $item->discount,
+                'sort_order'  => $item->sort_order,
+            ]);
+        }
+
+        $invoice->update(['status' => 'carried']);
+
+        ActivityLogger::log('invoice.carried', $invoice, ['carried_to' => $child->invoice_number]);
+        return back()->with('success', 'Invoice di-carry. Tunggakan akan masuk ke invoice berikutnya.');
     }
 
     public function freeze(Invoice $invoice)
@@ -574,6 +637,17 @@ class InvoiceController extends Controller
 
         ActivityLogger::log('invoice.resumed', $child, ['from_frozen' => $invoice->invoice_number]);
         return back()->with('success', 'Invoice dilanjutkan. Draft baru telah dibuat.');
+    }
+
+    private function payCarriedAncestors(Invoice $invoice): void
+    {
+        if (!$invoice->carried_from_id) return;
+        $carried = Invoice::find($invoice->carried_from_id);
+        if ($carried && $carried->status === 'carried') {
+            $carried->update(['status' => 'paid']);
+            ActivityLogger::log('invoice.status_changed', $carried, ['from' => 'carried', 'to' => 'paid']);
+            $this->payCarriedAncestors($carried);
+        }
     }
 
     private function generateRecurring(Invoice $parent): void

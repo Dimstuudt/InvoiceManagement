@@ -122,6 +122,19 @@
               </div>
             </div>
 
+            <!-- Tip: Carry -->
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-700">Carry — utang ke periode berikutnya</p>
+                <p class="text-xs text-gray-400 mt-0.5 leading-relaxed">Klik <span class="font-medium text-orange-600">Carry</span> di invoice Sent/Unpaid yang punya interval. Invoice lama jadi <span class="font-semibold bg-orange-50 text-orange-600 px-1 rounded">Carried</span>, invoice baru dibuat dengan <span class="font-medium">tunggakan</span> bulan lama otomatis masuk di PDF dan detail invoice.</p>
+              </div>
+            </div>
+
             <!-- Tip: Status -->
             <div class="flex gap-3">
               <div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
@@ -258,10 +271,13 @@
                               <button v-if="invoice.status === 'sent'" @click="markPaid(invoice)" title="Tandai lunas" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
                                 Paid
                               </button>
+                              <button v-if="['sent','unpaid'].includes(invoice.status) && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" title="Carry — utang dilanjut ke invoice berikutnya" class="px-2 py-1 text-[10px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-md transition-colors">
+                                Carry
+                              </button>
                               <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id" @click="freezeInvoice(invoice)" title="Bekukan — tunda perpanjangan tanpa menghapus invoice" class="px-2 py-1 text-[10px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors">
                                 Freeze
                               </button>
-                              <button v-if="invoice.status === 'frozen' && !invoice.children?.length" @click="openResume(invoice)" title="Lanjutkan dengan tanggal baru" class="px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">
+                              <button v-if="invoice.status === 'frozen' && !hasChild(invoice)" @click="openResume(invoice)" title="Lanjutkan dengan tanggal baru" class="px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">
                                 Perbarui
                               </button>
                               <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
@@ -522,7 +538,7 @@ function chainPaidTotal(group) { return group.invoices.filter(i => i.status === 
 
 const summary = computed(() => {
   const paid    = props.invoices.filter(i => i.status === 'paid');
-  const pending = props.invoices.filter(i => !['paid','frozen'].includes(i.status));
+  const pending = props.invoices.filter(i => !['paid','frozen','carried'].includes(i.status));
   return {
     paid:         paid.reduce((s, i) => s + invoiceTotal(i), 0),
     paidCount:    paid.length,
@@ -548,23 +564,25 @@ const fmtCurrency = v => v != null
   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
   : '-';
 
-const isPastDue    = inv => !['paid','frozen'].includes(inv.status) && new Date(inv.due_date) < new Date(new Date().toDateString());
+const isPastDue    = inv => !['paid','frozen','carried'].includes(inv.status) && new Date(inv.due_date) < new Date(new Date().toDateString());
 const daysPastDue  = inv => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000);
 const hasOverdue   = group => group.invoices.some(isPastDue);
 
 // ── Status display ──────────────────────────────────────────
-const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen' }[s] ?? s);
+const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen', carried: 'Carried' }[s] ?? s);
 const statusClass = s => ({
-  draft:  'bg-gray-100 text-gray-500',
-  sent:   'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
-  paid:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  unpaid: 'bg-red-50 text-red-600 ring-1 ring-red-200',
-  frozen: 'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
+  draft:   'bg-gray-100 text-gray-500',
+  sent:    'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
+  paid:    'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  unpaid:  'bg-red-50 text-red-600 ring-1 ring-red-200',
+  frozen:  'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
+  carried: 'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
 }[s] ?? 'bg-gray-100 text-gray-500');
 
 const dotClass = inv => {
-  if (inv.status === 'frozen') return 'bg-sky-400';
-  if (isPastDue(inv))          return 'bg-red-500';
+  if (inv.status === 'frozen')  return 'bg-sky-400';
+  if (inv.status === 'carried') return 'bg-orange-400';
+  if (isPastDue(inv))           return 'bg-red-500';
   return { draft: 'bg-gray-300', sent: 'bg-blue-400', paid: 'bg-emerald-500', unpaid: 'bg-red-400' }[inv.status] ?? 'bg-gray-300';
 };
 
@@ -599,12 +617,20 @@ function monthGap(newer, older) {
 }
 
 // ── Actions ─────────────────────────────────────────────────
+function hasChild(invoice) {
+  return props.invoices.some(inv => inv.parent_invoice_id === invoice.id)
+}
+
 function markPaid(invoice) {
   router.patch(route('invoices.status', invoice.id), { status: 'paid' }, { preserveScroll: true })
 }
 
 function freezeInvoice(invoice) {
   router.post(route('invoices.freeze', invoice.id), {}, { preserveScroll: true })
+}
+
+function carryInvoice(invoice) {
+  router.post(route('invoices.carry', invoice.id), {}, { preserveScroll: true })
 }
 
 const resumeModal   = ref(false)

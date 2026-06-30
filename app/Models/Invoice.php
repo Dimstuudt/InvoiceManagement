@@ -11,7 +11,7 @@ class Invoice extends Model
         'bank_account_id', 'signature_id', 'email_template_id', 'with_signature', 'spk_number',
         'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked',
         'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
-        'interval_months', 'parent_invoice_id',
+        'interval_months', 'parent_invoice_id', 'carried_from_id',
     ];
 
     protected $casts = [
@@ -34,6 +34,7 @@ class Invoice extends Model
     public function items()           { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order'); }
     public function parent()          { return $this->belongsTo(Invoice::class, 'parent_invoice_id'); }
     public function children()        { return $this->hasMany(Invoice::class, 'parent_invoice_id'); }
+    public function carriedFrom()     { return $this->belongsTo(Invoice::class, 'carried_from_id'); }
 
     public function getSubtotalAttribute(): float
     {
@@ -68,6 +69,21 @@ class Invoice extends Model
     public function getTotalAttribute(): float
     {
         return $this->after_discount + $this->tax_amount;
+    }
+
+    public function getCarriedTotalAttribute(): float
+    {
+        if (!$this->carried_from_id) return 0.0;
+        $from = $this->relationLoaded('carriedFrom')
+            ? $this->carriedFrom
+            : static::with(['items', 'carriedFrom.items'])->find($this->carried_from_id);
+        if (!$from) return 0.0;
+        return $from->total + $from->carried_total;
+    }
+
+    public function getGrandTotalAttribute(): float
+    {
+        return $this->total + $this->carried_total;
     }
 
     public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate): string

@@ -304,7 +304,7 @@
                               <button v-if="invoice.status === 'sent'" @click="markPaid(invoice)" title="Tandai lunas" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
                                 Paid
                               </button>
-                              <button v-if="['sent','unpaid'].includes(invoice.status) && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" title="Carry — utang dilanjut ke invoice berikutnya" class="px-2 py-1 text-[10px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-md transition-colors">
+                              <button v-if="invoice.status === 'sent' && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" title="Carry — utang dilanjut ke invoice berikutnya" class="px-2 py-1 text-[10px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-md transition-colors">
                                 Carry
                               </button>
                               <button v-if="invoice.status === 'unpaid' && invoice.interval_months && !hasChild(invoice) && !invoice.is_reaktivasi" @click="reactivateInvoice(invoice)" title="Reaktivasi — perpanjang kontrak dengan bayar tunggakan sekaligus" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">

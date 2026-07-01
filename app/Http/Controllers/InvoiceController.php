@@ -667,7 +667,7 @@ class InvoiceController extends Controller
         $invoice->load('items', 'projectCategory');
 
         $issueDate = Carbon::parse($invoice->issue_date)->addMonths($invoice->interval_months);
-        $dueDate   = $issueDate->copy()->addMonths($invoice->interval_months)->subDay();
+        $dueDate   = $issueDate->copy()->addDays(14);
         $number    = Invoice::generateNumber($invoice->projectCategory->code, $issueDate);
 
         $child = Invoice::create([
@@ -697,8 +697,11 @@ class InvoiceController extends Controller
         foreach ($invoice->items as $item) {
             $child->items()->create([
                 'description' => $item->description,
+                'quantity'    => $item->quantity,
+                'unit'        => $item->unit,
+                'unit_price'  => $item->unit_price,
                 'amount'      => $item->amount,
-                'discount'    => $item->discount,
+                'discount'    => $item->discount ?? 0,
                 'sort_order'  => $item->sort_order,
             ]);
         }
@@ -735,7 +738,7 @@ class InvoiceController extends Controller
         $invoice->load('items', 'projectCategory');
 
         $issueDate = Carbon::parse($request->issue_date);
-        $dueDate   = $issueDate->copy()->addMonths($request->interval_months)->subDay();
+        $dueDate   = $issueDate->copy()->addDays(14);
         $number    = Invoice::generateNumber($invoice->projectCategory->code, $issueDate);
 
         $child = Invoice::create([
@@ -805,7 +808,7 @@ class InvoiceController extends Controller
             $cursorDay = min($originalDay, $cursor->daysInMonth);
             $cursor->setDay($cursorDay);
 
-            $dueDate = $cursor->copy()->addMonths($interval)->subDay();
+            $dueDate = $cursor->copy()->addDays(14);
             $number  = Invoice::generateNumber($invoice->projectCategory->code, $cursor);
             $isHead  = $cursor->format('Y-m') === $headDate->format('Y-m');
 
@@ -889,8 +892,9 @@ class InvoiceController extends Controller
         $members = Invoice::where('reaktivasi_chain_id', $invoice->id)->get();
         foreach ($members as $member) {
             if ($member->status !== 'paid') {
+                $oldStatus = $member->status;
                 $member->update(['status' => 'paid']);
-                ActivityLogger::log('invoice.status_changed', $member, ['from' => $member->status, 'to' => 'paid', 'note' => 'cascade reaktivasi']);
+                ActivityLogger::log('invoice.status_changed', $member, ['from' => $oldStatus, 'to' => 'paid', 'note' => 'cascade reaktivasi']);
             }
         }
     }
@@ -902,7 +906,7 @@ class InvoiceController extends Controller
         // issue = issue_date parent + interval (maju N bulan dari tanggal mulai)
         $issueDate = Carbon::parse($parent->issue_date)->addMonths($parent->interval_months);
         // due = issue baru + interval - 1 hari
-        $dueDate = $issueDate->copy()->addMonths($parent->interval_months)->subDay();
+        $dueDate = $issueDate->copy()->addDays(14);
 
         $number = Invoice::generateNumber($parent->projectCategory->code, $issueDate);
 

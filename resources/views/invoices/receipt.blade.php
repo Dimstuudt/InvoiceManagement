@@ -46,9 +46,13 @@
   $hdr          = $imgB64($invoice->documentIssuer?->header_image_url);
   $sig          = $imgB64($invoice->signature?->signature_image_url);
   $total        = $invoice->total;
-  $carriedFrom  = $invoice->carriedFrom ?? null;
-  $carriedTotal = $invoice->carried_total;
-  $grandTotal   = $invoice->grand_total;
+  $carriedFrom        = $invoice->carriedFrom ?? null;
+  $carriedTotal       = $invoice->carried_total;
+  $grandTotal         = $invoice->grand_total;
+  $isReaktivasiHead   = $invoice->is_reaktivasi && !$invoice->reaktivasi_chain_id;
+  $reaktivasiMembers  = $isReaktivasiHead ? $invoice->reaktivasiChain->sortBy('issue_date') : collect();
+  $reaktivasiTotal    = $invoice->reaktivasi_total;
+  $reaktivasiGrand    = $invoice->reaktivasi_grand_total;
   $isPaid       = $invoice->status === 'paid';
   $isOverdue    = !$isPaid && $invoice->due_date && $invoice->due_date->isPast();
   $stampLabel   = [
@@ -209,7 +213,7 @@
               {{-- Grand Total / Total Invoice --}}
               <tr style="border-top:2px solid #1d4ed8">
                 <td style="padding:0.6rem 0.75rem 0.6rem 0;font-size:0.875rem;font-weight:900;color:#1d4ed8;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap">
-                  {{ $carriedFrom ? 'TOTAL INVOICE' : 'TOTAL' }}
+                  {{ ($carriedFrom || $isReaktivasiHead) ? 'TOTAL INVOICE' : 'TOTAL' }}
                 </td>
                 <td style="padding:0.6rem 0;font-size:1rem;font-weight:900;text-align:right;font-family:'Courier New',monospace;color:#1d4ed8;white-space:nowrap">
                   Rp {{ number_format($total, 2, ',', '.') }}
@@ -230,6 +234,33 @@
                 <td style="padding:0.6rem 0.75rem 0.6rem 0;font-size:0.875rem;font-weight:900;color:#b45309;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap">TOTAL BAYAR</td>
                 <td style="padding:0.6rem 0;font-size:1rem;font-weight:900;text-align:right;font-family:'Courier New',monospace;color:#b45309;white-space:nowrap">
                   Rp {{ number_format($grandTotal, 2, ',', '.') }}
+                </td>
+              </tr>
+              @endif
+
+              {{-- Tunggakan Reaktivasi --}}
+              @if($isReaktivasiHead && $reaktivasiMembers->count() > 0)
+              <tr><td colspan="2" style="padding:0.4rem 0 0.1rem 0"><div style="border-top:1px dashed #d1fae5"></div></td></tr>
+              <tr>
+                <td colspan="2" style="padding:0.2rem 0 0.3rem 0;font-size:0.7rem;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.06em">
+                  Reaktivasi — Tunggakan Layanan
+                </td>
+              </tr>
+              @foreach($reaktivasiMembers as $member)
+              <tr>
+                <td style="padding:0.2rem 0.75rem 0.2rem 0;font-size:0.8rem;color:#065f46;white-space:nowrap">
+                  {{ $member->issue_date->format('F Y') }}
+                  <span style="font-size:0.7rem;color:#6b7280">({{ $member->invoice_number }})</span>
+                </td>
+                <td style="padding:0.2rem 0;font-size:0.8rem;text-align:right;font-family:'Courier New',monospace;color:#065f46;white-space:nowrap">
+                  + Rp {{ number_format($member->total, 2, ',', '.') }}
+                </td>
+              </tr>
+              @endforeach
+              <tr style="border-top:2px solid #059669">
+                <td style="padding:0.6rem 0.75rem 0.6rem 0;font-size:0.875rem;font-weight:900;color:#047857;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap">TOTAL BAYAR</td>
+                <td style="padding:0.6rem 0;font-size:1rem;font-weight:900;text-align:right;font-family:'Courier New',monospace;color:#047857;white-space:nowrap">
+                  Rp {{ number_format($reaktivasiGrand, 2, ',', '.') }}
                 </td>
               </tr>
               @endif

@@ -419,6 +419,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
+            'reaktivasiChain.items',
         ]);
 
         $html      = view('invoices.pdf', ['invoice' => $invoice, 'imgB64' => fn($url) => $this->urlToBase64($url)])->render();
@@ -437,6 +438,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
+            'reaktivasiChain.items',
         ]);
 
         ActivityLogger::log('invoice.printed', $invoice);
@@ -453,6 +455,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
+            'reaktivasiChain.items',
         ]);
 
         return view('invoices.receipt', [
@@ -638,6 +641,7 @@ class InvoiceController extends Controller
 
         if ($request->status === 'paid') {
             $this->payCarriedAncestors($invoice);
+            $this->payReaktivasiChain($invoice);
 
             if ($invoice->interval_months && $invoice->children()->doesntExist()) {
                 $this->generateRecurring($invoice);
@@ -770,6 +774,102 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice dilanjutkan. Draft baru telah dibuat.');
     }
 
+    public function reactivate(Invoice $invoice)
+    {
+        if ($invoice->status !== 'unpaid') {
+            return back()->with('error', 'Hanya invoice unpaid yang bisa direaktivasi.');
+        }
+        if (!$invoice->interval_months) {
+            return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
+        }
+        if ($invoice->children()->exists()) {
+            return back()->with('error', 'Invoice sudah memiliki perpanjangan.');
+        }
+
+        $invoice->load('items', 'projectCategory');
+
+        $now              = Carbon::now();
+        $originalDate     = Carbon::parse($invoice->issue_date);
+        $originalDay      = $originalDate->day;
+        $interval         = $invoice->interval_months;
+
+        // Head = bulan depan dari sekarang, pakai hari yang sama dengan invoice asli
+        $headDate = Carbon::create($now->year, $now->month, 1)->addMonth();
+        $headDate->setDay(min($originalDay, $headDate->daysInMonth));
+
+        $cursor          = $originalDate->copy()->addMonths($interval);
+        $previousInvoice = $invoice;
+        $generated       = [];
+
+        while ($cursor->lte($headDate)) {
+            $cursorDay = min($originalDay, $cursor->daysInMonth);
+            $cursor->setDay($cursorDay);
+
+            $dueDate = $cursor->copy()->addMonths($interval)->subDay();
+            $number  = Invoice::generateNumber($invoice->projectCategory->code, $cursor);
+            $isHead  = $cursor->format('Y-m') === $headDate->format('Y-m');
+
+            $child = Invoice::create([
+                'user_id'             => $invoice->user_id,
+                'client_id'           => $invoice->client_id,
+                'project_category_id' => $invoice->project_category_id,
+                'document_issuer_id'  => $invoice->document_issuer_id,
+                'bank_account_id'     => $invoice->bank_account_id,
+                'signature_id'        => $invoice->signature_id,
+                'email_template_id'   => $invoice->email_template_id,
+                'with_signature'      => $invoice->with_signature,
+                'attention'           => $invoice->attention,
+                'notes'               => $invoice->notes,
+                'invoice_number'      => $number,
+                'issue_date'          => $cursor->toDateString(),
+                'due_date'            => $dueDate->toDateString(),
+                'status'              => $isHead ? 'draft' : 'unpaid',
+                'interval_months'     => $interval,
+                'parent_invoice_id'   => $previousInvoice->id,
+                'tax_percentage'      => $invoice->tax_percentage,
+                'discount_type'       => $invoice->discount_type,
+                'discount_value'      => $invoice->discount_value,
+                'is_dpp'              => $invoice->is_dpp,
+                'is_reaktivasi'       => true,
+            ]);
+
+            foreach ($invoice->items as $item) {
+                $child->items()->create([
+                    'description' => $item->description,
+                    'quantity'    => $item->quantity,
+                    'unit'        => $item->unit,
+                    'unit_price'  => $item->unit_price,
+                    'amount'      => $item->amount,
+                    'discount'    => $item->discount ?? 0,
+                    'sort_order'  => $item->sort_order,
+                ]);
+            }
+
+            $generated[]     = $child;
+            $previousInvoice = $child;
+            $cursor->addMonths($interval);
+        }
+
+        $head   = end($generated);
+        $headId = $head->id;
+
+        // Mark original + all non-head generated invoices with reaktivasi_chain_id
+        $invoice->update(['is_reaktivasi' => true, 'reaktivasi_chain_id' => $headId]);
+        $nonHeadIds = collect($generated)->slice(0, -1)->pluck('id')->toArray();
+        if (!empty($nonHeadIds)) {
+            Invoice::whereIn('id', $nonHeadIds)->update(['reaktivasi_chain_id' => $headId]);
+        }
+
+        ActivityLogger::log('invoice.reactivated', $invoice, [
+            'chain_head'  => $head->invoice_number,
+            'chain_count' => count($generated),
+            'from'        => $originalDate->format('Y-m'),
+            'to'          => Carbon::parse($head->issue_date)->format('Y-m'),
+        ]);
+
+        return back()->with('success', 'Reaktivasi berhasil. ' . count($generated) . ' invoice dibuat — bayar di ' . $head->invoice_number . '.');
+    }
+
     private function payCarriedAncestors(Invoice $invoice): void
     {
         if (!$invoice->carried_from_id) return;
@@ -778,6 +878,20 @@ class InvoiceController extends Controller
             $carried->update(['status' => 'paid']);
             ActivityLogger::log('invoice.status_changed', $carried, ['from' => 'carried', 'to' => 'paid']);
             $this->payCarriedAncestors($carried);
+        }
+    }
+
+    private function payReaktivasiChain(Invoice $invoice): void
+    {
+        // Only cascade if this is the reaktivasi head (is_reaktivasi = true, no chain_id = it IS the head)
+        if (!$invoice->is_reaktivasi || $invoice->reaktivasi_chain_id) return;
+
+        $members = Invoice::where('reaktivasi_chain_id', $invoice->id)->get();
+        foreach ($members as $member) {
+            if ($member->status !== 'paid') {
+                $member->update(['status' => 'paid']);
+                ActivityLogger::log('invoice.status_changed', $member, ['from' => $member->status, 'to' => 'paid', 'note' => 'cascade reaktivasi']);
+            }
         }
     }
 

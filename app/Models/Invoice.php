@@ -12,16 +12,18 @@ class Invoice extends Model
         'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked',
         'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
         'interval_months', 'parent_invoice_id', 'carried_from_id',
+        'is_reaktivasi', 'reaktivasi_chain_id',
     ];
 
     protected $casts = [
-        'issue_date'      => 'date',
-        'due_date'        => 'date',
-        'with_signature'  => 'boolean',
-        'is_marked'       => 'boolean',
-        'is_dpp'          => 'boolean',
-        'interval_months' => 'integer',
-        'discount_value'  => 'float',
+        'issue_date'         => 'date',
+        'due_date'           => 'date',
+        'with_signature'     => 'boolean',
+        'is_marked'          => 'boolean',
+        'is_dpp'             => 'boolean',
+        'is_reaktivasi'      => 'boolean',
+        'interval_months'    => 'integer',
+        'discount_value'     => 'float',
     ];
 
     public function user()            { return $this->belongsTo(User::class); }
@@ -34,7 +36,8 @@ class Invoice extends Model
     public function items()           { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order'); }
     public function parent()          { return $this->belongsTo(Invoice::class, 'parent_invoice_id'); }
     public function children()        { return $this->hasMany(Invoice::class, 'parent_invoice_id'); }
-    public function carriedFrom()     { return $this->belongsTo(Invoice::class, 'carried_from_id'); }
+    public function carriedFrom()      { return $this->belongsTo(Invoice::class, 'carried_from_id'); }
+    public function reaktivasiChain()  { return $this->hasMany(Invoice::class, 'reaktivasi_chain_id'); }
 
     public function getSubtotalAttribute(): float
     {
@@ -84,6 +87,20 @@ class Invoice extends Model
     public function getGrandTotalAttribute(): float
     {
         return $this->total + $this->carried_total;
+    }
+
+    public function getReaktivasiTotalAttribute(): float
+    {
+        if (!$this->is_reaktivasi || $this->reaktivasi_chain_id) return 0.0;
+        $members = $this->relationLoaded('reaktivasiChain')
+            ? $this->reaktivasiChain
+            : static::with('items')->where('reaktivasi_chain_id', $this->id)->get();
+        return (float) $members->sum(fn($inv) => $inv->total);
+    }
+
+    public function getReaktivasiGrandTotalAttribute(): float
+    {
+        return $this->total + $this->reaktivasi_total;
     }
 
     public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate): string

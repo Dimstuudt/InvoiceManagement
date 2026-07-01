@@ -228,7 +228,11 @@
                     <div v-if="idx > 0" class="flex items-center border-t border-gray-50">
                       <div class="w-[57px] flex justify-center shrink-0">
                         <div class="w-px h-5"
-                          :class="recurringGroups[activeTab].invoices[idx - 1].carried_from_id === invoice.id ? 'bg-orange-300' : 'bg-gray-100'"/>
+                          :class="recurringGroups[activeTab].invoices[idx - 1].carried_from_id === invoice.id
+                            ? 'bg-orange-300'
+                            : isReaktivasiPair(recurringGroups[activeTab].invoices[idx - 1], invoice)
+                              ? 'bg-emerald-300'
+                              : 'bg-gray-100'"/>
                       </div>
                       <!-- Badge Carry -->
                       <template v-if="recurringGroups[activeTab].invoices[idx - 1].carried_from_id === invoice.id">
@@ -237,6 +241,15 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
                           </svg>
                           Carry
+                        </span>
+                      </template>
+                      <!-- Badge Reaktivasi -->
+                      <template v-else-if="isReaktivasiPair(recurringGroups[activeTab].invoices[idx - 1], invoice)">
+                        <span class="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          <svg class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                          </svg>
+                          Reaktivasi
                         </span>
                       </template>
                       <!-- Badge interval normal -->
@@ -254,10 +267,14 @@
                           </svg>
                           <div v-else class="w-1.5 h-1.5 rounded-full bg-white"/>
                         </div>
-                        <!-- Garis vertikal ke bawah — oranye kalau invoice berikutnya di-carry dari sini -->
+                        <!-- Garis vertikal ke bawah -->
                         <div v-if="idx < recurringGroups[activeTab].invoices.length - 1"
                           class="flex-1 w-px mt-1"
-                          :class="invoice.carried_from_id === recurringGroups[activeTab].invoices[idx + 1]?.id ? 'bg-orange-300' : 'bg-gray-100'"/>
+                          :class="invoice.carried_from_id === recurringGroups[activeTab].invoices[idx + 1]?.id
+                            ? 'bg-orange-300'
+                            : isReaktivasiPair(invoice, recurringGroups[activeTab].invoices[idx + 1])
+                              ? 'bg-emerald-300'
+                              : 'bg-gray-100'"/>
                       </div>
                       <div class="flex-1 min-w-0 py-3 pr-4">
                         <div class="flex items-start justify-between gap-3">
@@ -289,6 +306,9 @@
                               </button>
                               <button v-if="['sent','unpaid'].includes(invoice.status) && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" title="Carry — utang dilanjut ke invoice berikutnya" class="px-2 py-1 text-[10px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-md transition-colors">
                                 Carry
+                              </button>
+                              <button v-if="invoice.status === 'unpaid' && invoice.interval_months && !hasChild(invoice) && !invoice.is_reaktivasi" @click="reactivateInvoice(invoice)" title="Reaktivasi — perpanjang kontrak dengan bayar tunggakan sekaligus" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
+                                Reaktivasi
                               </button>
                               <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id" @click="freezeInvoice(invoice)" title="Bekukan — tunda perpanjangan tanpa menghapus invoice" class="px-2 py-1 text-[10px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors">
                                 Freeze
@@ -647,6 +667,31 @@ function freezeInvoice(invoice) {
 
 function carryInvoice(invoice) {
   router.post(route('invoices.carry', invoice.id), {}, { preserveScroll: true })
+}
+
+function reactivateInvoice(invoice) {
+  Swal.fire({
+    title: 'Reaktivasi invoice ini?',
+    html: `<div style="text-align:left;font-size:0.85rem;color:#374151">
+      <p>Invoice <strong>${invoice.invoice_number}</strong> akan direaktivasi.</p>
+      <p style="margin-top:0.5rem">Sistem akan membuat invoice tunggakan untuk setiap bulan yang terlewat hingga bulan depan, dengan harga yang sama.</p>
+      <p style="margin-top:0.5rem;color:#059669;font-weight:600">Bayar sekaligus di invoice paling atas (bulan depan).</p>
+    </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#059669',
+    confirmButtonText: 'Ya, Reaktivasi',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) router.post(route('invoices.reactivate', invoice.id), {}, { preserveScroll: true })
+  })
+}
+
+function isReaktivasiPair(upper, lower) {
+  if (!upper || !lower) return false
+  // upper adalah yang lebih baru (tampil di atas), lower lebih lama
+  // chain: lower.parent = upper, both is_reaktivasi = true
+  return upper.is_reaktivasi && lower.is_reaktivasi && upper.parent_invoice_id === lower.id
 }
 
 const resumeModal   = ref(false)

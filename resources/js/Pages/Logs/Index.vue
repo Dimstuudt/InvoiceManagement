@@ -301,6 +301,7 @@ function describe(log) {
     case 'invoice.frozen':            return `Invoice ${s} dibekukan`
     case 'invoice.carried':           return `Invoice ${s} di-carry ke periode berikutnya`
     case 'invoice.resumed':           return `Invoice ${s} dilanjutkan dari status frozen`
+    case 'invoice.reactivated':       return `Reaktivasi ${s} · ${d.chain_count ?? 0} invoice dibuat, head: ${d.chain_head ?? '?'}`
     case 'invoice.exported': {
       const from       = fmtMonth(d.from)
       const to         = fmtMonth(d.to)

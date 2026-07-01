@@ -61,6 +61,7 @@ class ActivityLogger
             'invoice.carried'           => 'Carry invoice',
             'invoice.resumed'           => 'Lanjut dari frozen',
             'invoice.exported'          => 'Export laporan',
+            'invoice.reactivated'       => 'Reaktivasi invoice',
             // Client
             'client.created'            => 'Tambah client',
             'client.updated'            => 'Edit client',
@@ -127,6 +128,7 @@ class ActivityLogger
             'invoice.recurring_created', 'invoice.downloaded', 'invoice.printed',
             'invoice.interval_changed', 'invoice.meta_updated', 'invoice.items_updated',
             'invoice.totals_updated', 'invoice.tax_updated', 'invoice.frozen',
+            'invoice.reactivated',
             'invoice.carried', 'invoice.resumed', 'invoice.exported',
             'client.created', 'client.updated', 'client.deleted',
             'user.login', 'user.logout', 'user.created', 'user.updated', 'user.deleted',

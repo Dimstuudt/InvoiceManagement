@@ -29,6 +29,7 @@
           <p class="text-[11px] text-gray-400 font-medium mt-3">Revenue Bulan Ini</p>
           <p class="text-lg font-bold text-gray-900 mt-0.5 truncate">{{ fmtCurrencyShort(stats.revenue_this_month) }}</p>
           <p class="text-[10px] text-gray-300 mt-1">vs {{ fmtCurrencyShort(stats.revenue_last_month) }} bulan lalu</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Dihitung dari invoice berstatus <strong>Paid</strong> bulan ini</p>
         </div>
 
         <!-- Outstanding -->
@@ -41,6 +42,7 @@
           <p class="text-[11px] text-gray-400 font-medium mt-3">Menunggu Bayar</p>
           <p class="text-lg font-bold text-gray-900 mt-0.5 truncate">{{ fmtCurrencyShort(stats.outstanding) }}</p>
           <p class="text-[10px] text-blue-400 mt-1">Belum jatuh tempo</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Invoice <strong>Sent</strong> yang belum melewati due date</p>
         </div>
 
         <!-- Overdue -->
@@ -59,6 +61,7 @@
           <p class="text-[10px] mt-1" :class="stats.overdue_count > 0 ? 'text-red-400' : 'text-gray-300'">
             {{ fmtCurrencyShort(stats.overdue_amount) }}
           </p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Invoice <strong>Sent/Unpaid</strong> yang sudah lewat due date</p>
         </div>
 
         <!-- Clients -->
@@ -71,6 +74,7 @@
           <p class="text-[11px] text-gray-400 font-medium mt-3">Client Aktif</p>
           <p class="text-lg font-bold text-gray-900 mt-0.5">{{ stats.active_clients }}</p>
           <p class="text-[10px] text-indigo-400 mt-1">{{ stats.invoices_this_month }} invoice bulan ini</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Client dengan minimal 1 invoice tercatat</p>
         </div>
 
       </div>

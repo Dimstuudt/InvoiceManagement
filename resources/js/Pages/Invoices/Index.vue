@@ -33,25 +33,57 @@
       </div>
 
       <!-- Summary stats -->
-      <div class="grid grid-cols-4 gap-3">
-        <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5">
-          <p class="text-xs text-gray-400 mb-1">Total Invoice</p>
-          <p class="text-xl font-bold text-gray-900">{{ summary.total_invoices }}</p>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center mb-3">
+            <svg class="w-4.5 h-4.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+            </svg>
+          </div>
+          <p class="text-[11px] text-gray-400 font-medium">Client Aktif</p>
+          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ clients.length }}</p>
+          <p class="text-[10px] text-gray-300 mt-1">{{ summary.total_invoices }} total invoice</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Client yang punya minimal 1 invoice</p>
         </div>
-        <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5">
-          <p class="text-xs text-gray-400 mb-1">Belum Dibayar</p>
-          <p class="text-xl font-bold text-red-500">{{ summary.total_unpaid }}</p>
+
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div class="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center mb-3">
+            <svg class="w-4.5 h-4.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <p class="text-[11px] text-gray-400 font-medium">Menunggu Bayar</p>
+          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ summary.total_unpaid }}</p>
+          <p class="text-[10px] text-amber-500 mt-1">invoice sent (belum due)</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Invoice <strong>Sent</strong> yang belum melewati due date</p>
         </div>
-        <div class="rounded-xl border shadow-sm px-4 py-3.5"
-          :class="summary.total_overdue > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'">
-          <p class="text-xs mb-1" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">Jatuh Tempo</p>
-          <p class="text-xl font-bold" :class="summary.total_overdue > 0 ? 'text-red-600' : 'text-gray-900'">
+
+        <div class="rounded-2xl border shadow-sm p-4"
+          :class="summary.total_overdue > 0 ? 'bg-red-50/60 border-red-100' : 'bg-white border-gray-100'">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
+            :class="summary.total_overdue > 0 ? 'bg-red-100' : 'bg-gray-100'">
+            <svg class="w-4.5 h-4.5" :class="summary.total_overdue > 0 ? 'text-red-500' : 'text-gray-400'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+          <p class="text-[11px] font-medium mb-0" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">Jatuh Tempo</p>
+          <p class="text-2xl font-bold mt-0.5" :class="summary.total_overdue > 0 ? 'text-red-600' : 'text-gray-900'">
             {{ summary.total_overdue }}
           </p>
+          <p class="text-[10px] mt-1" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-300'">invoice overdue</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Invoice <strong>Sent/Unpaid</strong> yang sudah lewat due date</p>
         </div>
-        <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5">
-          <p class="text-xs text-gray-400 mb-1">Outstanding</p>
-          <p class="text-base font-bold text-gray-900 truncate">{{ formatCurrency(summary.total_outstanding) }}</p>
+
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
+            <svg class="w-4.5 h-4.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+          </div>
+          <p class="text-[11px] text-gray-400 font-medium">Outstanding</p>
+          <p class="text-base font-bold text-gray-900 mt-0.5 truncate">{{ fmtShort(summary.total_outstanding) }}</p>
+          <p class="text-[10px] text-blue-400 mt-1">belum terbayar</p>
+          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Total Rp dari <strong>Sent + Unpaid</strong> · semua yang belum terbayar</p>
         </div>
       </div>
 
@@ -100,91 +132,97 @@
       <!-- Client cards grid -->
       <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <div v-for="client in filteredClients" :key="client.id"
-          class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-shadow">
+          class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
 
           <!-- Card header -->
-          <div class="px-5 pt-5 pb-3 flex items-start gap-3">
-            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-              <span class="text-indigo-600 font-bold text-sm">{{ client.company_name.charAt(0) }}</span>
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-start justify-between gap-2">
-                <h3 class="font-semibold text-gray-900 text-sm leading-tight">{{ client.company_name }}</h3>
-                <span v-if="client.overdue_count"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-red-100 text-red-600 shrink-0">
-                  <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                      clip-rule="evenodd"/>
-                  </svg>
-                  {{ client.overdue_count }} overdue
-                </span>
+          <div class="px-5 pt-5 pb-4">
+            <div class="flex items-start gap-3">
+              <!-- Avatar -->
+              <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-base shadow-sm"
+                :class="avatarColor(client.company_name)">
+                {{ client.company_name.charAt(0).toUpperCase() }}
               </div>
-              <p class="text-xs text-gray-400 mt-0.5 truncate">
-                {{ client.city ?? '—' }}<span v-if="client.category"> &bull; {{ client.category.name }}</span>
-              </p>
-              <p v-if="client.pic" class="text-xs text-gray-500 mt-0.5 truncate">
-                <span class="text-gray-400">PIC:</span> {{ client.pic }}
-              </p>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <h3 class="font-semibold text-gray-900 text-sm leading-snug truncate">{{ client.company_name }}</h3>
+                  <span v-if="client.overdue_count"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold bg-red-100 text-red-600 shrink-0">
+                    ⚠ {{ client.overdue_count }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span v-if="client.category" class="text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">
+                    {{ client.category.name }}
+                  </span>
+                  <span v-if="client.city" class="text-[10px] text-gray-400">{{ client.city }}</span>
+                </div>
+                <p v-if="client.pic" class="text-[11px] text-gray-400 mt-1 truncate">{{ client.pic }}</p>
+              </div>
+            </div>
+
+            <!-- Status pills -->
+            <div class="flex flex-wrap gap-1.5 mt-3.5">
+              <span v-if="client.paid_count"
+                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                Paid {{ client.paid_count }}
+              </span>
+              <span v-if="client.sent_count"
+                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-600 ring-1 ring-blue-200">
+                Sent {{ client.sent_count }}
+              </span>
+              <span v-if="client.unpaid_count"
+                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 text-red-600 ring-1 ring-red-200">
+                Unpaid {{ client.unpaid_count }}
+              </span>
+              <span v-if="client.draft_count"
+                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-gray-100 text-gray-500">
+                Draft {{ client.draft_count }}
+              </span>
+              <span v-if="!totalInvoices(client)" class="text-[10px] text-gray-300 italic">Belum ada invoice</span>
             </div>
           </div>
 
-          <!-- Status counts -->
-          <div class="px-5 pb-3 flex flex-wrap gap-1.5">
-            <span v-if="client.draft_count"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-              Draft <span class="font-bold">{{ client.draft_count }}</span>
-            </span>
-            <span v-if="client.sent_count"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-600 ring-1 ring-blue-200">
-              Sent <span class="font-bold">{{ client.sent_count }}</span>
-            </span>
-            <span v-if="client.unpaid_count"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-50 text-red-600 ring-1 ring-red-200">
-              Unpaid <span class="font-bold">{{ client.unpaid_count }}</span>
-            </span>
-            <span v-if="client.paid_count"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-              Paid <span class="font-bold">{{ client.paid_count }}</span>
-            </span>
-            <span v-if="!totalInvoices(client)" class="text-xs text-gray-300 italic">Belum ada invoice</span>
-          </div>
-
-          <!-- Nilai & meta -->
-          <div class="px-5 pb-4 grid grid-cols-2 gap-x-4 gap-y-2">
+          <!-- Financial info -->
+          <div class="px-5 pb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-50 pt-3.5">
             <div>
-              <p class="text-xs text-gray-400">Outstanding</p>
-              <p class="text-sm font-semibold" :class="client.unpaid_amount > 0 ? 'text-red-500' : 'text-gray-400'">
-                {{ client.unpaid_amount > 0 ? formatCurrency(client.unpaid_amount) : '—' }}
+              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Outstanding</p>
+              <p class="text-sm font-bold mt-0.5" :class="client.unpaid_amount > 0 ? 'text-red-500' : 'text-gray-300'">
+                {{ client.unpaid_amount > 0 ? fmtShort(client.unpaid_amount) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-xs text-gray-400">Total Lifetime</p>
-              <p class="text-sm font-semibold text-gray-700">
-                {{ client.total_amount > 0 ? formatCurrency(client.total_amount) : '—' }}
+              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Total Lifetime</p>
+              <p class="text-sm font-bold text-gray-700 mt-0.5">
+                {{ client.total_amount > 0 ? fmtShort(client.total_amount) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-xs text-gray-400">Invoice Terakhir</p>
-              <p class="text-sm font-medium text-gray-600">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Invoice Terakhir</p>
+              <p class="text-[12px] font-medium text-gray-600 mt-0.5">
                 {{ client.invoices_max_issue_date ? fmtDate(client.invoices_max_issue_date) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-xs text-gray-400">Jenis Produk</p>
-              <p class="text-sm font-medium text-gray-600">{{ client.product_type_count || '—' }}</p>
+              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Jenis Produk</p>
+              <p class="text-[12px] font-medium text-gray-600 mt-0.5">{{ client.product_type_count || '—' }}</p>
             </div>
           </div>
 
           <!-- Actions -->
-          <div class="mt-auto border-t border-gray-50 px-5 py-3 flex items-center gap-2">
+          <div class="mt-auto border-t border-gray-50 px-4 py-3 flex items-center gap-2">
             <Link :href="route('invoices.create', { client_id: client.id })"
-              class="flex-1 text-center text-xs px-3 py-2 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium">
-              + Buat Invoice
+              class="flex items-center justify-center gap-1 flex-1 text-[12px] px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors font-medium">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+              </svg>
+              Buat Invoice
             </Link>
             <Link :href="route('invoices.client', client.id)"
-              class="flex-1 text-center text-xs px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium">
-              Lihat Invoice →
+              class="flex items-center justify-center gap-1 flex-1 text-[12px] px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors font-medium">
+              Lihat Invoice
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
             </Link>
           </div>
 
@@ -358,6 +396,23 @@ const totalInvoices = c =>
 const formatCurrency = v =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
 
+function fmtShort(v) {
+  if (!v) return 'Rp 0'
+  if (v >= 1_000_000_000) return 'Rp ' + (v / 1_000_000_000).toFixed(1).replace('.0', '') + 'M'
+  if (v >= 1_000_000)     return 'Rp ' + (v / 1_000_000).toFixed(1).replace('.0', '') + 'jt'
+  if (v >= 1_000)         return 'Rp ' + (v / 1_000).toFixed(0) + 'rb'
+  return 'Rp ' + v
+}
+
 const fmtDate = d =>
   new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+
+function avatarColor(name) {
+  const palette = [
+    'bg-indigo-600', 'bg-blue-600', 'bg-violet-600',
+    'bg-emerald-600', 'bg-teal-600', 'bg-rose-600',
+    'bg-amber-600', 'bg-cyan-600',
+  ]
+  return palette[(name?.charCodeAt(0) ?? 0) % palette.length]
+}
 </script>

@@ -1,32 +1,65 @@
 <template>
   <AppLayout :title="client.company_name">
-    <div class="space-y-6">
+    <div class="space-y-4">
 
-      <!-- Header -->
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <Link :href="route('invoices.index')"
-            class="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-            </svg>
-          </Link>
-          <div>
-            <h2 class="text-lg font-semibold text-gray-900">{{ client.company_name }}</h2>
-            <p class="text-sm text-gray-400 mt-0.5">
-              {{ client.city ?? '—' }}
-              <span v-if="client.category"> &bull; {{ client.category.name }}</span>
-              &bull; {{ invoices.length }} invoice
-            </p>
+      <!-- Back -->
+      <div>
+        <Link :href="route('invoices.index')"
+          class="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          Kembali ke daftar client
+        </Link>
+      </div>
+
+      <!-- Client Profile Card -->
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div class="flex items-start gap-4">
+          <!-- Avatar -->
+          <div class="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shrink-0 shadow-sm">
+            {{ client.company_name?.charAt(0)?.toUpperCase() ?? '?' }}
+          </div>
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h2 class="text-lg font-bold text-gray-900 leading-tight">{{ client.company_name }}</h2>
+                <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span v-if="client.category"
+                    class="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    {{ client.category.name }}
+                  </span>
+                  <span v-if="client.city" class="text-xs text-gray-400">{{ client.city }}</span>
+                  <span class="text-xs text-gray-300">·</span>
+                  <span class="text-xs text-gray-400">{{ invoices.length }} invoice</span>
+                </div>
+              </div>
+              <Link :href="route('invoices.create', { client_id: client.id })"
+                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Buat Invoice
+              </Link>
+            </div>
+            <!-- Meta row -->
+            <div class="flex flex-wrap gap-x-6 gap-y-2 mt-3.5 pt-3.5 border-t border-gray-50">
+              <div v-if="client.pic">
+                <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">PIC</p>
+                <p class="text-sm text-gray-700 mt-0.5">{{ client.pic }}</p>
+              </div>
+              <div v-if="client.emails?.length > 0">
+                <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Email</p>
+                <p class="text-sm text-gray-700 mt-0.5">{{ client.emails.map(e => e.email).join(' · ') }}</p>
+              </div>
+              <div v-if="client.address">
+                <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Alamat</p>
+                <p class="text-sm text-gray-700 mt-0.5">{{ client.address }}</p>
+              </div>
+            </div>
           </div>
         </div>
-        <Link :href="route('invoices.create', { client_id: client.id })"
-          class="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm shrink-0">
-          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
-          Buat Invoice
-        </Link>
       </div>
 
       <!-- Empty -->
@@ -43,26 +76,51 @@
 
         <!-- Summary Stats -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5">
-            <p class="text-xs text-gray-400 font-medium">Total Invoice</p>
-            <p class="text-xl font-bold text-gray-800 mt-1">{{ invoices.length }}</p>
-            <p class="text-xs text-gray-300 mt-0.5">semua status</p>
+
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center mb-3">
+              <svg class="w-4.5 h-4.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <p class="text-[11px] text-gray-400 font-medium">Total Invoice</p>
+            <p class="text-2xl font-bold text-gray-800 mt-0.5">{{ invoices.length }}</p>
+            <p class="text-[10px] text-gray-300 mt-1">semua status</p>
           </div>
-          <div class="bg-emerald-50 rounded-xl border border-emerald-100 px-4 py-3.5">
-            <p class="text-xs text-emerald-600 font-medium">Sudah Dibayar</p>
-            <p class="text-xl font-bold text-emerald-700 mt-1 truncate">{{ fmtCurrency(summary.paid) }}</p>
-            <p class="text-xs text-emerald-400 mt-0.5">{{ summary.paidCount }} invoice</p>
+
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center mb-3">
+              <svg class="w-4.5 h-4.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <p class="text-[11px] text-gray-400 font-medium">Sudah Dibayar</p>
+            <p class="text-base font-bold text-gray-800 mt-0.5 truncate">{{ fmtCurrency(summary.paid) }}</p>
+            <p class="text-[10px] text-emerald-500 mt-1">{{ summary.paidCount }} invoice</p>
           </div>
-          <div class="bg-amber-50 rounded-xl border border-amber-100 px-4 py-3.5">
-            <p class="text-xs text-amber-600 font-medium">Menunggu Bayar</p>
-            <p class="text-xl font-bold text-amber-700 mt-1 truncate">{{ fmtCurrency(summary.pending) }}</p>
-            <p class="text-xs text-amber-400 mt-0.5">{{ summary.pendingCount }} invoice</p>
+
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center mb-3">
+              <svg class="w-4.5 h-4.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <p class="text-[11px] text-gray-400 font-medium">Menunggu Bayar</p>
+            <p class="text-base font-bold text-gray-800 mt-0.5 truncate">{{ fmtCurrency(summary.pending) }}</p>
+            <p class="text-[10px] text-amber-500 mt-1">{{ summary.pendingCount }} invoice</p>
           </div>
-          <div class="bg-indigo-50 rounded-xl border border-indigo-100 px-4 py-3.5">
-            <p class="text-xs text-indigo-600 font-medium">Layanan Berulang</p>
-            <p class="text-xl font-bold text-indigo-700 mt-1">{{ recurringGroups.length }}</p>
-            <p class="text-xs text-indigo-400 mt-0.5">produk aktif</p>
+
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center mb-3">
+              <svg class="w-4.5 h-4.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+            </div>
+            <p class="text-[11px] text-gray-400 font-medium">Layanan Berulang</p>
+            <p class="text-2xl font-bold text-gray-800 mt-0.5">{{ recurringGroups.length }}</p>
+            <p class="text-[10px] text-indigo-400 mt-1">produk aktif</p>
           </div>
+
         </div>
 
         <!-- Tips Panel -->

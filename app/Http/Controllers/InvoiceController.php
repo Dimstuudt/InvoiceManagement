@@ -33,14 +33,14 @@ class InvoiceController extends Controller
 
         $clients->each(function ($c) {
             $c->product_type_count = $c->invoices->pluck('project_category_id')->unique()->filter()->count();
-            $c->unpaid_amount      = (float) $c->invoices->where('status', 'unpaid')->sum(fn($inv) => $inv->total);
+            $c->unpaid_amount      = (float) $c->invoices->whereIn('status', ['sent', 'unpaid'])->sum(fn($inv) => $inv->total);
             $c->total_amount       = (float) $c->invoices->sum(fn($inv) => $inv->total);
         });
 
         $summary = [
             'total_outstanding' => $clients->sum('unpaid_amount'),
             'total_overdue'     => $clients->sum('overdue_count'),
-            'total_unpaid'      => $clients->sum('unpaid_count'),
+            'total_unpaid'      => $clients->sum('sent_count'),
             'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->unpaid_count)),
         ];
 

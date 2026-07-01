@@ -80,18 +80,39 @@ class DashboardController extends Controller
             ];
         })->values();
 
+        $lastMonth        = $now->copy()->subMonth();
+        $revenueLastMonth = Invoice::where('status', 'paid')
+            ->whereYear('issue_date', $lastMonth->year)
+            ->whereMonth('issue_date', $lastMonth->month)
+            ->with('items')
+            ->get()
+            ->sum(fn($i) => $i->total);
+
+        $statusCounts = Invoice::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
         return Inertia::render('Dashboard', [
             'stats' => [
-                'revenue_this_month' => $revenueThisMonth,
-                'outstanding'        => $outstanding,
-                'overdue_count'      => $overdueRaw->count(),
-                'overdue_amount'     => $overdueRaw->sum(fn($i) => $i->total),
-                'invoices_this_month'=> Invoice::whereBetween('issue_date', [$start, $end])->count(),
-                'active_clients'     => Client::where('is_active', true)->count(),
+                'revenue_this_month'  => $revenueThisMonth,
+                'revenue_last_month'  => $revenueLastMonth,
+                'outstanding'         => $outstanding,
+                'overdue_count'       => $overdueRaw->count(),
+                'overdue_amount'      => $overdueRaw->sum(fn($i) => $i->total),
+                'invoices_this_month' => Invoice::whereBetween('issue_date', [$start, $end])->count(),
+                'active_clients'      => Client::where('is_active', true)->count(),
             ],
-            'monthly_revenue'  => $monthlyRevenue,
-            'overdue_invoices' => $overdueInvoices->take(6),
-            'upcoming_invoices'=> $upcomingInvoices,
+            'status_distribution' => [
+                'paid'    => (int) ($statusCounts['paid']    ?? 0),
+                'sent'    => (int) ($statusCounts['sent']    ?? 0),
+                'unpaid'  => (int) ($statusCounts['unpaid']  ?? 0),
+                'draft'   => (int) ($statusCounts['draft']   ?? 0),
+                'carried' => (int) ($statusCounts['carried'] ?? 0),
+                'frozen'  => (int) ($statusCounts['frozen']  ?? 0),
+            ],
+            'monthly_revenue'   => $monthlyRevenue,
+            'overdue_invoices'  => $overdueInvoices->take(8),
+            'upcoming_invoices' => $upcomingInvoices,
         ]);
     }
 }

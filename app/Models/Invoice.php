@@ -111,11 +111,14 @@ class Invoice extends Model
         $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
         $roman = $romanMonths[$month - 1];
 
-        $count = static::whereYear('issue_date', $year)
+        $maxSeq = static::whereYear('issue_date', $year)
             ->whereMonth('issue_date', $month)
-            ->count();
+            ->where('invoice_number', 'like', "%/INV/MVC/{$roman}/{$year}")
+            ->get()
+            ->map(fn($inv) => (int) explode('/', $inv->invoice_number)[0])
+            ->max() ?? 0;
 
-        $seq = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+        $seq = str_pad($maxSeq + 1, 3, '0', STR_PAD_LEFT);
 
         return "{$seq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
     }

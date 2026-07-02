@@ -193,6 +193,24 @@
               </div>
             </div>
 
+            <!-- Tip: Reaktivasi -->
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-3.5 h-3.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-700">Reaktivasi — hidupkan kembali layanan</p>
+                <p class="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                  Digunakan saat client berhenti langganan lalu mau lanjut lagi.
+                  Klik <span class="font-medium text-violet-600">Reaktivasi</span> di invoice terakhir yang sudah <span class="font-semibold bg-emerald-50 text-emerald-700 px-1 rounded">Paid</span> →
+                  isi tanggal mulai baru + durasi → sistem akan generate ulang invoice-invoice baru sesuai interval,
+                  termasuk periode yang terlewat selama jeda. Hasilnya muncul sebagai chain baru di tab yang sama.
+                </p>
+              </div>
+            </div>
+
             <!-- Tip: Status -->
             <div class="flex gap-3">
               <div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">

@@ -12,6 +12,7 @@ use App\Models\Signature;
 use App\Support\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class InvoiceController extends Controller
@@ -796,14 +797,15 @@ class InvoiceController extends Controller
         $originalDay      = $originalDate->day;
         $interval         = $invoice->interval_months;
 
-        // Head = bulan depan dari sekarang, pakai hari yang sama dengan invoice asli
-        $headDate = Carbon::create($now->year, $now->month, 1)->addMonth();
+        // Head = bulan ini, pakai hari yang sama dengan invoice asli
+        $headDate = Carbon::create($now->year, $now->month, 1);
         $headDate->setDay(min($originalDay, $headDate->daysInMonth));
 
         $cursor          = $originalDate->copy()->addMonths($interval);
         $previousInvoice = $invoice;
         $generated       = [];
 
+        DB::transaction(function () use ($invoice, $cursor, $headDate, $originalDay, $interval, $originalDate, &$previousInvoice, &$generated) {
         while ($cursor->lte($headDate)) {
             $cursorDay = min($originalDay, $cursor->daysInMonth);
             $cursor->setDay($cursorDay);
@@ -862,7 +864,9 @@ class InvoiceController extends Controller
         if (!empty($nonHeadIds)) {
             Invoice::whereIn('id', $nonHeadIds)->update(['reaktivasi_chain_id' => $headId]);
         }
+        }); // end DB::transaction
 
+        $head = end($generated);
         ActivityLogger::log('invoice.reactivated', $invoice, [
             'chain_head'  => $head->invoice_number,
             'chain_count' => count($generated),

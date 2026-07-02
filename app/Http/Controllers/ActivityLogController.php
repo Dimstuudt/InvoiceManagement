@@ -16,21 +16,24 @@ class ActivityLogController extends Controller
 
         $query = ActivityLog::with('user')->orderByDesc('created_at');
 
+        // Search — subject, user name, IP, action
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(fn($q) => $q
                 ->where('subject_label', 'like', "%{$s}%")
                 ->orWhereHas('user', fn($u) => $u->where('name', 'like', "%{$s}%"))
                 ->orWhere('ip_address', 'like', "%{$s}%")
+                ->orWhere('action', 'like', "%{$s}%")
             );
         }
 
+        // Kategori
         if ($request->filled('kategori')) {
             $kat = $request->kategori;
             $prefixes = match ($kat) {
                 'invoice' => ['invoice.'],
                 'client'  => ['client.'],
-                'auth'    => ['user.'],
+                'auth'    => ['user.', 'profile.'],
                 'master'  => $masterPrefixes,
                 default   => [],
             };
@@ -39,7 +42,23 @@ class ActivityLogController extends Controller
             }
         }
 
-        $logs = $query->paginate(25)->withQueryString();
+        // Date range
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        // User filter
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
+        }
+
+        // Per page (25 / 50 / 100 / 250)
+        $perPage = in_array((int) $request->per_page, [25, 50, 100, 250]) ? (int) $request->per_page : 25;
+
+        $logs = $query->paginate($perPage)->withQueryString();
 
         $logs->through(fn($log) => [
             'id'            => $log->id,
@@ -60,15 +79,17 @@ class ActivityLogController extends Controller
             'total'   => ActivityLog::count(),
             'invoice' => ActivityLog::where('action', 'like', 'invoice.%')->count(),
             'client'  => ActivityLog::where('action', 'like', 'client.%')->count(),
-            'auth'    => ActivityLog::where('action', 'like', 'user.%')->count(),
-            'master'  => ActivityLog::where(fn($q) => collect($masterPrefixes)
-                ->each(fn($p) => $q->orWhere('action', 'like', $p . '%')))->count(),
+            'auth'    => ActivityLog::where(fn($q) => $q->where('action', 'like', 'user.%')->orWhere('action', 'like', 'profile.%'))->count(),
+            'master'  => ActivityLog::where(fn($q) => collect($masterPrefixes)->each(fn($p) => $q->orWhere('action', 'like', $p . '%')))->count(),
         ];
+
+        $users = User::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Logs/Index', [
             'logs'    => $logs,
             'stats'   => $stats,
-            'filters' => $request->only('search', 'kategori'),
+            'users'   => $users,
+            'filters' => $request->only('search', 'kategori', 'date_from', 'date_to', 'user_id', 'per_page'),
         ]);
     }
 }

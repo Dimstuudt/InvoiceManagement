@@ -19,10 +19,17 @@ class InvoiceController extends Controller
 {
     public function resetAll()
     {
+        $totalInvoices = Invoice::count();
+
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         \App\Models\InvoiceItem::query()->delete();
         Invoice::query()->delete();
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+        ActivityLogger::log('invoice.reset_all', null, [
+            'total_dihapus' => $totalInvoices,
+            'keterangan'    => 'Reset data demo — semua invoice dihapus, client aman',
+        ]);
 
         return redirect()->route('invoices.index')->with('success', 'Semua invoice berhasil dihapus.');
     }
@@ -677,6 +684,7 @@ class InvoiceController extends Controller
         $dueDate   = $issueDate->copy()->addDays(14);
 
         // Nomor invoice lama berpindah ke invoice baru (inherit), lama dapat prefix C-
+        $statusBefore  = $invoice->status;
         $oldNumber     = $invoice->invoice_number;
         $oldSeq        = explode('/', $oldNumber)[0]; // e.g. "001" atau "C-001"
         $inheritedSeq  = ltrim($oldSeq, 'C-');        // ambil angka murni
@@ -731,7 +739,16 @@ class InvoiceController extends Controller
 
         $invoice->update(['status' => 'carried']);
 
-        ActivityLogger::log('invoice.carried', $invoice, ['carried_to' => $child->invoice_number]);
+        ActivityLogger::log('invoice.carried', $invoice, [
+            'original_number' => $oldNumber,
+            'renamed_to'      => "C-{$oldNumber}",
+            'child_number'    => $child->invoice_number,
+            'status_sebelum'  => $statusBefore,
+            'client'          => $invoice->client->company_name ?? '-',
+            'jumlah'          => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
+            'periode_asal'    => Carbon::parse($invoice->issue_date)->format('M Y'),
+            'periode_baru'    => Carbon::parse($child->issue_date)->format('M Y'),
+        ]);
         return back()->with('success', 'Invoice di-carry. Tunggakan akan masuk ke invoice berikutnya.');
     }
 
@@ -905,12 +922,19 @@ class InvoiceController extends Controller
         }
         }); // end DB::transaction
 
-        $head = end($generated);
+        $head           = end($generated);
+        $backlogNumbers = collect($generated)->slice(0, -1)->pluck('invoice_number')->values()->toArray();
         ActivityLogger::log('invoice.reactivated', $invoice, [
-            'chain_head'  => $head->invoice_number,
-            'chain_count' => count($generated),
-            'from'        => $originalDate->format('Y-m'),
-            'to'          => Carbon::parse($head->issue_date)->format('Y-m'),
+            'original_number'    => $oldNumber,
+            'renamed_to'         => "R-{$oldNumber}",
+            'head_number'        => $head->invoice_number,
+            'client'             => $invoice->client->company_name ?? '-',
+            'total_dibuat'       => count($generated),
+            'jumlah_per_invoice' => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
+            'total_semua'        => 'Rp ' . number_format($invoice->total * count($generated), 0, ',', '.'),
+            'periode_dari'       => $originalDate->format('M Y'),
+            'periode_sampai'     => Carbon::parse($head->issue_date)->format('M Y'),
+            'backlog'            => $backlogNumbers,
         ]);
 
         return back()->with('success', 'Reaktivasi berhasil. ' . count($generated) . ' invoice dibuat — bayar di ' . $head->invoice_number . '.');

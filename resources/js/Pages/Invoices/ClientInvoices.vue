@@ -223,7 +223,7 @@
                 <div class="flex flex-wrap gap-1.5 mt-1.5">
                   <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Draft</span>
                   <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Sent</span>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Paid</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Dibayarkan</span>
                   <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600">Unpaid</span>
                   <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-600">Frozen</span>
                 </div>
@@ -318,7 +318,9 @@
                             </svg>
                             <div v-else class="w-1.5 h-1.5 rounded-full bg-white"/>
                           </div>
-                          <div v-if="idx < recurringGroups[activeTab].invoices.length - 1" class="flex-1 w-px mt-1 bg-gray-200"/>
+                          <div v-if="idx < recurringGroups[activeTab].invoices.length - 1"
+                            class="flex-1 w-px mt-1"
+                            :class="invoice.status === 'paid' ? 'bg-emerald-300' : 'bg-gray-200'"/>
                         </div>
                         <div class="flex-1 min-w-0 py-3 pr-4">
                           <div class="flex items-start justify-between gap-3">
@@ -371,9 +373,11 @@
                         class="border-t border-gray-50 group"
                         :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : 'hover:bg-violet-50/30'">
                         <div class="ml-7 flex items-start"
-                          :class="idx < recurringGroups[activeTab].invoices.length - 1 ? 'border-l-2 border-gray-100' : ''">
+                          :class="idx < recurringGroups[activeTab].invoices.length - 1
+                            ? (invoice.status === 'paid' ? 'border-l-2 border-emerald-200' : 'border-l-2 border-gray-100')
+                            : ''">
                           <div class="flex items-start w-[30px] shrink-0 pt-2.5">
-                            <div class="w-3 h-px bg-gray-200 mt-1.5 shrink-0"/>
+                            <div class="w-3 h-px mt-1.5 shrink-0" :class="invoice.status === 'paid' ? 'bg-emerald-200' : 'bg-gray-200'"/>
                             <div class="w-3.5 h-3.5 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm shrink-0" :class="dotClass(invoice)">
                               <svg v-if="invoice.status === 'paid'" class="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
@@ -709,7 +713,7 @@ const daysPastDue  = inv => Math.floor((new Date(new Date().toDateString()) - ne
 const hasOverdue   = group => group.invoices.some(isPastDue);
 
 // ── Status display ──────────────────────────────────────────
-const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen', carried: 'Carried' }[s] ?? s);
+const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Dibayarkan', unpaid: 'Unpaid', frozen: 'Frozen', carried: 'Carried' }[s] ?? s);
 const statusClass = s => ({
   draft:   'bg-gray-100 text-gray-500',
   sent:    'bg-blue-50 text-blue-600 ring-1 ring-blue-200',

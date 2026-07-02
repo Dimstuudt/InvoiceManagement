@@ -149,7 +149,7 @@
                   </div>
                   <div>
                     <p class="text-sm font-semibold" :class="form.invoice_type === 'yearly' ? 'text-amber-700' : 'text-gray-700'">Tahunan</p>
-                    <p class="text-xs text-gray-400 mt-0.5">Format: 001/KODE/INV-TH/MVC/VII/2026</p>
+                    <p class="text-xs text-gray-400 mt-0.5">Format: 001/KODE/INV/MVC/VII/2026</p>
                   </div>
                 </button>
               </div>

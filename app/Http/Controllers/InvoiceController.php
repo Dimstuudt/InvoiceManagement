@@ -693,9 +693,7 @@ class InvoiceController extends Controller
         $year          = $issueDate->format('Y');
         $categoryCode  = $invoice->projectCategory->code;
 
-        $newNumber = $invoice->invoice_type === 'yearly'
-            ? "{$inheritedSeq}/{$categoryCode}/INV-TH/MVC/{$roman}/{$year}"
-            : "{$inheritedSeq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
+        $newNumber = "{$inheritedSeq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
 
         // Lepas nomor dari invoice lama → prefix C-
         $invoice->update(['invoice_number' => "C-" . $oldNumber]);
@@ -857,7 +855,7 @@ class InvoiceController extends Controller
             $roman       = $romanMonths[(int) $cursor->format('n') - 1];
             $year        = $cursor->format('Y');
             $code        = $invoice->projectCategory->code;
-            $invType     = $invoice->invoice_type === 'yearly' ? 'INV-TH' : 'INV';
+            $invType     = 'INV';
 
             // HEAD inherit nomor asli (tanpa R-), backlog pakai R-{seqPart}
             $number = $isHead

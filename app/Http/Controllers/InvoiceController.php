@@ -371,6 +371,22 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
+        // Jika ini HEAD carry, restore C- parent: lepas prefix C- dan kembalikan ke unpaid
+        if ($invoice->carried_from_id) {
+            $carriedParent = Invoice::find($invoice->carried_from_id);
+            if ($carriedParent && str_starts_with($carriedParent->invoice_number, 'C-')) {
+                $restoredNumber = substr($carriedParent->invoice_number, 2);
+                $carriedParent->update([
+                    'invoice_number' => $restoredNumber,
+                    'status'         => 'draft',
+                ]);
+                ActivityLogger::log('invoice.restored', $carriedParent, [
+                    'reason'          => 'HEAD carry dihapus',
+                    'restored_number' => $restoredNumber,
+                ]);
+            }
+        }
+
         ActivityLogger::log('invoice.deleted', $invoice);
         $invoice->delete();
         return back()->with('success', 'Invoice berhasil dihapus.');
@@ -433,7 +449,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
-            'reaktivasiChain.items',
+            'reaktivasiChain.items', 'prepayChain.items',
         ]);
 
         $html      = view('invoices.pdf', ['invoice' => $invoice, 'imgB64' => fn($url) => $this->urlToBase64($url)])->render();
@@ -452,7 +468,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
-            'reaktivasiChain.items',
+            'reaktivasiChain.items', 'prepayChain.items',
         ]);
 
         ActivityLogger::log('invoice.printed', $invoice);
@@ -469,7 +485,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'client', 'projectCategory', 'documentIssuer',
             'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items',
-            'reaktivasiChain.items',
+            'reaktivasiChain.items', 'prepayChain.items',
         ]);
 
         return view('invoices.receipt', [
@@ -656,14 +672,115 @@ class InvoiceController extends Controller
         if ($request->status === 'paid') {
             $this->payCarriedAncestors($invoice);
             $this->payReaktivasiChain($invoice);
+            $this->payPrepayChain($invoice);
 
-            if ($invoice->interval_months && $invoice->children()->doesntExist()) {
-                $this->generateRecurring($invoice);
-                return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
+            if ($invoice->interval_months) {
+                // Prepay HEAD: buat recurring setelah P- terakhir dalam chain
+                if ($invoice->is_prepay && !$invoice->prepay_chain_id) {
+                    $lastPrepay = Invoice::where('prepay_chain_id', $invoice->id)
+                        ->orderByDesc('issue_date')
+                        ->first();
+                    $recurringBase = $lastPrepay ?? $invoice;
+                    if ($recurringBase->children()->doesntExist()) {
+                        $this->generateRecurring($recurringBase);
+                        return back()->with('success', 'Status diperbarui. Invoice perpanjangan setelah periode prepay dibuat sebagai draft.');
+                    }
+                } elseif ($invoice->children()->doesntExist()) {
+                    $this->generateRecurring($invoice);
+                    return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
+                }
             }
         }
 
         return back()->with('success', 'Status diperbarui.');
+    }
+
+    public function prepay(Invoice $invoice)
+    {
+        if (!in_array($invoice->status, ['draft', 'sent', 'unpaid'])) {
+            return back()->with('error', 'Hanya invoice draft, sent, atau unpaid yang bisa di-prepay.');
+        }
+        if (!$invoice->interval_months) {
+            return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
+        }
+        if ($invoice->prepay_chain_id) {
+            return back()->with('error', 'Prepay hanya bisa dilakukan dari invoice HEAD.');
+        }
+
+        $invoice->load('items', 'projectCategory');
+
+        $interval    = $invoice->interval_months;
+        $seqPart     = explode('/', $invoice->invoice_number)[0];
+        $code        = $invoice->projectCategory->code;
+        $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+
+        // Cari P- terakhir dalam chain, atau gunakan HEAD sebagai base
+        $lastInChain = Invoice::where('prepay_chain_id', $invoice->id)
+            ->orderByDesc('issue_date')
+            ->first();
+
+        $baseDate        = Carbon::parse($lastInChain ? $lastInChain->issue_date : $invoice->issue_date);
+        $previousInvoice = $lastInChain ?? $invoice;
+        $cursor          = $baseDate->copy()->addMonths($interval);
+
+        $roman   = $romanMonths[(int) $cursor->format('n') - 1];
+        $year    = $cursor->format('Y');
+        $dueDate = $cursor->copy()->addDays(14);
+        $number  = "P-{$seqPart}/{$code}/INV/MVC/{$roman}/{$year}";
+
+        DB::transaction(function () use ($invoice, $cursor, $dueDate, $number, $interval, $previousInvoice) {
+            if (!$invoice->is_prepay) {
+                $invoice->update(['is_prepay' => true]);
+            }
+
+            $child = Invoice::create([
+                'user_id'             => $invoice->user_id,
+                'client_id'           => $invoice->client_id,
+                'project_category_id' => $invoice->project_category_id,
+                'document_issuer_id'  => $invoice->document_issuer_id,
+                'bank_account_id'     => $invoice->bank_account_id,
+                'signature_id'        => $invoice->signature_id,
+                'email_template_id'   => $invoice->email_template_id,
+                'with_signature'      => $invoice->with_signature,
+                'attention'           => $invoice->attention,
+                'notes'               => $invoice->notes,
+                'invoice_number'      => $number,
+                'invoice_type'        => $invoice->invoice_type,
+                'issue_date'          => $cursor->toDateString(),
+                'due_date'            => $dueDate->toDateString(),
+                'status'              => 'draft',
+                'tax_percentage'      => $invoice->tax_percentage,
+                'discount_type'       => $invoice->discount_type,
+                'discount_value'      => $invoice->discount_value,
+                'is_dpp'              => $invoice->is_dpp,
+                'interval_months'     => $interval,
+                'is_prepay'           => true,
+                'prepay_chain_id'     => $invoice->id,
+                'parent_invoice_id'   => $previousInvoice->id,
+            ]);
+
+            foreach ($invoice->items as $item) {
+                $child->items()->create([
+                    'description' => $item->description,
+                    'amount'      => $item->amount,
+                    'discount'    => $item->discount ?? 0,
+                    'sort_order'  => $item->sort_order,
+                ]);
+            }
+        });
+
+        $totalChain = Invoice::where('prepay_chain_id', $invoice->id)->count();
+
+        ActivityLogger::log('invoice.prepay', $invoice, [
+            'head_number'        => $invoice->invoice_number,
+            'client'             => $invoice->client->company_name ?? '-',
+            'added'              => $number,
+            'total_chain'        => $totalChain,
+            'interval'           => $interval . ' bulan',
+            'jumlah_per_invoice' => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
+        ]);
+
+        return back()->with('success', "Prepay +{$interval} bulan → {$number}.");
     }
 
     public function carry(Invoice $invoice)
@@ -946,6 +1063,20 @@ class InvoiceController extends Controller
             $carried->update(['status' => 'paid']);
             ActivityLogger::log('invoice.status_changed', $carried, ['from' => 'carried', 'to' => 'paid']);
             $this->payCarriedAncestors($carried);
+        }
+    }
+
+    private function payPrepayChain(Invoice $invoice): void
+    {
+        if (!$invoice->is_prepay || $invoice->prepay_chain_id !== null) return;
+
+        $members = Invoice::where('prepay_chain_id', $invoice->id)->get();
+        foreach ($members as $member) {
+            if ($member->status !== 'paid') {
+                $oldStatus = $member->status;
+                $member->update(['status' => 'paid']);
+                ActivityLogger::log('invoice.status_changed', $member, ['from' => $oldStatus, 'to' => 'paid', 'note' => 'cascade prepay']);
+            }
         }
     }
 

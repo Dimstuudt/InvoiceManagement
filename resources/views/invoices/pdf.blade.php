@@ -25,6 +25,10 @@
   $reaktivasiMembers  = $isReaktivasiHead ? $invoice->reaktivasiChain->sortBy('issue_date') : collect();
   $reaktivasiTotal    = $invoice->reaktivasi_total;
   $reaktivasiGrand    = $invoice->reaktivasi_grand_total;
+  $isPrepayHead       = $invoice->is_prepay && !$invoice->prepay_chain_id;
+  $prepayMembers      = $isPrepayHead ? $invoice->prepayChain->sortBy('issue_date') : collect();
+  $prepayTotal        = $invoice->prepay_total;
+  $prepayGrand        = $invoice->prepay_grand_total;
   // Tunggakan period labels & combined subtotal
   $carryPeriodLabel = null;
   if ($carriedFrom) {
@@ -40,7 +44,13 @@
     $e = $reaktivasiMembers->last()->issue_date->translatedFormat('F Y');
     $reaktivasiPeriodLabel = $s === $e ? $s : "{$s} s/d {$e}";
   }
-  $displayTotal = $isReaktivasiHead ? $reaktivasiGrand : $grandTotal;
+  $prepayPeriodLabel = null;
+  if ($isPrepayHead && $prepayMembers->count() > 0) {
+    $s = $prepayMembers->first()->issue_date->translatedFormat('F Y');
+    $e = $prepayMembers->last()->issue_date->translatedFormat('F Y');
+    $prepayPeriodLabel = $s === $e ? $s : "{$s} s/d {$e}";
+  }
+  $displayTotal = $isPrepayHead ? $prepayGrand : ($isReaktivasiHead ? $reaktivasiGrand : $grandTotal);
 @endphp
 <div class="paper">
 
@@ -170,8 +180,8 @@
               </tr>
               @endif
 
-              {{-- Total Jasa (jika ada tunggakan, pisahkan dulu sebelum menambah tunggakan) --}}
-              @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0))
+              {{-- Total Jasa (jika ada tunggakan atau prepay, pisahkan dulu) --}}
+              @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
               <tr style="border-top:1px solid #e5e7eb">
                 <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">Total Jasa</td>
                 <td style="padding:0.45rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
@@ -199,6 +209,18 @@
                 </td>
                 <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#065f46;white-space:nowrap">
                   Rp {{ number_format($reaktivasiTotal, 2, ',', '.') }}
+                </td>
+              </tr>
+              @endif
+
+              {{-- Pembayaran di Muka (Prepay) --}}
+              @if($isPrepayHead && $prepayMembers->count() > 0)
+              <tr>
+                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#0f766e;white-space:nowrap">
+                  Pembayaran di Muka {{ $prepayPeriodLabel }}
+                </td>
+                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#0f766e;white-space:nowrap">
+                  Rp {{ number_format($prepayTotal, 2, ',', '.') }}
                 </td>
               </tr>
               @endif

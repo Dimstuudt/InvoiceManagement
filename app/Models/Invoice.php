@@ -13,6 +13,7 @@ class Invoice extends Model
         'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
         'interval_months', 'parent_invoice_id', 'carried_from_id',
         'is_reaktivasi', 'reaktivasi_chain_id', 'invoice_type',
+        'is_prepay', 'prepay_chain_id',
     ];
 
     protected $casts = [
@@ -22,6 +23,7 @@ class Invoice extends Model
         'is_marked'          => 'boolean',
         'is_dpp'             => 'boolean',
         'is_reaktivasi'      => 'boolean',
+        'is_prepay'          => 'boolean',
         'interval_months'    => 'integer',
         'discount_value'     => 'float',
     ];
@@ -38,6 +40,7 @@ class Invoice extends Model
     public function children()        { return $this->hasMany(Invoice::class, 'parent_invoice_id'); }
     public function carriedFrom()      { return $this->belongsTo(Invoice::class, 'carried_from_id'); }
     public function reaktivasiChain()  { return $this->hasMany(Invoice::class, 'reaktivasi_chain_id'); }
+    public function prepayChain()      { return $this->hasMany(Invoice::class, 'prepay_chain_id'); }
 
     public function getSubtotalAttribute(): float
     {
@@ -101,6 +104,20 @@ class Invoice extends Model
     public function getReaktivasiGrandTotalAttribute(): float
     {
         return $this->total + $this->reaktivasi_total;
+    }
+
+    public function getPrepayTotalAttribute(): float
+    {
+        if (!$this->is_prepay || $this->prepay_chain_id) return 0.0;
+        $members = $this->relationLoaded('prepayChain')
+            ? $this->prepayChain
+            : static::with('items')->where('prepay_chain_id', $this->id)->get();
+        return (float) $members->sum(fn($inv) => $inv->total);
+    }
+
+    public function getPrepayGrandTotalAttribute(): float
+    {
+        return $this->total + $this->prepay_total;
     }
 
     public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate, string $type = 'monthly'): string

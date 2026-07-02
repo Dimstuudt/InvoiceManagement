@@ -353,6 +353,7 @@
                               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button v-if="invoice.status === 'sent'" @click="markPaid(invoice)" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">Paid</button>
                                 <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-md transition-colors">Carry</button>
+                                <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.prepay_chain_id" @click="prepayInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-md transition-colors">Prepay</button>
                                 <button v-if="invoice.status === 'unpaid' && invoice.interval_months && !hasChild(invoice) && !invoice.is_reaktivasi" @click="reactivateInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">Reaktivasi</button>
                                 <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id" @click="freezeInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors">Freeze</button>
                                 <button v-if="invoice.status === 'frozen' && !hasChild(invoice)" @click="openResume(invoice)" class="px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">Perbarui</button>
@@ -371,7 +372,7 @@
                       <!-- Compact inline: C-/R- prefix (indented, posisi kronologis) -->
                       <div v-else
                         class="border-t border-gray-50 group"
-                        :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : 'hover:bg-violet-50/30'">
+                        :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : invoice.invoice_number.startsWith('P-') ? 'hover:bg-teal-50/30' : 'hover:bg-violet-50/30'">
                         <div class="ml-7 flex items-start"
                           :class="idx < recurringGroups[activeTab].invoices.length - 1
                             ? (invoice.status === 'paid' ? 'border-l-2 border-emerald-200' : 'border-l-2 border-gray-100')
@@ -393,6 +394,10 @@
                                     class="text-[9px] font-bold text-orange-700 bg-orange-100 border border-orange-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
                                     Carry
                                   </span>
+                                  <span v-else-if="invoice.invoice_number.startsWith('P-')"
+                                    class="text-[9px] font-bold text-teal-700 bg-teal-100 border border-teal-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
+                                    Prepay
+                                  </span>
                                   <span v-else
                                     class="text-[9px] font-bold text-violet-700 bg-violet-100 border border-violet-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
                                     Reaktivasi
@@ -411,11 +416,7 @@
                               <div class="flex items-center gap-0.5 shrink-0">
                                 <p class="text-xs font-semibold text-gray-500 whitespace-nowrap mr-1">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
                                 <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button v-if="invoice.status === 'sent'" @click="markPaid(invoice)" class="px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors">Paid</button>
-                                  <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" class="px-1.5 py-0.5 text-[9px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors">Carry</button>
-                                  <button @click.stop="toggleMenu($event, invoice)" class="p-1 rounded text-gray-400 hover:bg-gray-100 transition-colors">
-                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                                  </button>
+                                  <Link :href="route('invoices.edit', invoice.id)" class="px-1.5 py-0.5 text-[9px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition-colors">Edit</Link>
                                   <button @click="deleteInvoice(invoice)" class="p-1 rounded text-red-400 hover:bg-red-50 transition-colors">
                                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                   </button>
@@ -603,8 +604,13 @@ const menuPosition = ref({ top: 0, right: 0 });
 
 function toggleMenu(event, invoice) {
   if (activeMenu.value === invoice.id) { activeMenu.value = null; return; }
-  const rect = event.currentTarget.getBoundingClientRect();
-  menuPosition.value = { top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right };
+  const rect       = event.currentTarget.getBoundingClientRect();
+  const menuHeight = 116;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const top = spaceBelow < menuHeight
+    ? rect.top + window.scrollY - menuHeight - 4
+    : rect.bottom + window.scrollY + 4;
+  menuPosition.value = { top, right: window.innerWidth - rect.right };
   menuInvoice.value  = invoice;
   activeMenu.value   = invoice.id;
 }
@@ -766,7 +772,7 @@ function hasChild(invoice) {
 }
 
 function isSmallSubCode(invoice) {
-  return /^[CR]-/.test(invoice.invoice_number)
+  return /^[CRP]-/.test(invoice.invoice_number)
 }
 
 function getFullSizeInvoices(groupInvoices) {
@@ -819,6 +825,7 @@ const resumeMinDate = ref('')
 const resumeForm    = reactive({ issue_date: '', interval_months: 1 })
 const resumeTarget  = ref(null)
 
+
 function openResume(invoice) {
   resumeTarget.value            = invoice
   resumeMinDate.value           = invoice.issue_date ? invoice.issue_date.substring(0, 10) : ''
@@ -836,6 +843,10 @@ function submitResume() {
     preserveScroll: true,
     onSuccess: () => { resumeModal.value = false },
   })
+}
+
+function prepayInvoice(invoice) {
+  router.post(route('invoices.prepay', invoice.id), {}, { preserveScroll: true })
 }
 
 function deleteInvoice(invoice) {

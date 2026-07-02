@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::post('invoices/{invoice}/freeze', [InvoiceController::class, 'freeze'])->name('invoices.freeze');
     Route::post('invoices/{invoice}/resume', [InvoiceController::class, 'resume'])->name('invoices.resume');
     Route::post('invoices/{invoice}/carry', [InvoiceController::class, 'carry'])->name('invoices.carry');
+    Route::post('invoices/{invoice}/prepay', [InvoiceController::class, 'prepay'])->name('invoices.prepay');
     Route::post('invoices/{invoice}/reactivate', [InvoiceController::class, 'reactivate'])->name('invoices.reactivate');
 
     // Master Data

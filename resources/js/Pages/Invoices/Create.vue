@@ -118,6 +118,43 @@
               <p class="text-xs text-gray-400 mt-1.5">Template akan otomatis digunakan saat kirim email invoice ini.</p>
             </div>
 
+            <!-- Tipe Invoice -->
+            <div class="border-t border-gray-100 pt-5">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Tipe Invoice <span class="text-red-400">*</span></label>
+              <div class="flex gap-3">
+                <button type="button" @click="form.invoice_type = 'monthly'"
+                  class="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 transition-colors text-left"
+                  :class="form.invoice_type === 'monthly' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'">
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    :class="form.invoice_type === 'monthly' ? 'bg-indigo-100' : 'bg-gray-100'">
+                    <svg class="w-4 h-4" :class="form.invoice_type === 'monthly' ? 'text-indigo-600' : 'text-gray-400'"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold" :class="form.invoice_type === 'monthly' ? 'text-indigo-700' : 'text-gray-700'">Bulanan</p>
+                    <p class="text-xs text-gray-400 mt-0.5">Format: 001/KODE/INV/MVC/VII/2026</p>
+                  </div>
+                </button>
+                <button type="button" @click="form.invoice_type = 'yearly'"
+                  class="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 transition-colors text-left"
+                  :class="form.invoice_type === 'yearly' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'">
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    :class="form.invoice_type === 'yearly' ? 'bg-amber-100' : 'bg-gray-100'">
+                    <svg class="w-4 h-4" :class="form.invoice_type === 'yearly' ? 'text-amber-600' : 'text-gray-400'"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold" :class="form.invoice_type === 'yearly' ? 'text-amber-700' : 'text-gray-700'">Tahunan</p>
+                    <p class="text-xs text-gray-400 mt-0.5">Format: 001/KODE/INV-TH/MVC/VII/2026</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             <!-- Interval Layanan -->
             <div class="border-t border-gray-100 pt-5">
               <div class="flex items-start gap-3">
@@ -127,12 +164,18 @@
                   </label>
                   <select v-model="form.interval_months" class="field">
                     <option :value="null">— One-time (tidak berulang) —</option>
-                    <option v-for="n in 12" :key="n" :value="n">{{ n }} bulan</option>
+                    <template v-if="form.invoice_type === 'yearly'">
+                      <option v-for="n in 5" :key="n" :value="n * 12">{{ n }} tahun</option>
+                    </template>
+                    <template v-else>
+                      <option v-for="n in 12" :key="n" :value="n">{{ n }} bulan</option>
+                    </template>
                   </select>
                 </div>
                 <div v-if="form.interval_months" class="mt-7 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl shrink-0">
                   <p class="text-xs text-indigo-600 font-medium whitespace-nowrap">
-                    Perpanjang otomatis tiap {{ form.interval_months }} bulan
+                    Perpanjang otomatis tiap
+                    {{ form.invoice_type === 'yearly' ? (form.interval_months / 12) + ' tahun' : form.interval_months + ' bulan' }}
                   </p>
                 </div>
               </div>
@@ -201,12 +244,12 @@ const form = useForm({
   signature_id:        prefill.signature_id         ?? '',
   email_template_id:   prefill.email_template_id    ?? (props.emailTemplates?.find(t => t.is_default)?.id ?? ''),
   interval_months:     prefill.interval_months      ?? null,
+  invoice_type:        prefill.invoice_type         ?? 'monthly',
   with_signature:      prefill.with_signature       ?? false,
   spk_number:          '',
   status:              'draft',
   issue_date:          '',
   due_date:            '',
-
 });
 
 watch(() => form.issue_date, (val) => {
@@ -214,6 +257,10 @@ watch(() => form.issue_date, (val) => {
   const d = new Date(val);
   d.setDate(d.getDate() + 14);
   form.due_date = d.toISOString().slice(0, 10);
+});
+
+watch(() => form.invoice_type, () => {
+  form.interval_months = null;
 });
 
 function submit()      { form.post(route('invoices.store')); }

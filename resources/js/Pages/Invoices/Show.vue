@@ -34,12 +34,17 @@
               <select :value="localInterval" @change="saveInterval($event.target.value)"
                 class="text-xs border border-indigo-200 bg-indigo-50 text-indigo-600 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
                 <option value="">↻ —</option>
-                <option v-for="n in 12" :key="n" :value="n">↻ {{ n }} bln</option>
+                <template v-if="invoice.invoice_type === 'yearly'">
+                  <option v-for="n in 5" :key="n" :value="n * 12">↻ {{ n }} thn</option>
+                </template>
+                <template v-else>
+                  <option v-for="n in 12" :key="n" :value="n">↻ {{ n }} bln</option>
+                </template>
               </select>
             </template>
             <span v-else-if="invoice.interval_months"
               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-500 shrink-0">
-              ↻ {{ invoice.interval_months }} bln
+              ↻ {{ invoice.invoice_type === 'yearly' ? (invoice.interval_months / 12) + ' thn' : invoice.interval_months + ' bln' }}
             </span>
 
             <!-- Parent / child nav -->
@@ -114,7 +119,7 @@
               <div v-if="moreMenuOpen"
                 class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                 <!-- Carry (utang ke periode berikutnya) -->
-                <button v-if="['sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.children?.length"
+                <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.children?.length"
                   @click="carryInvoice(); moreMenuOpen = false"
                   class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors text-left">
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -543,10 +548,17 @@
               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Perpanjangan (bulan)</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">
+              Perpanjangan ({{ invoice.invoice_type === 'yearly' ? 'tahun' : 'bulan' }})
+            </label>
             <select v-model="resumeForm.interval_months"
               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              <option v-for="n in 36" :key="n" :value="n">{{ n }} bulan</option>
+              <template v-if="invoice.invoice_type === 'yearly'">
+                <option v-for="n in 5" :key="n" :value="n * 12">{{ n }} tahun</option>
+              </template>
+              <template v-else>
+                <option v-for="n in 36" :key="n" :value="n">{{ n }} bulan</option>
+              </template>
             </select>
           </div>
         </div>

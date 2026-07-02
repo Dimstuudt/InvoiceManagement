@@ -12,7 +12,7 @@ class Invoice extends Model
         'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked',
         'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
         'interval_months', 'parent_invoice_id', 'carried_from_id',
-        'is_reaktivasi', 'reaktivasi_chain_id',
+        'is_reaktivasi', 'reaktivasi_chain_id', 'invoice_type',
     ];
 
     protected $casts = [
@@ -103,23 +103,36 @@ class Invoice extends Model
         return $this->total + $this->reaktivasi_total;
     }
 
-    public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate): string
+    public static function generateNumber(string $categoryCode, \DateTimeInterface $issueDate, string $type = 'monthly'): string
     {
-        $month = (int) $issueDate->format('n');
-        $year  = (int) $issueDate->format('Y');
-
+        $year        = (int) $issueDate->format('Y');
         $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
-        $roman = $romanMonths[$month - 1];
 
-        $maxSeq = static::whereYear('issue_date', $year)
-            ->whereMonth('issue_date', $month)
-            ->where('invoice_number', 'like', "%/INV/MVC/{$roman}/{$year}")
+        if ($type === 'yearly') {
+            $roman  = $romanMonths[(int) $issueDate->format('n') - 1];
+            $maxSeq = static::where('invoice_type', 'yearly')
+                ->whereYear('issue_date', $year)
+                ->where('invoice_number', 'like', "%/INV-TH/MVC/%/{$year}")
+                ->get()
+                ->map(fn($inv) => (int) explode('/', $inv->invoice_number)[0])
+                ->filter(fn($n) => $n > 0)
+                ->max() ?? 0;
+
+            $seq = str_pad($maxSeq + 1, 3, '0', STR_PAD_LEFT);
+            return "{$seq}/{$categoryCode}/INV-TH/MVC/{$roman}/{$year}";
+        }
+
+        // monthly — sequence global per tahun, semua kategori
+        $roman  = $romanMonths[(int) $issueDate->format('n') - 1];
+        $maxSeq = static::where('invoice_type', 'monthly')
+            ->whereYear('issue_date', $year)
+            ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
             ->get()
             ->map(fn($inv) => (int) explode('/', $inv->invoice_number)[0])
+            ->filter(fn($n) => $n > 0) // exclude C-xxx dan R-xxx (cast ke 0)
             ->max() ?? 0;
 
         $seq = str_pad($maxSeq + 1, 3, '0', STR_PAD_LEFT);
-
         return "{$seq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
     }
 }

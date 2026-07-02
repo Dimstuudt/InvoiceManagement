@@ -95,7 +95,7 @@
                   <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
                   <span v-if="invoice.interval_months"
                     class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-xs font-medium rounded-md">
-                    ↻ {{ invoice.interval_months }} bln
+                    ↻ {{ invoice.invoice_type === 'yearly' ? (invoice.interval_months / 12) + ' thn' : invoice.interval_months + ' bln' }}
                   </span>
                   <span v-if="invoice.parent_invoice_id"
                     class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-500 text-xs font-medium rounded-md">

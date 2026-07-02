@@ -17,6 +17,16 @@ use Inertia\Inertia;
 
 class InvoiceController extends Controller
 {
+    public function resetAll()
+    {
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        \App\Models\InvoiceItem::query()->delete();
+        Invoice::query()->delete();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+        return redirect()->route('invoices.index')->with('success', 'Semua invoice berhasil dihapus.');
+    }
+
     public function index()
     {
         $clients = Client::where('is_active', true)
@@ -146,11 +156,12 @@ class InvoiceController extends Controller
             'status'              => 'required|in:draft,sent,paid,unpaid',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'interval_months'     => 'nullable|integer|min:1|max:12',
+            'invoice_type'        => 'required|in:monthly,yearly',
         ]);
 
         $category      = ProjectCategory::findOrFail($validated['project_category_id']);
         $issueDate     = Carbon::parse($validated['issue_date']);
-        $invoiceNumber = Invoice::generateNumber($category->code, $issueDate);
+        $invoiceNumber = Invoice::generateNumber($category->code, $issueDate, $validated['invoice_type']);
 
         $invoice = Invoice::create([
             ...$validated,
@@ -327,23 +338,18 @@ class InvoiceController extends Controller
             'notes'               => 'nullable|string',
             'status'              => 'required|in:draft,sent,paid,unpaid',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
+            'invoice_type'        => 'required|in:monthly,yearly',
         ]);
 
-        // Regenerate invoice number jika issue_date atau project_category berubah
+        // Regenerate invoice number jika issue_date, category, atau type berubah
         $dateChanged     = $invoice->issue_date->format('Y-m') !== Carbon::parse($validated['issue_date'])->format('Y-m');
         $categoryChanged = $invoice->project_category_id != $validated['project_category_id'];
+        $typeChanged     = $invoice->invoice_type !== $validated['invoice_type'];
 
-        if ($dateChanged || $categoryChanged) {
-            $category    = ProjectCategory::findOrFail($validated['project_category_id']);
-            $issueDate   = Carbon::parse($validated['issue_date']);
-            // Exclude invoice ini dari hitungan supaya tidak loncat nomor
-            $count = Invoice::whereYear('issue_date', $issueDate->year)
-                ->whereMonth('issue_date', $issueDate->month)
-                ->where('id', '!=', $invoice->id)
-                ->count();
-            $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
-            $seq = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
-            $validated['invoice_number'] = "{$seq}/{$category->code}/INV/MVC/{$romanMonths[$issueDate->month - 1]}/{$issueDate->year}";
+        if ($dateChanged || $categoryChanged || $typeChanged) {
+            $category  = ProjectCategory::findOrFail($validated['project_category_id']);
+            $issueDate = Carbon::parse($validated['issue_date']);
+            $validated['invoice_number'] = Invoice::generateNumber($category->code, $issueDate, $validated['invoice_type']);
         }
 
         $invoice->update([
@@ -655,8 +661,8 @@ class InvoiceController extends Controller
 
     public function carry(Invoice $invoice)
     {
-        if (!in_array($invoice->status, ['sent', 'unpaid'])) {
-            return back()->with('error', 'Hanya invoice sent atau unpaid yang bisa di-carry.');
+        if (!in_array($invoice->status, ['draft', 'sent', 'unpaid'])) {
+            return back()->with('error', 'Hanya invoice draft, sent, atau unpaid yang bisa di-carry.');
         }
         if (!$invoice->interval_months) {
             return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
@@ -669,7 +675,22 @@ class InvoiceController extends Controller
 
         $issueDate = Carbon::parse($invoice->issue_date)->addMonths($invoice->interval_months);
         $dueDate   = $issueDate->copy()->addDays(14);
-        $number    = Invoice::generateNumber($invoice->projectCategory->code, $issueDate);
+
+        // Nomor invoice lama berpindah ke invoice baru (inherit), lama dapat prefix C-
+        $oldNumber     = $invoice->invoice_number;
+        $oldSeq        = explode('/', $oldNumber)[0]; // e.g. "001" atau "C-001"
+        $inheritedSeq  = ltrim($oldSeq, 'C-');        // ambil angka murni
+        $romanMonths   = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $roman         = $romanMonths[(int) $issueDate->format('n') - 1];
+        $year          = $issueDate->format('Y');
+        $categoryCode  = $invoice->projectCategory->code;
+
+        $newNumber = $invoice->invoice_type === 'yearly'
+            ? "{$inheritedSeq}/{$categoryCode}/INV-TH/MVC/{$roman}/{$year}"
+            : "{$inheritedSeq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
+
+        // Lepas nomor dari invoice lama → prefix C-
+        $invoice->update(['invoice_number' => "C-" . $oldNumber]);
 
         $child = Invoice::create([
             'user_id'             => $invoice->user_id,
@@ -682,7 +703,8 @@ class InvoiceController extends Controller
             'with_signature'      => $invoice->with_signature,
             'attention'           => $invoice->attention,
             'notes'               => $invoice->notes,
-            'invoice_number'      => $number,
+            'invoice_number'      => $newNumber,
+            'invoice_type'        => $invoice->invoice_type,
             'issue_date'          => $issueDate,
             'due_date'            => $dueDate,
             'status'              => 'draft',
@@ -801,18 +823,29 @@ class InvoiceController extends Controller
         $headDate = Carbon::create($now->year, $now->month, 1);
         $headDate->setDay(min($originalDay, $headDate->daysInMonth));
 
+        $oldNumber       = $invoice->invoice_number;
+        $seqPart         = explode('/', $oldNumber)[0]; // e.g. "004"
         $cursor          = $originalDate->copy()->addMonths($interval);
         $previousInvoice = $invoice;
         $generated       = [];
 
-        DB::transaction(function () use ($invoice, $cursor, $headDate, $originalDay, $interval, $originalDate, &$previousInvoice, &$generated) {
+        DB::transaction(function () use ($invoice, $cursor, $headDate, $originalDay, $interval, $originalDate, $oldNumber, $seqPart, &$previousInvoice, &$generated) {
         while ($cursor->lte($headDate)) {
             $cursorDay = min($originalDay, $cursor->daysInMonth);
             $cursor->setDay($cursorDay);
 
-            $dueDate = $cursor->copy()->addDays(14);
-            $number  = Invoice::generateNumber($invoice->projectCategory->code, $cursor);
-            $isHead  = $cursor->format('Y-m') === $headDate->format('Y-m');
+            $dueDate     = $cursor->copy()->addDays(14);
+            $isHead      = $cursor->format('Y-m') === $headDate->format('Y-m');
+            $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+            $roman       = $romanMonths[(int) $cursor->format('n') - 1];
+            $year        = $cursor->format('Y');
+            $code        = $invoice->projectCategory->code;
+            $invType     = $invoice->invoice_type === 'yearly' ? 'INV-TH' : 'INV';
+
+            // HEAD inherit nomor asli (tanpa R-), backlog pakai R-{seqPart}
+            $number = $isHead
+                ? "{$seqPart}/{$code}/{$invType}/MVC/{$roman}/{$year}"
+                : 'R-TEMP-' . uniqid();
 
             $child = Invoice::create([
                 'user_id'             => $invoice->user_id,
@@ -826,6 +859,7 @@ class InvoiceController extends Controller
                 'attention'           => $invoice->attention,
                 'notes'               => $invoice->notes,
                 'invoice_number'      => $number,
+                'invoice_type'        => $invoice->invoice_type,
                 'issue_date'          => $cursor->toDateString(),
                 'due_date'            => $dueDate->toDateString(),
                 'status'              => $isHead ? 'draft' : 'unpaid',
@@ -837,6 +871,11 @@ class InvoiceController extends Controller
                 'is_dpp'              => $invoice->is_dpp,
                 'is_reaktivasi'       => true,
             ]);
+
+            // Update backlog dengan R-{seqPart} (bukan R-{id})
+            if (!$isHead) {
+                $child->update(['invoice_number' => "R-{$seqPart}/{$code}/{$invType}/MVC/{$roman}/{$year}"]);
+            }
 
             foreach ($invoice->items as $item) {
                 $child->items()->create([
@@ -858,8 +897,8 @@ class InvoiceController extends Controller
         $head   = end($generated);
         $headId = $head->id;
 
-        // Mark original + all non-head generated invoices with reaktivasi_chain_id
-        $invoice->update(['is_reaktivasi' => true, 'reaktivasi_chain_id' => $headId]);
+        // Original dapat prefix R-, serahkan nomor asli ke HEAD
+        $invoice->update(['is_reaktivasi' => true, 'reaktivasi_chain_id' => $headId, 'invoice_number' => "R-{$oldNumber}"]);
         $nonHeadIds = collect($generated)->slice(0, -1)->pluck('id')->toArray();
         if (!empty($nonHeadIds)) {
             Invoice::whereIn('id', $nonHeadIds)->update(['reaktivasi_chain_id' => $headId]);
@@ -912,7 +951,7 @@ class InvoiceController extends Controller
         // due = issue baru + interval - 1 hari
         $dueDate = $issueDate->copy()->addDays(14);
 
-        $number = Invoice::generateNumber($parent->projectCategory->code, $issueDate);
+        $number = Invoice::generateNumber($parent->projectCategory->code, $issueDate, $parent->invoice_type ?? 'monthly');
 
         $child = Invoice::create([
             'user_id'             => $parent->user_id,
@@ -926,6 +965,7 @@ class InvoiceController extends Controller
             'attention'           => $parent->attention,
             'notes'               => $parent->notes,
             'invoice_number'      => $number,
+            'invoice_type'        => $parent->invoice_type ?? 'monthly',
             'issue_date'          => $issueDate,
             'due_date'            => $dueDate,
             'status'              => 'draft',

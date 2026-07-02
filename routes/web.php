@@ -43,6 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::get('invoices/export', [InvoiceController::class, 'export'])->name('invoices.export');
     Route::get('invoices/schedule', [InvoiceController::class, 'schedule'])->name('invoices.schedule');
     Route::get('invoices/clients/{client}', [InvoiceController::class, 'clientInvoices'])->name('invoices.client');
+    Route::delete('invoices/reset-all', [InvoiceController::class, 'resetAll'])->name('invoices.reset-all');
     Route::resource('invoices', InvoiceController::class);
     Route::patch('invoices/{invoice}/status', [InvoiceController::class, 'updateStatus'])->name('invoices.status');
     Route::patch('invoices/{invoice}/save', [InvoiceController::class, 'saveAll'])->name('invoices.save');

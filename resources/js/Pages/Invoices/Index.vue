@@ -14,6 +14,14 @@
           </p>
         </div>
         <div class="flex items-center gap-2">
+          <button @click="showReset = true"
+            class="inline-flex items-center px-3 py-2 border border-red-200 text-red-500 text-sm font-medium rounded-xl hover:bg-red-50 transition-colors">
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Reset Demo
+          </button>
           <button @click="showExport = true"
             class="inline-flex items-center px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -322,12 +330,43 @@
       </div>
     </Teleport>
 
+    <!-- Modal Reset Demo -->
+    <Teleport to="body">
+      <div v-if="showReset" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showReset = false"/>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-gray-900">Hapus Semua Invoice?</p>
+              <p class="text-xs text-gray-400 mt-0.5">Client tetap aman, hanya invoice yang dihapus.</p>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-5">
+            <button @click="showReset = false"
+              class="flex-1 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+              Batal
+            </button>
+            <button @click="doReset"
+              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors">
+              Ya, Hapus Semua
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </AppLayout>
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
 const props = defineProps({ clients: Array, summary: Object })
@@ -358,6 +397,14 @@ const filteredClients = computed(() => {
   if (statusFilter.value === 'sent')    list = list.filter(c => c.sent_count    > 0)
   return list
 })
+
+// Reset Demo
+const showReset = ref(false)
+function doReset() {
+  router.delete(route('invoices.reset-all'), {
+    onSuccess: () => { showReset.value = false },
+  })
+}
 
 // Export
 const showExport    = ref(false)

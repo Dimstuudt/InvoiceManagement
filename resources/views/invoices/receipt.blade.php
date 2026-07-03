@@ -189,15 +189,55 @@
           <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">Rp {{ number_format($item->amount, 2, ',', '.') }}</td>
         </tr>
         @endforeach
+        {{-- Baris perpanjangan layanan (carry, reaktivasi, prepay) --}}
+        @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
+        <tr><td colspan="2" style="padding:0 0.75rem"><div style="border-top:1px dashed #cbd5e1"></div></td></tr>
+        @endif
+        @if($carriedFrom)
+        <tr style="background:#fffbf5">
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#78350f;font-style:italic">
+            Perpanjangan Layanan — {{ $carryPeriodLabel }}
+          </td>
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#78350f;white-space:nowrap">
+            Rp {{ number_format($carriedTotal, 2, ',', '.') }}
+          </td>
+        </tr>
+        @endif
+        @if($isReaktivasiHead && $reaktivasiMembers->count() > 0)
+        <tr style="background:#f0fdf4">
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#065f46;font-style:italic">
+            Perpanjangan Layanan — {{ $reaktivasiPeriodLabel }}
+          </td>
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#065f46;white-space:nowrap">
+            Rp {{ number_format($reaktivasiTotal, 2, ',', '.') }}
+          </td>
+        </tr>
+        @endif
+        @if($isPrepayHead && $prepayMembers->count() > 0)
+        <tr style="background:#f0fdfa">
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#0f766e;font-style:italic">
+            Pembayaran di Muka — {{ $prepayPeriodLabel }}
+          </td>
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#0f766e;white-space:nowrap">
+            Rp {{ number_format($prepayTotal, 2, ',', '.') }}
+          </td>
+        </tr>
+        @endif
       </tbody>
       <tfoot>
         <tr>
           <td colspan="2" style="padding:0.5rem 1rem 0.75rem 1rem">
             <table style="width:320px;border-collapse:collapse;margin-left:auto">
 
-              {{-- Sub Total (items saja, tunggakan tidak masuk basis pajak) --}}
+              {{-- Sub Total (items periode ini saja, perpanjangan tidak masuk basis pajak) --}}
               <tr style="border-top:1px solid #e5e7eb">
-                <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">Sub Total</td>
+                <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+                  @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
+                    Sub Total <span style="font-size:0.7rem;font-style:italic">(periode ini)</span>
+                  @else
+                    Sub Total
+                  @endif
+                </td>
                 <td style="padding:0.45rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
                   Rp {{ number_format($invoice->subtotal, 2, ',', '.') }}
                 </td>
@@ -235,46 +275,6 @@
               </tr>
               @endif
 
-              {{-- Total Jasa + Tambahan (jika ada tunggakan atau prepay) --}}
-              @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
-              <tr style="border-top:1px solid #e5e7eb">
-                <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">Total Jasa</td>
-                <td style="padding:0.45rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
-                  Rp {{ number_format($invoice->total, 2, ',', '.') }}
-                </td>
-              </tr>
-              @if($carriedFrom)
-              <tr>
-                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#92400e;white-space:nowrap">
-                  Tunggakan Layanan {{ $carryPeriodLabel }}
-                </td>
-                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#92400e;white-space:nowrap">
-                  Rp {{ number_format($carriedTotal, 2, ',', '.') }}
-                </td>
-              </tr>
-              @endif
-              @if($isReaktivasiHead && $reaktivasiMembers->count() > 0)
-              <tr>
-                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#065f46;white-space:nowrap">
-                  Tunggakan Layanan {{ $reaktivasiPeriodLabel }}
-                </td>
-                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#065f46;white-space:nowrap">
-                  Rp {{ number_format($reaktivasiTotal, 2, ',', '.') }}
-                </td>
-              </tr>
-              @endif
-              @if($isPrepayHead && $prepayMembers->count() > 0)
-              <tr>
-                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#0f766e;white-space:nowrap">
-                  Pembayaran di Muka {{ $prepayPeriodLabel }}
-                </td>
-                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#0f766e;white-space:nowrap">
-                  Rp {{ number_format($prepayTotal, 2, ',', '.') }}
-                </td>
-              </tr>
-              @endif
-              @endif
-
               {{-- Grand Total --}}
               <tr style="border-top:2px solid #1d4ed8">
                 <td style="padding:0.6rem 0.75rem 0.6rem 0;font-size:0.875rem;font-weight:900;color:#1d4ed8;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap">TOTAL</td>
@@ -283,11 +283,11 @@
                 </td>
               </tr>
 
-              {{-- Note pajak tunggakan --}}
+              {{-- Note pajak perpanjangan --}}
               @if($invoice->tax_percentage && ($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0)))
               <tr>
                 <td colspan="2" style="padding:0.5rem 0 0 0;font-size:0.7rem;color:#9ca3af;font-style:italic;line-height:1.5">
-                  * Tunggakan layanan merupakan nilai bersih yang telah diperhitungkan pajaknya pada periode sebelumnya dan tidak dikenakan {{ $invoice->is_dpp ? 'DPP/PPN' : 'PPN' }} kembali.
+                  * Biaya perpanjangan layanan merupakan nilai netto yang telah diperhitungkan {{ $invoice->is_dpp ? 'DPP/PPN' : 'PPN' }}-nya pada periode masing-masing dan tidak dikenakan pajak kembali pada invoice ini.
                 </td>
               </tr>
               @endif

@@ -344,6 +344,11 @@
                                 <span v-if="isPastDue(invoice)" class="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
                                   lewat {{ daysPastDue(invoice) }} hari
                                 </span>
+                                <span v-if="invoice.is_marked"
+                                  class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded shrink-0">
+                                  <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+                                  Ditandai
+                                </span>
                               </div>
                               <p class="text-xs text-gray-500 mt-1">{{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span> {{ fmtDateShort(invoice.due_date) }}</p>
                               <p v-if="idx === 0" class="text-[10px] text-gray-300 mt-0.5">Dibuat {{ fmtDateTime(invoice.created_at) }}</p>
@@ -366,6 +371,12 @@
                                 <button v-if="invoice.status === 'unpaid' && invoice.interval_months && !hasChild(invoice) && !invoice.is_reaktivasi" @click="reactivateInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">Reaktivasi</button>
                                 <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id" @click="freezeInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors">Freeze</button>
                                 <button v-if="invoice.status === 'frozen' && !hasChild(invoice)" @click="openResume(invoice)" class="px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">Perbarui</button>
+                                <button @click="toggleMark(invoice)"
+                                  class="px-2 py-1 text-[10px] font-semibold rounded-md transition-colors flex items-center gap-0.5"
+                                  :class="invoice.is_marked ? 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'">
+                                  <svg class="w-2.5 h-2.5" :fill="invoice.is_marked ? 'currentColor' : 'none'" viewBox="0 0 20 20" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+                                  {{ invoice.is_marked ? 'Tandai ✓' : 'Tandai' }}
+                                </button>
                                 <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
                                   <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                                 </button>
@@ -476,6 +487,11 @@
                       <span :class="isPastDue(invoice) ? 'text-red-500 font-medium' : ''">{{ fmtDateShort(invoice.due_date) }}</span>
                       <span v-if="isPastDue(invoice)" class="ml-1 text-red-500 font-semibold">· lewat {{ daysPastDue(invoice) }} hari</span>
                     </p>
+                    <span v-if="invoice.is_marked"
+                      class="inline-flex items-center gap-0.5 mt-1 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded">
+                      <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+                      Ditandai
+                    </span>
                     <p class="text-[10px] text-gray-300 mt-0.5">Dibuat {{ fmtDateTime(invoice.created_at) }}</p>
                   </div>
                   <div class="text-right shrink-0">
@@ -483,6 +499,12 @@
                     <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
                   </div>
                   <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button @click="toggleMark(invoice)"
+                      class="px-2 py-1 text-[10px] font-semibold rounded-md transition-colors flex items-center gap-0.5"
+                      :class="invoice.is_marked ? 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'">
+                      <svg class="w-2.5 h-2.5" :fill="invoice.is_marked ? 'currentColor' : 'none'" viewBox="0 0 20 20" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+                      {{ invoice.is_marked ? 'Tandai ✓' : 'Tandai' }}
+                    </button>
                     <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
                       <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                     </button>
@@ -688,7 +710,23 @@ function toggleStatusMenu(e, invoice) {
 
 function changeStatus(invoice, newStatus) {
   activeStatusMenu.value = null
-  router.patch(route('invoices.status', invoice.id), { status: newStatus }, { preserveScroll: true })
+  const label = { draft: 'Draft', sent: 'Sent', unpaid: 'Unpaid', paid: 'Lunas' }[newStatus] ?? newStatus
+  Swal.fire({
+    title: `Ubah status ke ${label}?`,
+    text: invoice.invoice_number,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#4f46e5',
+    confirmButtonText: 'Ya, Ubah',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) {
+      router.patch(route('invoices.status', invoice.id), { status: newStatus }, {
+        preserveScroll: true,
+        onSuccess: () => toast(`Status berubah ke ${label}`),
+      })
+    }
+  })
 }
 
 function closeAll() { activeMenu.value = null; activeStatusMenu.value = null; }
@@ -901,16 +939,76 @@ function getSubListInvoices(groupInvoices) {
   return groupInvoices.filter(inv => isSmallSubCode(inv))
 }
 
+function toast(title, icon = 'success') {
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon,
+    title,
+    showConfirmButton: false,
+    timer: 2500,
+    timerProgressBar: true,
+  })
+}
+
 function markPaid(invoice) {
-  router.patch(route('invoices.status', invoice.id), { status: 'paid' }, { preserveScroll: true })
+  Swal.fire({
+    title: 'Tandai sebagai Lunas?',
+    text: invoice.invoice_number,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#059669',
+    confirmButtonText: 'Ya, Lunas',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) {
+      router.patch(route('invoices.status', invoice.id), { status: 'paid' }, {
+        preserveScroll: true,
+        onSuccess: () => toast('Invoice ditandai lunas ✓'),
+      })
+    }
+  })
 }
 
 function freezeInvoice(invoice) {
-  router.post(route('invoices.freeze', invoice.id), {}, { preserveScroll: true })
+  Swal.fire({
+    title: 'Bekukan invoice ini?',
+    text: `${invoice.invoice_number} tidak akan dihitung jatuh tempo selama dibekukan.`,
+    icon: 'info',
+    showCancelButton: true,
+    confirmButtonColor: '#0ea5e9',
+    confirmButtonText: 'Ya, Bekukan',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) {
+      router.post(route('invoices.freeze', invoice.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => toast('Invoice dibekukan'),
+      })
+    }
+  })
 }
 
 function carryInvoice(invoice) {
-  router.post(route('invoices.carry', invoice.id), {}, { preserveScroll: true })
+  Swal.fire({
+    title: 'Carry invoice ini?',
+    html: `<div style="text-align:left;font-size:0.85rem;color:#374151">
+      <p>Invoice <strong>${invoice.invoice_number}</strong> akan di-carry.</p>
+      <p style="margin-top:0.5rem">Invoice lama jadi <strong>Carried</strong>, invoice baru dibuat dengan tunggakan bulan lama otomatis masuk di PDF.</p>
+    </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#f97316',
+    confirmButtonText: 'Ya, Carry',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) {
+      router.post(route('invoices.carry', invoice.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => toast('Invoice berhasil di-carry'),
+      })
+    }
+  })
 }
 
 function reactivateInvoice(invoice) {
@@ -927,7 +1025,10 @@ function reactivateInvoice(invoice) {
     confirmButtonText: 'Ya, Reaktivasi',
     cancelButtonText: 'Batal',
   }).then(r => {
-    if (r.isConfirmed) router.post(route('invoices.reactivate', invoice.id), {}, { preserveScroll: true })
+    if (r.isConfirmed) router.post(route('invoices.reactivate', invoice.id), {}, {
+      preserveScroll: true,
+      onSuccess: () => toast('Invoice berhasil direaktivasi'),
+    })
   })
 }
 
@@ -959,12 +1060,37 @@ function submitResume() {
     interval_months: resumeForm.interval_months,
   }, {
     preserveScroll: true,
-    onSuccess: () => { resumeModal.value = false },
+    onSuccess: () => {
+      resumeModal.value = false
+      toast('Invoice berhasil dilanjutkan')
+    },
+  })
+}
+
+function toggleMark(invoice) {
+  router.patch(route('invoices.mark', invoice.id), {}, {
+    preserveScroll: true,
+    onSuccess: () => toast(invoice.is_marked ? 'Tanda dihapus' : 'Invoice ditandai untuk auto-kirim'),
   })
 }
 
 function prepayInvoice(invoice) {
-  router.post(route('invoices.prepay', invoice.id), {}, { preserveScroll: true })
+  Swal.fire({
+    title: 'Buat Prepay?',
+    text: `Prepay akan dibuat untuk ${invoice.invoice_number}.`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#0d9488',
+    confirmButtonText: 'Ya, Prepay',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) {
+      router.post(route('invoices.prepay', invoice.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => toast('Prepay berhasil dibuat'),
+      })
+    }
+  })
 }
 
 function deleteInvoice(invoice) {
@@ -977,7 +1103,10 @@ function deleteInvoice(invoice) {
     confirmButtonText: 'Hapus',
     cancelButtonText: 'Batal',
   }).then(r => {
-    if (r.isConfirmed) router.delete(route('invoices.destroy', invoice.id));
-  });
+    if (r.isConfirmed) router.delete(route('invoices.destroy', invoice.id), {
+      preserveScroll: true,
+      onSuccess: () => toast('Invoice dihapus', 'info'),
+    })
+  })
 }
 </script>

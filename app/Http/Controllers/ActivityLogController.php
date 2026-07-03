@@ -14,7 +14,9 @@ class ActivityLogController extends Controller
     {
         $masterPrefixes = ['bank_account.', 'client_category.', 'project_category.', 'document_issuer.', 'signature.', 'email_template.'];
 
-        $query = ActivityLog::with('user')->orderByDesc('created_at');
+        $query = ActivityLog::with('user')
+            ->where('action', 'not like', 'invoice.auto_%')
+            ->orderByDesc('created_at');
 
         // Search — subject, user name, IP, action
         if ($request->filled('search')) {
@@ -38,7 +40,11 @@ class ActivityLogController extends Controller
                 default   => [],
             };
             if ($prefixes) {
-                $query->where(fn($q) => collect($prefixes)->each(fn($p) => $q->orWhere('action', 'like', $p . '%')));
+                $query->where(function ($q) use ($prefixes) {
+                    foreach ($prefixes as $p) {
+                        $q->orWhere('action', 'like', $p . '%');
+                    }
+                });
             }
         }
 
@@ -76,11 +82,15 @@ class ActivityLogController extends Controller
         ]);
 
         $stats = [
-            'total'   => ActivityLog::count(),
-            'invoice' => ActivityLog::where('action', 'like', 'invoice.%')->count(),
+            'total'   => ActivityLog::where('action', 'not like', 'invoice.auto_%')->count(),
+            'invoice' => ActivityLog::where('action', 'like', 'invoice.%')->where('action', 'not like', 'invoice.auto_%')->count(),
             'client'  => ActivityLog::where('action', 'like', 'client.%')->count(),
             'auth'    => ActivityLog::where(fn($q) => $q->where('action', 'like', 'user.%')->orWhere('action', 'like', 'profile.%'))->count(),
-            'master'  => ActivityLog::where(fn($q) => collect($masterPrefixes)->each(fn($p) => $q->orWhere('action', 'like', $p . '%')))->count(),
+            'master'  => ActivityLog::where(function ($q) use ($masterPrefixes) {
+                foreach ($masterPrefixes as $p) {
+                    $q->orWhere('action', 'like', $p . '%');
+                }
+            })->count(),
         ];
 
         $users = User::orderBy('name')->get(['id', 'name']);
@@ -91,5 +101,51 @@ class ActivityLogController extends Controller
             'users'   => $users,
             'filters' => $request->only('search', 'kategori', 'date_from', 'date_to', 'user_id', 'per_page'),
         ]);
+    }
+
+    public function cronLogs(Request $request)
+    {
+        $query = ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue'])
+            ->orderByDesc('created_at');
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        $perPage = in_array((int) $request->per_page, [25, 50, 100, 250]) ? (int) $request->per_page : 50;
+
+        $logs = $query->paginate($perPage)->withQueryString();
+
+        $logs->through(fn($log) => [
+            'id'            => $log->id,
+            'action'        => $log->action,
+            'subject_type'  => $log->subject_type,
+            'subject_id'    => $log->subject_id,
+            'subject_label' => $log->subject_label,
+            'detail'        => $log->detail,
+            'created_at'    => $log->created_at,
+        ]);
+
+        $stats = [
+            'total'     => ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue'])->count(),
+            'auto_sent' => ActivityLog::where('action', 'invoice.auto_sent')->count(),
+            'overdue'   => ActivityLog::where('action', 'invoice.auto_overdue')->count(),
+        ];
+
+        return Inertia::render('Logs/CronLogs', [
+            'logs'    => $logs,
+            'stats'   => $stats,
+            'filters' => $request->only('date_from', 'date_to', 'per_page'),
+        ]);
+    }
+
+    public function deleteCronLogs()
+    {
+        ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue'])->delete();
+
+        return redirect()->route('logs.cron');
     }
 }

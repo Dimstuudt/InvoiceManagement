@@ -13,9 +13,13 @@ use App\Http\Controllers\Master\ProjectCategoryController;
 use App\Http\Controllers\Master\SignatureController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ArtisanController;
+use App\Http\Controllers\CronController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
+
+// Public cron trigger — no auth, protected by secret query param
+Route::get('/cron/run', [CronController::class, 'run'])->name('cron.run');
 
 
 // Auth
@@ -36,13 +40,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('logs', [ActivityLogController::class, 'index'])->name('logs.index');
+    Route::get('logs/cron', [ActivityLogController::class, 'cronLogs'])->name('logs.cron');
+    Route::delete('logs/cron', [ActivityLogController::class, 'deleteCronLogs'])->name('logs.cron.delete');
 
     Route::resource('users', UserController::class)->except(['show'])->middleware('admin');
 
-    // Artisan panel — admin only + validasi ARTISAN_SECRET saat run
+    // Admin-only panels
     Route::middleware('admin')->group(function () {
         Route::get('/admin/artisan', [ArtisanController::class, 'dashboard'])->name('admin.artisan');
         Route::post('/admin/artisan/run', [ArtisanController::class, 'run'])->name('admin.artisan.run');
+
+        Route::get('/admin/cron', [CronController::class, 'dashboard'])->name('admin.cron');
+        Route::post('/admin/cron/run', [CronController::class, 'manualRun'])->name('admin.cron.run');
+        Route::post('/admin/cron/demo', [CronController::class, 'createDemo'])->name('admin.cron.demo');
     });
 
     Route::resource('clients', ClientController::class)->except(['show']);

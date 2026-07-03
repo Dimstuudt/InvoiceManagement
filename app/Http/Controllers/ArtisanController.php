@@ -17,6 +17,7 @@ class ArtisanController extends Controller
         'view:cache',   'view:clear',
         'cache:clear',
         'queue:restart',
+        'invoice:auto-send',
     ];
 
     public function dashboard()

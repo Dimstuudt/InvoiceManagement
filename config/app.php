@@ -41,6 +41,8 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    'artisan_secret' => env('ARTISAN_SECRET'),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

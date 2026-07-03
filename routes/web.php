@@ -12,10 +12,11 @@ use App\Http\Controllers\Master\EmailTemplateController;
 use App\Http\Controllers\Master\ProjectCategoryController;
 use App\Http\Controllers\Master\SignatureController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ArtisanController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::redirect('/', '/login');
+
 
 // Auth
 Route::middleware('guest')->group(function () {
@@ -37,6 +38,12 @@ Route::middleware('auth')->group(function () {
     Route::get('logs', [ActivityLogController::class, 'index'])->name('logs.index');
 
     Route::resource('users', UserController::class)->except(['show'])->middleware('admin');
+
+    // Artisan panel — admin only + validasi ARTISAN_SECRET saat run
+    Route::middleware('admin')->group(function () {
+        Route::get('/admin/artisan', [ArtisanController::class, 'dashboard'])->name('admin.artisan');
+        Route::post('/admin/artisan/run', [ArtisanController::class, 'run'])->name('admin.artisan.run');
+    });
 
     Route::resource('clients', ClientController::class)->except(['show']);
 

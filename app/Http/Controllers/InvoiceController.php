@@ -371,7 +371,7 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
-        // Jika ini HEAD carry, restore C- parent: lepas prefix C- dan kembalikan ke unpaid
+        // Jika ini HEAD carry, restore C- parent: lepas prefix C- dan kembalikan ke draft
         if ($invoice->carried_from_id) {
             $carriedParent = Invoice::find($invoice->carried_from_id);
             if ($carriedParent && str_starts_with($carriedParent->invoice_number, 'C-')) {
@@ -382,6 +382,22 @@ class InvoiceController extends Controller
                 ]);
                 ActivityLogger::log('invoice.restored', $carriedParent, [
                     'reason'          => 'HEAD carry dihapus',
+                    'restored_number' => $restoredNumber,
+                ]);
+            }
+        }
+
+        // Jika ini HEAD resume, restore F- parent: lepas prefix F- dan kembalikan ke frozen
+        if ($invoice->parent_invoice_id) {
+            $frozenParent = Invoice::find($invoice->parent_invoice_id);
+            if ($frozenParent && str_starts_with($frozenParent->invoice_number, 'F-')) {
+                $restoredNumber = substr($frozenParent->invoice_number, 2);
+                $frozenParent->update([
+                    'invoice_number' => $restoredNumber,
+                    'status'         => 'frozen',
+                ]);
+                ActivityLogger::log('invoice.restored', $frozenParent, [
+                    'reason'          => 'HEAD resume dihapus',
                     'restored_number' => $restoredNumber,
                 ]);
             }
@@ -892,9 +908,17 @@ class InvoiceController extends Controller
 
         $invoice->load('items', 'projectCategory');
 
-        $issueDate = Carbon::parse($request->issue_date);
-        $dueDate   = $issueDate->copy()->addDays(14);
-        $number    = Invoice::generateNumber($invoice->projectCategory->code, $issueDate);
+        $oldNumber   = $invoice->invoice_number;
+        $seqPart     = explode('/', $oldNumber)[0];
+        $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $issueDate   = Carbon::parse($request->issue_date);
+        $dueDate     = $issueDate->copy()->addDays(14);
+        $roman       = $romanMonths[(int) $issueDate->format('n') - 1];
+        $year        = $issueDate->format('Y');
+        $newNumber   = "{$seqPart}/{$invoice->projectCategory->code}/INV/MVC/{$roman}/{$year}";
+
+        // Frozen invoice dapat prefix F-, HEAD baru inherit nomor asli
+        $invoice->update(['invoice_number' => "F-{$oldNumber}"]);
 
         $child = Invoice::create([
             'user_id'             => $invoice->user_id,
@@ -907,7 +931,8 @@ class InvoiceController extends Controller
             'with_signature'      => $invoice->with_signature,
             'attention'           => $invoice->attention,
             'notes'               => $invoice->notes,
-            'invoice_number'      => $number,
+            'invoice_number'      => $newNumber,
+            'invoice_type'        => $invoice->invoice_type,
             'issue_date'          => $issueDate,
             'due_date'            => $dueDate,
             'status'              => 'draft',
@@ -928,7 +953,11 @@ class InvoiceController extends Controller
             ]);
         }
 
-        ActivityLogger::log('invoice.resumed', $child, ['from_frozen' => $invoice->invoice_number]);
+        ActivityLogger::log('invoice.resumed', $child, [
+            'from_frozen'    => $oldNumber,
+            'frozen_renamed' => "F-{$oldNumber}",
+            'new_number'     => $newNumber,
+        ]);
         return back()->with('success', 'Invoice dilanjutkan. Draft baru telah dibuat.');
     }
 

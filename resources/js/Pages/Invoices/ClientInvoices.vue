@@ -372,7 +372,7 @@
                       <!-- Compact inline: C-/R- prefix (indented, posisi kronologis) -->
                       <div v-else
                         class="border-t border-gray-50 group"
-                        :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : invoice.invoice_number.startsWith('P-') ? 'hover:bg-teal-50/30' : 'hover:bg-violet-50/30'">
+                        :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : invoice.invoice_number.startsWith('P-') ? 'hover:bg-teal-50/30' : invoice.invoice_number.startsWith('F-') ? 'hover:bg-sky-50/30' : 'hover:bg-violet-50/30'">
                         <div class="ml-7 flex items-start"
                           :class="idx < recurringGroups[activeTab].invoices.length - 1
                             ? (invoice.status === 'paid' ? 'border-l-2 border-emerald-200' : 'border-l-2 border-gray-100')
@@ -397,6 +397,10 @@
                                   <span v-else-if="invoice.invoice_number.startsWith('P-')"
                                     class="text-[9px] font-bold text-teal-700 bg-teal-100 border border-teal-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
                                     Prepay
+                                  </span>
+                                  <span v-else-if="invoice.invoice_number.startsWith('F-')"
+                                    class="text-[9px] font-bold text-sky-700 bg-sky-100 border border-sky-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
+                                    Frozen
                                   </span>
                                   <span v-else
                                     class="text-[9px] font-bold text-violet-700 bg-violet-100 border border-violet-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
@@ -772,7 +776,7 @@ function hasChild(invoice) {
 }
 
 function isSmallSubCode(invoice) {
-  return /^[CRP]-/.test(invoice.invoice_number)
+  return /^[CRPF]-/.test(invoice.invoice_number)
 }
 
 function getFullSizeInvoices(groupInvoices) {

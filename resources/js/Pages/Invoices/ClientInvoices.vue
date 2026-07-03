@@ -335,7 +335,10 @@
                                   class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
                                   {{ invoice.invoice_number }}
                                 </Link>
-                                <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0" :class="statusClass(invoice.status)">
+                                <span
+                                  class="px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 select-none"
+                                  :class="[statusClass(invoice.status), !['frozen','carried'].includes(invoice.status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
+                                  @click.stop="toggleStatusMenu($event, invoice)">
                                   {{ statusLabel(invoice.status) }}
                                 </span>
                                 <span v-if="isPastDue(invoice)" class="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
@@ -348,6 +351,12 @@
                             <div class="flex items-center gap-1 shrink-0">
                               <div class="text-right mr-1">
                                 <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
+                                <template v-if="headChainTotal(invoice, recurringGroups[activeTab].invoices) > 0">
+                                  <p class="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap">
+                                    + {{ fmtCurrency(headChainTotal(invoice, recurringGroups[activeTab].invoices)) }}
+                                    <span :class="headChainLabel(invoice)?.cls">{{ headChainLabel(invoice)?.text }}</span>
+                                  </p>
+                                </template>
                                 <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
                               </div>
                               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -410,7 +419,10 @@
                                     class="font-mono text-xs font-semibold text-gray-500 hover:text-indigo-600 hover:underline truncate">
                                     {{ invoice.invoice_number }}
                                   </Link>
-                                  <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0" :class="statusClass(invoice.status)">
+                                  <span
+                                    class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0 select-none"
+                                    :class="[statusClass(invoice.status), !['frozen','carried'].includes(invoice.status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
+                                    @click.stop="toggleStatusMenu($event, invoice)">
                                     {{ statusLabel(invoice.status) }}
                                   </span>
                                   <span v-if="isPastDue(invoice)" class="text-[9px] font-semibold text-red-500 shrink-0">lewat {{ daysPastDue(invoice) }}h</span>
@@ -447,7 +459,10 @@
                 <div v-for="invoice in standaloneInvoices" :key="invoice.id"
                   class="flex items-center gap-4 px-5 py-3.5 border-t border-gray-50 transition-colors group"
                   :class="isPastDue(invoice) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50/50'">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold shrink-0" :class="statusClass(invoice.status)">
+                  <span
+                    class="px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 select-none"
+                    :class="[statusClass(invoice.status), !['frozen','carried'].includes(invoice.status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
+                    @click.stop="toggleStatusMenu($event, invoice)">
                     {{ statusLabel(invoice.status) }}
                   </span>
                   <div class="flex-1 min-w-0">
@@ -584,6 +599,31 @@
       </div>
     </Teleport>
 
+    <!-- Status quick-change dropdown -->
+    <Teleport to="body">
+      <div v-if="activeStatusMenu !== null"
+        class="fixed inset-0 z-40"
+        @click="activeStatusMenu = null"/>
+      <div v-if="activeStatusMenu !== null && statusMenuInvoice"
+        class="fixed z-50 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden w-36"
+        :style="{ top: statusMenuPos.top + 'px', left: statusMenuPos.left + 'px' }"
+        @click.stop>
+        <div class="px-2.5 pt-2 pb-1">
+          <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Ubah Status</p>
+        </div>
+        <div class="p-1 pt-0">
+          <button v-for="s in manualStatuses" :key="s.value"
+            v-show="s.value !== statusMenuInvoice.status"
+            @click="changeStatus(statusMenuInvoice, s.value)"
+            class="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-2"
+            :class="s.cls">
+            <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="s.dot"/>
+            {{ s.label }}
+          </button>
+        </div>
+      </div>
+    </Teleport>
+
   </AppLayout>
 </template>
 
@@ -619,8 +659,41 @@ function toggleMenu(event, invoice) {
   activeMenu.value   = invoice.id;
 }
 function closeMenu() { activeMenu.value = null; }
-onMounted(() => document.addEventListener('click', closeMenu));
-onUnmounted(() => document.removeEventListener('click', closeMenu));
+
+// ── Status quick-change dropdown ────────────────────────────
+const activeStatusMenu  = ref(null)
+const statusMenuPos     = ref({ top: 0, left: 0 })
+const statusMenuInvoice = ref(null)
+
+const manualStatuses = [
+  { value: 'draft',  label: 'Draft',   dot: 'bg-gray-400',    cls: 'text-gray-700 hover:bg-gray-100' },
+  { value: 'sent',   label: 'Sent',    dot: 'bg-blue-500',    cls: 'text-blue-700 hover:bg-blue-50' },
+  { value: 'unpaid', label: 'Unpaid',  dot: 'bg-red-500',     cls: 'text-red-600  hover:bg-red-50' },
+  { value: 'paid',   label: 'Lunas',   dot: 'bg-emerald-500', cls: 'text-emerald-700 hover:bg-emerald-50' },
+]
+
+function toggleStatusMenu(e, invoice) {
+  if (['frozen', 'carried'].includes(invoice.status)) return
+  if (activeStatusMenu.value === invoice.id) { activeStatusMenu.value = null; return }
+  const rect    = e.currentTarget.getBoundingClientRect()
+  const popH    = 152
+  const spaceBelow = window.innerHeight - rect.bottom
+  const top  = spaceBelow < popH
+    ? rect.top  + window.scrollY - popH - 4
+    : rect.bottom + window.scrollY + 4
+  statusMenuPos.value     = { top, left: rect.left + window.scrollX }
+  statusMenuInvoice.value = invoice
+  activeStatusMenu.value  = invoice.id
+}
+
+function changeStatus(invoice, newStatus) {
+  activeStatusMenu.value = null
+  router.patch(route('invoices.status', invoice.id), { status: newStatus }, { preserveScroll: true })
+}
+
+function closeAll() { activeMenu.value = null; activeStatusMenu.value = null; }
+onMounted(() => document.addEventListener('click', closeAll));
+onUnmounted(() => document.removeEventListener('click', closeAll));
 
 function openReceipt(invoice) { receiptUrl.value = route('invoices.receipt', invoice.id); }
 
@@ -689,6 +762,47 @@ function invoiceTotal(inv) {
 }
 function chainTotal(group)     { return group.invoices.filter(i => i.status !== 'frozen').reduce((s, inv) => s + invoiceTotal(inv), 0); }
 function chainPaidTotal(group) { return group.invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + invoiceTotal(inv), 0); }
+
+// Chain amount breakdown untuk HEAD carry/prepay/reaktivasi
+function headChainTotal(invoice, groupInvoices) {
+  // Prepay HEAD: sum semua P- member yang prepay_chain_id = invoice.id
+  if (invoice.is_prepay && !invoice.prepay_chain_id) {
+    return groupInvoices
+      .filter(inv => inv.prepay_chain_id === invoice.id)
+      .reduce((s, inv) => s + invoiceTotal(inv), 0)
+  }
+  // Carry HEAD: invoice.carried_from_id → traverse parent chain (C- ancestors)
+  if (invoice.carried_from_id) {
+    let total = 0
+    let parentId = invoice.parent_invoice_id
+    while (parentId) {
+      const parent = groupInvoices.find(inv => inv.id === parentId)
+      if (!parent || !isSmallSubCode(parent)) break
+      total += invoiceTotal(parent)
+      parentId = parent.parent_invoice_id ?? null
+    }
+    return total
+  }
+  // Reaktivasi HEAD: sum R- parents in chain
+  if (invoice.is_reaktivasi && !isSmallSubCode(invoice)) {
+    let total = 0
+    let parentId = invoice.parent_invoice_id
+    while (parentId) {
+      const parent = groupInvoices.find(inv => inv.id === parentId)
+      if (!parent || !isSmallSubCode(parent)) break
+      total += invoiceTotal(parent)
+      parentId = parent.parent_invoice_id ?? null
+    }
+    return total
+  }
+  return 0
+}
+function headChainLabel(invoice) {
+  if (invoice.is_prepay && !invoice.prepay_chain_id) return { text: 'prepay', cls: 'text-teal-500' }
+  if (invoice.carried_from_id)                        return { text: 'carry',  cls: 'text-orange-500' }
+  if (invoice.is_reaktivasi && !isSmallSubCode(invoice)) return { text: 'reaktivasi', cls: 'text-violet-500' }
+  return null
+}
 
 const summary = computed(() => {
   const paid    = props.invoices.filter(i => i.status === 'paid');

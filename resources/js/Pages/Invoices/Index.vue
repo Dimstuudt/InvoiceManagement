@@ -1,38 +1,40 @@
 <template>
   <AppLayout title="Invoice">
-    <div class="space-y-5">
+    <div class="space-y-6">
 
       <!-- Header -->
-      <div class="flex items-center justify-between">
+      <div class="flex items-start justify-between gap-4">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900">Invoice</h2>
+          <h2 class="text-lg font-bold text-gray-900 tracking-tight">Invoice</h2>
           <p class="text-sm text-gray-400 mt-0.5">
             <template v-if="search || statusFilter !== 'all'">
               {{ filteredClients.length }} dari {{ clients.length }} client
             </template>
-            <template v-else>{{ clients.length }} client aktif</template>
+            <template v-else>
+              {{ clients.length }} client · {{ summary.total_invoices }} invoice
+            </template>
           </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
           <button @click="showReset = true"
-            class="inline-flex items-center px-3 py-2 border border-red-200 text-red-500 text-sm font-medium rounded-xl hover:bg-red-50 transition-colors">
-            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="inline-flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-500 text-xs font-medium rounded-xl hover:bg-red-50 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
             </svg>
-            Reset Demo
+            Reset
           </button>
           <button @click="showExport = true"
-            class="inline-flex items-center px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
-            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-50 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
             </svg>
             Export
           </button>
           <Link :href="route('invoices.create')"
-            class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
             Buat Invoice
@@ -42,61 +44,68 @@
 
       <!-- Summary stats -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center mb-3">
-            <svg class="w-4.5 h-4.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-            </svg>
+
+        <!-- Outstanding -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-20 h-20 bg-indigo-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+          <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Outstanding</p>
+          <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_outstanding) }}</p>
+          <p class="text-[10px] text-indigo-400 mt-1.5 font-medium">belum terbayar</p>
+          <div class="flex items-center gap-1.5 mt-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"/>
+            <span class="text-[10px] text-gray-400">{{ summary.total_unpaid }} sent</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-red-400 ml-1"/>
+            <span class="text-[10px] text-gray-400">{{ summary.total_invoices - (summary.total_invoices - (summary.total_unpaid ?? 0)) }} unpaid</span>
           </div>
-          <p class="text-[11px] text-gray-400 font-medium">Client Aktif</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ clients.length }}</p>
-          <p class="text-[10px] text-gray-300 mt-1">{{ summary.total_invoices }} total invoice</p>
-          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Client yang punya minimal 1 invoice</p>
         </div>
 
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div class="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center mb-3">
-            <svg class="w-4.5 h-4.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+        <!-- Total Paid -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+          <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Total Lunas</p>
+          <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_paid_amount) }}</p>
+          <p class="text-[10px] text-emerald-500 mt-1.5 font-medium">sudah dibayarkan</p>
+          <div class="flex items-center gap-1.5 mt-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
+            <span class="text-[10px] text-gray-400">{{ clients.reduce((s,c)=>s+(c.paid_count??0),0) }} invoice paid</span>
           </div>
-          <p class="text-[11px] text-gray-400 font-medium">Menunggu Bayar</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ summary.total_unpaid }}</p>
-          <p class="text-[10px] text-amber-500 mt-1">invoice sent (belum due)</p>
-          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Invoice <strong>Sent</strong> yang belum melewati due date</p>
         </div>
 
-        <div class="rounded-2xl border shadow-sm p-4"
-          :class="summary.total_overdue > 0 ? 'bg-red-50/60 border-red-100' : 'bg-white border-gray-100'">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
-            :class="summary.total_overdue > 0 ? 'bg-red-100' : 'bg-gray-100'">
-            <svg class="w-4.5 h-4.5" :class="summary.total_overdue > 0 ? 'text-red-500' : 'text-gray-400'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
+        <!-- Overdue -->
+        <div class="rounded-2xl border shadow-sm p-4 relative overflow-hidden"
+          :class="summary.total_overdue > 0 ? 'bg-red-50/70 border-red-100' : 'bg-white border-gray-100'">
+          <div class="absolute top-0 right-0 w-20 h-20 rounded-full -translate-y-8 translate-x-8 opacity-60"
+            :class="summary.total_overdue > 0 ? 'bg-red-100' : 'bg-gray-50'"/>
+          <p class="text-[11px] font-semibold uppercase tracking-wide"
+            :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">Jatuh Tempo</p>
+          <p class="text-xl font-bold mt-1.5"
+            :class="summary.total_overdue > 0 ? 'text-red-600' : 'text-gray-900'">{{ summary.total_overdue }}</p>
+          <p class="text-[10px] mt-1.5 font-medium"
+            :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-300'">invoice overdue</p>
+          <div class="flex items-center gap-1.5 mt-2">
+            <span class="w-1.5 h-1.5 rounded-full" :class="summary.total_overdue > 0 ? 'bg-red-400' : 'bg-gray-200'"/>
+            <span class="text-[10px]" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">
+              {{ summary.total_overdue > 0 ? 'perlu tindakan segera' : 'semua aman' }}
+            </span>
           </div>
-          <p class="text-[11px] font-medium mb-0" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">Jatuh Tempo</p>
-          <p class="text-2xl font-bold mt-0.5" :class="summary.total_overdue > 0 ? 'text-red-600' : 'text-gray-900'">
-            {{ summary.total_overdue }}
-          </p>
-          <p class="text-[10px] mt-1" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-300'">invoice overdue</p>
-          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Invoice <strong>Sent/Unpaid</strong> yang sudah lewat due date</p>
         </div>
 
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
-            <svg class="w-4.5 h-4.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+        <!-- Client & Frozen -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-20 h-20 bg-sky-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+          <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Client Aktif</p>
+          <p class="text-xl font-bold text-gray-900 mt-1.5">{{ clients.length }}</p>
+          <p class="text-[10px] text-gray-400 mt-1.5 font-medium">{{ summary.total_invoices }} total invoice</p>
+          <div class="flex items-center gap-1.5 mt-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-400"/>
+            <span class="text-[10px] text-gray-400">{{ summary.total_frozen ?? 0 }} frozen</span>
           </div>
-          <p class="text-[11px] text-gray-400 font-medium">Outstanding</p>
-          <p class="text-base font-bold text-gray-900 mt-0.5 truncate">{{ fmtShort(summary.total_outstanding) }}</p>
-          <p class="text-[10px] text-blue-400 mt-1">belum terbayar</p>
-          <p class="text-[9px] text-gray-300 mt-1.5 italic">💡 Total Rp dari <strong>Sent + Unpaid</strong> · semua yang belum terbayar</p>
         </div>
+
       </div>
 
-      <!-- Search + Filter -->
-      <div class="flex flex-col sm:flex-row gap-3">
+      <!-- Search + Filter + Sort -->
+      <div class="flex flex-col sm:flex-row gap-2.5">
         <div class="relative flex-1">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
             fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,25 +115,43 @@
           <input v-model="search" type="text" placeholder="Cari client, kota, PIC..."
             class="w-full pl-9 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 shadow-sm"/>
         </div>
-        <div class="flex items-center gap-1.5 flex-wrap">
-          <button v-for="f in filterOptions" :key="f.value" @click="statusFilter = f.value"
-            class="px-3 py-2 text-xs font-medium rounded-xl transition-colors whitespace-nowrap"
-            :class="statusFilter === f.value
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'">
-            {{ f.label }}
-          </button>
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1 bg-white border border-gray-200 rounded-xl shadow-sm p-1">
+            <button v-for="f in filterOptions" :key="f.value" @click="statusFilter = f.value"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+              :class="statusFilter === f.value
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'">
+              {{ f.label }}
+            </button>
+          </div>
+          <div class="relative">
+            <select v-model="sortBy"
+              class="appearance-none pl-3 pr-7 py-2 text-xs font-medium bg-white border border-gray-200 rounded-xl shadow-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer">
+              <option value="name">A–Z</option>
+              <option value="outstanding">Outstanding</option>
+              <option value="overdue">Overdue</option>
+              <option value="last_invoice">Invoice Terbaru</option>
+              <option value="total">Total Lifetime</option>
+            </select>
+            <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
         </div>
       </div>
 
       <!-- Empty filtered -->
-      <div v-if="filteredClients.length === 0 && clients.length > 0"
-        class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-        <svg class="w-8 h-8 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <p class="text-gray-400 text-sm">Tidak ada client yang sesuai filter.</p>
+      <div v-if="sortedClients.length === 0 && clients.length > 0"
+        class="bg-white rounded-2xl border border-gray-100 shadow-sm p-14 text-center">
+        <div class="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
+          <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </div>
+        <p class="text-gray-500 text-sm font-medium">Tidak ada client yang sesuai filter</p>
         <button @click="search = ''; statusFilter = 'all'"
           class="mt-2 text-xs text-indigo-500 hover:underline">
           Reset filter
@@ -134,17 +161,24 @@
       <!-- Empty base -->
       <div v-else-if="clients.length === 0"
         class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-        <p class="text-gray-400 text-sm">Belum ada client aktif.</p>
+        <div class="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-7 h-7 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <p class="text-gray-500 text-sm font-semibold">Belum ada client aktif</p>
+        <p class="text-gray-400 text-xs mt-1">Tambahkan client dan buat invoice pertama.</p>
       </div>
 
       <!-- Client cards grid -->
       <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <div v-for="client in filteredClients" :key="client.id"
-          class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div v-for="client in sortedClients" :key="client.id"
+          class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
 
           <!-- Card header -->
           <div class="px-5 pt-5 pb-4">
-            <div class="flex items-start gap-3">
+            <div class="flex items-start gap-3.5">
               <!-- Avatar -->
               <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-base shadow-sm"
                 :class="avatarColor(client.company_name)">
@@ -152,81 +186,101 @@
               </div>
               <div class="min-w-0 flex-1">
                 <div class="flex items-start justify-between gap-2">
-                  <h3 class="font-semibold text-gray-900 text-sm leading-snug truncate">{{ client.company_name }}</h3>
-                  <span v-if="client.overdue_count"
-                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold bg-red-100 text-red-600 shrink-0">
-                    ⚠ {{ client.overdue_count }}
-                  </span>
+                  <h3 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-1">{{ client.company_name }}</h3>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <span v-if="client.overdue_count"
+                      class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-bold bg-red-100 text-red-600">
+                      <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                      </svg>
+                      {{ client.overdue_count }}
+                    </span>
+                  </div>
                 </div>
                 <div class="flex items-center gap-1.5 mt-1 flex-wrap">
-                  <span v-if="client.category" class="text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">
+                  <span v-if="client.category"
+                    class="text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">
                     {{ client.category.name }}
                   </span>
                   <span v-if="client.city" class="text-[10px] text-gray-400">{{ client.city }}</span>
                 </div>
-                <p v-if="client.pic" class="text-[11px] text-gray-400 mt-1 truncate">{{ client.pic }}</p>
+                <p v-if="client.pic" class="text-[11px] text-gray-400 mt-0.5 truncate">{{ client.pic }}</p>
               </div>
             </div>
 
-            <!-- Status pills -->
-            <div class="flex flex-wrap gap-1.5 mt-3.5">
+            <!-- Status pills row -->
+            <div class="flex flex-wrap gap-1 mt-3.5">
               <span v-if="client.paid_count"
-                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-                Paid {{ client.paid_count }}
+                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
+                {{ client.paid_count }} Paid
               </span>
               <span v-if="client.sent_count"
-                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-600 ring-1 ring-blue-200">
-                Sent {{ client.sent_count }}
+                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-400"/>
+                {{ client.sent_count }} Sent
               </span>
               <span v-if="client.unpaid_count"
-                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 text-red-600 ring-1 ring-red-200">
-                Unpaid {{ client.unpaid_count }}
+                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-400"/>
+                {{ client.unpaid_count }} Unpaid
               </span>
               <span v-if="client.draft_count"
-                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-gray-100 text-gray-500">
-                Draft {{ client.draft_count }}
+                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">
+                <span class="w-1.5 h-1.5 rounded-full bg-gray-300"/>
+                {{ client.draft_count }} Draft
+              </span>
+              <span v-if="client.frozen_count"
+                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"/>
+                {{ client.frozen_count }} Frozen
               </span>
               <span v-if="!totalInvoices(client)" class="text-[10px] text-gray-300 italic">Belum ada invoice</span>
             </div>
           </div>
 
+          <!-- Divider -->
+          <div class="h-px bg-gray-50 mx-5"/>
+
           <!-- Financial info -->
-          <div class="px-5 pb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-50 pt-3.5">
+          <div class="px-5 py-3.5 grid grid-cols-2 gap-x-4 gap-y-2.5">
             <div>
-              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Outstanding</p>
+              <p class="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Outstanding</p>
               <p class="text-sm font-bold mt-0.5" :class="client.unpaid_amount > 0 ? 'text-red-500' : 'text-gray-300'">
                 {{ client.unpaid_amount > 0 ? fmtShort(client.unpaid_amount) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Total Lifetime</p>
+              <p class="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Total Lifetime</p>
               <p class="text-sm font-bold text-gray-700 mt-0.5">
                 {{ client.total_amount > 0 ? fmtShort(client.total_amount) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Invoice Terakhir</p>
-              <p class="text-[12px] font-medium text-gray-600 mt-0.5">
+              <p class="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Invoice Terakhir</p>
+              <p class="text-[11px] font-medium text-gray-600 mt-0.5">
                 {{ client.invoices_max_issue_date ? fmtDate(client.invoices_max_issue_date) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Jenis Produk</p>
-              <p class="text-[12px] font-medium text-gray-600 mt-0.5">{{ client.product_type_count || '—' }}</p>
+              <p class="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Jenis Produk</p>
+              <p class="text-[11px] font-medium text-gray-600 mt-0.5">
+                {{ client.product_type_count ? `${client.product_type_count} kategori` : '—' }}
+              </p>
             </div>
           </div>
 
           <!-- Actions -->
           <div class="mt-auto border-t border-gray-50 px-4 py-3 flex items-center gap-2">
             <Link :href="route('invoices.create', { client_id: client.id })"
-              class="flex items-center justify-center gap-1 flex-1 text-[12px] px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors font-medium">
+              class="flex items-center justify-center gap-1.5 flex-1 text-[11px] px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors font-semibold">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
               </svg>
               Buat Invoice
             </Link>
             <Link :href="route('invoices.client', client.id)"
-              class="flex items-center justify-center gap-1 flex-1 text-[12px] px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors font-medium">
+              class="flex items-center justify-center gap-1.5 flex-1 text-[11px] px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors font-semibold">
               Lihat Invoice
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
@@ -244,15 +298,13 @@
       <div v-if="showExport" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showExport = false"/>
         <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-
-          <!-- Modal header -->
           <div class="flex items-center justify-between mb-5">
             <div>
               <h3 class="text-base font-semibold text-gray-900">Export Invoice</h3>
               <p class="text-xs text-gray-400 mt-0.5">Download laporan ke format XLSX</p>
             </div>
             <button @click="showExport = false"
-              class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+              class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
               </svg>
@@ -260,8 +312,6 @@
           </div>
 
           <div class="space-y-4">
-
-            <!-- Rentang bulan -->
             <div>
               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Rentang Bulan</p>
               <div class="grid grid-cols-2 gap-2">
@@ -292,7 +342,6 @@
               </div>
             </div>
 
-            <!-- Filter status -->
             <div>
               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status Invoice</p>
               <div class="flex flex-wrap gap-1.5">
@@ -309,7 +358,6 @@
                 {{ exportStatuses.length === 0 ? 'Semua status akan di-export' : exportStatuses.length + ' status dipilih' }}
               </p>
             </div>
-
           </div>
 
           <div class="flex gap-2 mt-6">
@@ -371,15 +419,15 @@ import { ref, computed } from 'vue'
 
 const props = defineProps({ clients: Array, summary: Object })
 
-// Filter
-const search = ref('')
+const search      = ref('')
 const statusFilter = ref('all')
+const sortBy      = ref('name')
 
 const filterOptions = [
   { value: 'all',     label: 'Semua' },
-  { value: 'overdue', label: 'Ada Overdue' },
-  { value: 'unpaid',  label: 'Ada Unpaid' },
-  { value: 'sent',    label: 'Ada Sent' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'unpaid',  label: 'Unpaid' },
+  { value: 'sent',    label: 'Sent' },
 ]
 
 const filteredClients = computed(() => {
@@ -388,14 +436,27 @@ const filteredClients = computed(() => {
     const q = search.value.toLowerCase()
     list = list.filter(c =>
       c.company_name.toLowerCase().includes(q) ||
-      (c.city  || '').toLowerCase().includes(q) ||
-      (c.pic   || '').toLowerCase().includes(q)
+      (c.city || '').toLowerCase().includes(q) ||
+      (c.pic  || '').toLowerCase().includes(q)
     )
   }
   if (statusFilter.value === 'overdue') list = list.filter(c => c.overdue_count > 0)
   if (statusFilter.value === 'unpaid')  list = list.filter(c => c.unpaid_count  > 0)
   if (statusFilter.value === 'sent')    list = list.filter(c => c.sent_count    > 0)
   return list
+})
+
+const sortedClients = computed(() => {
+  const list = [...filteredClients.value]
+  if (sortBy.value === 'outstanding')  return list.sort((a, b) => b.unpaid_amount - a.unpaid_amount)
+  if (sortBy.value === 'overdue')      return list.sort((a, b) => b.overdue_count - a.overdue_count)
+  if (sortBy.value === 'total')        return list.sort((a, b) => b.total_amount - a.total_amount)
+  if (sortBy.value === 'last_invoice') return list.sort((a, b) => {
+    const da = a.invoices_max_issue_date ? new Date(a.invoices_max_issue_date) : new Date(0)
+    const db = b.invoices_max_issue_date ? new Date(b.invoices_max_issue_date) : new Date(0)
+    return db - da
+  })
+  return list.sort((a, b) => a.company_name.localeCompare(b.company_name))
 })
 
 // Reset Demo
@@ -407,20 +468,20 @@ function doReset() {
 }
 
 // Export
-const showExport    = ref(false)
-const now           = new Date()
-const thisMonth     = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-const exportFrom    = ref(thisMonth)
-const exportTo      = ref(thisMonth)
-const exportStatuses = ref([])
+const showExport      = ref(false)
+const now             = new Date()
+const thisMonth       = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+const exportFrom      = ref(thisMonth)
+const exportTo        = ref(thisMonth)
+const exportStatuses  = ref([])
 
 const exportStatusOptions = [
-  { value: 'paid',    label: 'Lunas',        activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
-  { value: 'sent',    label: 'Terkirim',     activeClass: 'border-blue-400 bg-blue-50 text-blue-700' },
-  { value: 'unpaid',  label: 'Belum Bayar',  activeClass: 'border-red-400 bg-red-50 text-red-700' },
-  { value: 'draft',   label: 'Draft',        activeClass: 'border-gray-400 bg-gray-100 text-gray-700' },
-  { value: 'frozen',  label: 'Dibekukan',    activeClass: 'border-slate-400 bg-slate-100 text-slate-700' },
-  { value: 'carried', label: 'Carry',        activeClass: 'border-orange-400 bg-orange-50 text-orange-700' },
+  { value: 'paid',    label: 'Lunas',       activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
+  { value: 'sent',    label: 'Terkirim',    activeClass: 'border-blue-400 bg-blue-50 text-blue-700' },
+  { value: 'unpaid',  label: 'Belum Bayar', activeClass: 'border-red-400 bg-red-50 text-red-700' },
+  { value: 'draft',   label: 'Draft',       activeClass: 'border-gray-400 bg-gray-100 text-gray-700' },
+  { value: 'frozen',  label: 'Dibekukan',   activeClass: 'border-slate-400 bg-slate-100 text-slate-700' },
+  { value: 'carried', label: 'Carry',       activeClass: 'border-orange-400 bg-orange-50 text-orange-700' },
 ]
 
 function toggleExportStatus(val) {
@@ -438,10 +499,8 @@ function doExport() {
 
 // Helpers
 const totalInvoices = c =>
-  (c.draft_count ?? 0) + (c.sent_count ?? 0) + (c.paid_count ?? 0) + (c.unpaid_count ?? 0)
-
-const formatCurrency = v =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
+  (c.draft_count ?? 0) + (c.sent_count ?? 0) + (c.paid_count ?? 0) +
+  (c.unpaid_count ?? 0) + (c.frozen_count ?? 0)
 
 function fmtShort(v) {
   if (!v) return 'Rp 0'

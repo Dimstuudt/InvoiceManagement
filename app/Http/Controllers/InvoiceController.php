@@ -43,6 +43,7 @@ class InvoiceController extends Controller
                 'invoices as sent_count'    => fn($q) => $q->where('status', 'sent'),
                 'invoices as paid_count'    => fn($q) => $q->where('status', 'paid'),
                 'invoices as unpaid_count'  => fn($q) => $q->where('status', 'unpaid'),
+                'invoices as frozen_count'  => fn($q) => $q->where('status', 'frozen'),
                 'invoices as overdue_count' => fn($q) => $q->whereNotIn('status', ['paid', 'frozen'])->where('due_date', '<', now()),
             ])
             ->withMax('invoices', 'issue_date')
@@ -59,7 +60,9 @@ class InvoiceController extends Controller
             'total_outstanding' => $clients->sum('unpaid_amount'),
             'total_overdue'     => $clients->sum('overdue_count'),
             'total_unpaid'      => $clients->sum('sent_count'),
-            'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->unpaid_count)),
+            'total_frozen'      => $clients->sum('frozen_count'),
+            'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->unpaid_count + $c->frozen_count)),
+            'total_paid_amount' => $clients->sum(fn($c) => (float) $c->invoices->where('status', 'paid')->sum(fn($inv) => $inv->total)),
         ];
 
         return Inertia::render('Invoices/Index', compact('clients', 'summary'));

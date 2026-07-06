@@ -190,6 +190,7 @@ class InvoiceController extends Controller
     {
         $currentYear = now()->year;
         $year        = $request->integer('year', $currentYear);
+        $month       = $request->integer('month', 0); // 0 = semua bulan
 
         $years = Invoice::selectRaw('YEAR(issue_date) as yr')
             ->where('is_demo', false)
@@ -202,25 +203,81 @@ class InvoiceController extends Controller
             $years = collect([$currentYear]);
         }
 
-        $invoices = Invoice::with(['client', 'projectCategory', 'user'])
-            ->withSum('items', 'amount')
+        // nextSeq pakai filter identik dengan generateNumber() agar hasilnya sama
+        $nextSeq = (Invoice::whereYear('issue_date', $year)
+            ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
+            ->where('is_demo', false)
+            ->get()
+            ->map(fn($inv) => (int) (explode('/', $inv->invoice_number)[0] ?? 0))
+            ->filter(fn($s) => $s > 0)
+            ->max() ?? 0) + 1;
+
+        // Bulan yang punya invoice di tahun ini
+        $availableMonths = Invoice::selectRaw('MONTH(issue_date) as m')
             ->whereYear('issue_date', $year)
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
+            ->groupBy('m')
+            ->orderBy('m')
+            ->pluck('m')
+            ->values();
+
+        $invoices = Invoice::with([
+                'client', 'projectCategory', 'items',
+                'carriedFrom.items',
+                'carriedFrom.carriedFrom.items',
+                'prepayChain.items',
+                'reaktivasiChain.items',
+            ])
+            ->whereYear('issue_date', $year)
+            ->where('invoice_number', 'regexp', '^[0-9]+/')
+            ->where('is_demo', false)
+            ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
             ->get()
             ->map(function ($inv) {
                 $parts    = explode('/', $inv->invoice_number);
                 $inv->seq = (int) ($parts[0] ?? 0);
+
+                // Pilih grand total yang tepat sesuai tipe chain
+                if ($inv->carried_from_id) {
+                    // Carry HEAD: total sendiri + semua tunggakan di chain carry
+                    $grandTotal = $inv->grand_total;
+                } elseif ($inv->is_prepay && ! $inv->prepay_chain_id) {
+                    // Prepay HEAD: total sendiri + semua periode prepay
+                    $grandTotal = $inv->prepay_grand_total;
+                } elseif ($inv->is_reaktivasi && ! $inv->reaktivasi_chain_id) {
+                    // Reaktivasi HEAD: total sendiri + semua periode reaktivasi
+                    $grandTotal = $inv->reaktivasi_grand_total;
+                } else {
+                    $grandTotal = $inv->total;
+                }
+
+                $inv->setAttribute('computed_total', $grandTotal);
+                $inv->setAttribute('is_overdue',
+                    ! in_array($inv->status, ['paid', 'frozen'])
+                    && $inv->due_date && $inv->due_date->lt(now())
+                );
                 return $inv;
             })
             ->filter(fn($inv) => $inv->seq > 0)
             ->sortBy('seq')
             ->values();
 
+        $summary = [
+            'total_nilai'       => $invoices->sum('computed_total'),
+            'total_lunas'       => $invoices->where('status', 'paid')->sum('computed_total'),
+            'total_outstanding' => $invoices->whereIn('status', ['sent', 'unpaid'])->sum('computed_total'),
+            'count_overdue'     => $invoices->where('is_overdue', true)->count(),
+        ];
+
         return Inertia::render('Invoices/Numbering', [
-            'invoices' => $invoices,
-            'year'     => $year,
-            'years'    => $years,
+            'invoices'        => $invoices->map(fn($inv) => $inv->makeHidden(['items', 'carried_from', 'prepay_chain', 'reaktivasi_chain'])),
+            'year'            => $year,
+            'month'           => $month,
+            'years'           => $years,
+            'availableMonths' => $availableMonths,
+            'nextSeq'         => $nextSeq,
+            'summary'         => $summary,
         ]);
     }
 
@@ -730,7 +787,7 @@ class InvoiceController extends Controller
     {
         $invoice->update(['is_marked' => ! $invoice->is_marked]);
         ActivityLogger::log($invoice->is_marked ? 'invoice.marked' : 'invoice.unmarked', $invoice);
-        return back()->with('success', $invoice->is_marked ? 'Invoice ditandai.' : 'Tanda dihapus.');
+        return back()->with('success', $invoice->is_marked ? 'Invoice masuk antrean kirim otomatis.' : 'Antrean kirim dibatalkan.');
     }
 
     public function updateInterval(Request $request, Invoice $invoice)
@@ -883,6 +940,9 @@ class InvoiceController extends Controller
 
     public function carry(Invoice $invoice)
     {
+        if (preg_match('/^[CRPF]-/', $invoice->invoice_number)) {
+            return back()->with('error', 'Carry hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
+        }
         if (!in_array($invoice->status, ['draft', 'sent', 'unpaid'])) {
             return back()->with('error', 'Hanya invoice draft, sent, atau unpaid yang bisa di-carry.');
         }
@@ -967,6 +1027,7 @@ class InvoiceController extends Controller
 
     public function freeze(Invoice $invoice)
     {
+        abort_if(preg_match('/^[CRPF]-/', $invoice->invoice_number), 403, 'Freeze hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
         abort_if(!in_array($invoice->status, ['draft', 'sent']), 403, 'Hanya draft atau sent yang bisa dibekukan.');
         $invoice->update(['status' => 'frozen']);
         ActivityLogger::log('invoice.frozen', $invoice);
@@ -1045,6 +1106,9 @@ class InvoiceController extends Controller
 
     public function reactivate(Invoice $invoice)
     {
+        if (preg_match('/^[CRPF]-/', $invoice->invoice_number)) {
+            return back()->with('error', 'Reaktivasi hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
+        }
         if ($invoice->status !== 'unpaid') {
             return back()->with('error', 'Hanya invoice unpaid yang bisa direaktivasi.');
         }

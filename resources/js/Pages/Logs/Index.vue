@@ -494,8 +494,8 @@ function describe(log) {
     case 'invoice.saved':             return `Perubahan item & total disimpan pada ${s}`
     case 'invoice.status_changed':    return `Status ${s} berubah dari ${d.from ?? '?'} → ${d.to ?? '?'}${d.note ? ' (' + d.note + ')' : ''}`
     case 'invoice.email_sent':        return `Invoice ${s} dikirim ke ${Array.isArray(d.to) ? d.to.join(', ') : d.to}`
-    case 'invoice.marked':            return `Invoice ${s} ditandai untuk batch kirim`
-    case 'invoice.unmarked':          return `Tanda batch dihapus dari ${s}`
+    case 'invoice.marked':            return `Invoice ${s} masuk antrean kirim otomatis`
+    case 'invoice.unmarked':          return `Antrean kirim dibatalkan dari ${s}`
     case 'invoice.recurring_created': return `Invoice perpanjangan ${s} dibuat dari ${d.parent ?? '?'}`
     case 'invoice.downloaded':        return `PDF ${s} diunduh`
     case 'invoice.printed':           return `${s} dibuka untuk print`

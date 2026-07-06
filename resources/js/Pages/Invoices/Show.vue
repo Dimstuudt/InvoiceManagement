@@ -119,7 +119,7 @@
               <div v-if="moreMenuOpen"
                 class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                 <!-- Carry (utang ke periode berikutnya) -->
-                <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.children?.length"
+                <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.children?.length && !isChainMember"
                   @click="carryInvoice(); moreMenuOpen = false"
                   class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors text-left">
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -128,7 +128,7 @@
                   Carry (Utang)
                 </button>
                 <!-- Freeze -->
-                <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id"
+                <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id && !isChainMember"
                   @click="freezeInvoice(); moreMenuOpen = false"
                   class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-sky-600 hover:bg-sky-50 transition-colors text-left">
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -142,7 +142,7 @@
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
-                  {{ invoice.is_marked ? 'Hapus Tanda' : 'Tandai' }}
+                  {{ invoice.is_marked ? 'Batal Antre' : 'Antre Kirim' }}
                 </button>
                 <div class="my-1 border-t border-gray-100"/>
                 <!-- Hapus -->
@@ -166,11 +166,27 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
           </svg>
           <p class="text-xs text-amber-700 font-medium">
-            Invoice ini sedang ditandai untuk batch kirim. Matikan tanda centang terlebih dahulu jika ingin mengedit.
+            Invoice ini sedang dalam antrean kirim otomatis. Batalkan antrean terlebih dahulu jika ingin mengedit.
           </p>
           <button @click="toggleMark" class="ml-auto text-xs text-amber-600 hover:text-amber-800 underline font-medium shrink-0">
-            Hapus tanda
+            Batal Antre
           </button>
+        </div>
+
+        <!-- NOTIF CHAIN MEMBER -->
+        <div v-if="isChainMember"
+          class="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+          </svg>
+          <p class="text-xs text-slate-600 font-medium">
+            Invoice ini adalah bagian dari chain — aksi seperti carry dan freeze dikelola dari invoice utama.
+          </p>
+          <Link v-if="chainHeadId"
+            :href="route('invoices.show', chainHeadId)"
+            class="ml-auto text-xs text-slate-500 hover:text-slate-700 underline font-medium shrink-0">
+            Lihat invoice utama
+          </Link>
         </div>
 
         <!-- NOTIF CARRIED -->
@@ -641,6 +657,14 @@ const afterDiscount = computed(() => Math.max(0, subtotal.value - discountAmount
 const dppBase       = computed(() => localIsDpp.value ? afterDiscount.value * (11 / 12) : afterDiscount.value)
 const taxAmount     = computed(() => localTaxEnabled.value && localTaxPct.value ? dppBase.value * (localTaxPct.value / 100) : 0)
 const grandTotal    = computed(() => afterDiscount.value + taxAmount.value)
+
+const isChainMember = computed(() => /^[CRPF]-/.test(props.invoice.invoice_number))
+const chainHeadId   = computed(() =>
+  props.invoice.carried_from_id
+  ?? props.invoice.prepay_chain_id
+  ?? props.invoice.reaktivasi_chain_id
+  ?? null
+)
 
 const isOverdue = computed(() => {
   if (['paid','frozen','carried'].includes(props.invoice.status)) return false

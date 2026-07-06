@@ -151,7 +151,7 @@
                       </button>
                       <span v-else
                         class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                        title="Tandai dulu untuk kirim email">
+                        title="Antre kirim dulu untuk kirim email">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                         </svg>
@@ -270,7 +270,7 @@
                   </button>
                   <span v-else
                     class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                    title="Tandai dulu untuk kirim email">
+                    title="Antre kirim dulu untuk kirim email">
                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                     </svg>

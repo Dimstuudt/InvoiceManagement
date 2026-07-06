@@ -347,7 +347,7 @@
                                 <span v-if="invoice.is_marked"
                                   class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded shrink-0">
                                   <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                                  Ditandai
+                                  Dalam Antrean
                                 </span>
                               </div>
                               <p class="text-xs text-gray-500 mt-1">{{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span> {{ fmtDateShort(invoice.due_date) }}</p>
@@ -375,7 +375,7 @@
                                   class="px-2 py-1 text-[10px] font-semibold rounded-md transition-colors flex items-center gap-0.5"
                                   :class="invoice.is_marked ? 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'">
                                   <svg class="w-2.5 h-2.5" :fill="invoice.is_marked ? 'currentColor' : 'none'" viewBox="0 0 20 20" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                                  {{ invoice.is_marked ? 'Tandai ✓' : 'Tandai' }}
+                                  {{ invoice.is_marked ? 'Antre ✓' : 'Antre Kirim' }}
                                 </button>
                                 <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
                                   <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
@@ -490,7 +490,7 @@
                     <span v-if="invoice.is_marked"
                       class="inline-flex items-center gap-0.5 mt-1 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded">
                       <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                      Ditandai
+                      Dalam Antrean
                     </span>
                     <p class="text-[10px] text-gray-300 mt-0.5">Dibuat {{ fmtDateTime(invoice.created_at) }}</p>
                   </div>
@@ -1070,7 +1070,7 @@ function submitResume() {
 function toggleMark(invoice) {
   router.patch(route('invoices.mark', invoice.id), {}, {
     preserveScroll: true,
-    onSuccess: () => toast(invoice.is_marked ? 'Tanda dihapus' : 'Invoice ditandai untuk auto-kirim'),
+    onSuccess: () => toast(invoice.is_marked ? 'Antrean dibatalkan' : 'Invoice masuk antrean kirim otomatis'),
   })
 }
 

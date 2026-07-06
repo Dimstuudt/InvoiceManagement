@@ -163,7 +163,7 @@
             <div class="flex-1">
               <p class="text-sm font-semibold text-gray-800">Kirim Email Invoice Otomatis</p>
               <p class="text-xs text-gray-500 mt-1 leading-relaxed">
-                Invoice yang <span class="font-medium text-gray-700">ditandai (is_marked ✓)</span> dan
+                Invoice yang <span class="font-medium text-gray-700">dalam antrean kirim (is_marked ✓)</span> dan
                 <span class="font-medium text-gray-700">issue_date sudah lewat atau hari ini</span> →
                 generate PDF, kirim via Brevo, status jadi
                 <span class="font-mono text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded">sent</span>.

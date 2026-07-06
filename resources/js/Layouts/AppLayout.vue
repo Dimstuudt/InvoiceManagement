@@ -230,7 +230,7 @@
       </header>
 
       <!-- Content -->
-      <main class="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-100 scroll-light">
+      <main ref="mainEl" class="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-100 scroll-light">
         <slot />
       </main>
 
@@ -242,6 +242,8 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 
+const mainEl = ref(null);
+
 defineProps({ title: { type: String, default: '' } });
 
 const page        = usePage();
@@ -251,8 +253,11 @@ const userInitial = computed(() =>
   page.props.auth.user?.name?.charAt(0).toUpperCase() ?? '?'
 );
 
-// Tutup sidebar otomatis saat navigasi (mobile)
-watch(() => page.url, () => { sidebarOpen.value = false; });
+// Reset scroll ke atas + tutup sidebar saat navigasi
+watch(() => page.url, () => {
+  sidebarOpen.value = false;
+  if (mainEl.value) mainEl.value.scrollTop = 0;
+});
 
 function closeSidebarOnMobile() {
   if (window.innerWidth < 1024) sidebarOpen.value = false;

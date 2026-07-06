@@ -101,6 +101,7 @@ class CronController extends Controller
             'tax_percentage'      => 0,
             'interval_months'     => 1,
             'with_signature'      => true,
+            'is_demo'             => true,
         ];
 
         $rand = strtoupper(substr(md5(uniqid()), 0, 5));

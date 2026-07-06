@@ -57,6 +57,8 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('clients', ClientController::class)->except(['show']);
 
+    Route::get('invoices/number-preview', [InvoiceController::class, 'numberPreview'])->name('invoices.number-preview');
+    Route::get('invoices/numbering', [InvoiceController::class, 'numbering'])->name('invoices.numbering');
     Route::get('invoices/export', [InvoiceController::class, 'export'])->name('invoices.export');
     Route::get('invoices/schedule', [InvoiceController::class, 'schedule'])->name('invoices.schedule');
     Route::get('invoices/clients/{client}', [InvoiceController::class, 'clientInvoices'])->name('invoices.client');

@@ -9,7 +9,7 @@ class Invoice extends Model
     protected $fillable = [
         'user_id', 'client_id', 'project_category_id', 'document_issuer_id',
         'bank_account_id', 'signature_id', 'email_template_id', 'with_signature', 'spk_number',
-        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked',
+        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked', 'is_demo',
         'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
         'interval_months', 'parent_invoice_id', 'carried_from_id',
         'is_reaktivasi', 'reaktivasi_chain_id', 'invoice_type',
@@ -21,6 +21,7 @@ class Invoice extends Model
         'due_date'           => 'date',
         'with_signature'     => 'boolean',
         'is_marked'          => 'boolean',
+        'is_demo'            => 'boolean',
         'is_dpp'             => 'boolean',
         'is_reaktivasi'      => 'boolean',
         'is_prepay'          => 'boolean',
@@ -126,12 +127,13 @@ class Invoice extends Model
         $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
         $roman       = $romanMonths[(int) $issueDate->format('n') - 1];
 
-        // Sequence global per tahun — semua tipe share counter yang sama
+        // Sequence global per tahun — semua tipe share counter yang sama, exclude demo
         $maxSeq = static::whereYear('issue_date', $year)
             ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
+            ->where('is_demo', false)
             ->get()
             ->map(fn($inv) => (int) explode('/', $inv->invoice_number)[0])
-            ->filter(fn($n) => $n > 0) // exclude C-xxx dan R-xxx (cast ke 0)
+            ->filter(fn($n) => $n > 0)
             ->max() ?? 0;
 
         $seq = str_pad($maxSeq + 1, 3, '0', STR_PAD_LEFT);

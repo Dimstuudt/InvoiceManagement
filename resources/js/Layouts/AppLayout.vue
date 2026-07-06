@@ -39,7 +39,7 @@
           Dashboard
         </Link>
 
-        <Link :href="route('invoices.index')" :class="navClass(route('invoices.index'), ['/invoices/schedule', '/invoices/broadcast', '/invoices/clients'])" @click="closeSidebarOnMobile">
+        <Link :href="route('invoices.index')" :class="navClass(route('invoices.index'), ['/invoices/schedule', '/invoices/broadcast', '/invoices/clients', '/invoices/numbering'])" @click="closeSidebarOnMobile">
           <svg class="w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -52,6 +52,13 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
           </svg>
           Email Schedule Invoice
+        </Link>
+
+        <Link :href="route('invoices.numbering')" :class="navClass(route('invoices.numbering'))" @click="closeSidebarOnMobile">
+          <svg class="w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+          </svg>
+          Urutan Nomor
         </Link>
 
         <Link :href="route('clients.index')" :class="navClass(route('clients.index'))" @click="closeSidebarOnMobile">

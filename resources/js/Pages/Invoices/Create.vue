@@ -23,7 +23,7 @@
 
           <div class="px-6 py-5 border-b border-gray-100">
             <h2 class="text-base font-semibold text-gray-900">Buat Invoice Baru</h2>
-            <p class="text-sm text-gray-400 mt-0.5">Nomor invoice digenerate otomatis setelah disimpan</p>
+            <p class="text-sm text-gray-400 mt-0.5">Nomor invoice otomatis · urutan dapat diubah jika perlu</p>
           </div>
 
           <div class="px-6 py-6 space-y-5">
@@ -62,6 +62,76 @@
                 </label>
                 <input v-model="form.due_date" type="date" class="field" :class="form.errors.due_date && 'field-error'" />
                 <p v-if="form.errors.due_date" class="err">{{ form.errors.due_date }}</p>
+              </div>
+            </div>
+
+            <!-- Nomor Invoice Preview -->
+            <div class="border-t border-gray-100 pt-5">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Nomor Invoice</p>
+
+              <div v-if="!readyPreview" class="text-sm text-gray-400 italic">
+                Pilih Project Category dan Issue Date untuk pratinjau nomor.
+              </div>
+
+              <div v-else class="space-y-2">
+                <!-- Segmented number display -->
+                <div class="flex items-center flex-wrap gap-1.5">
+                  <div class="flex flex-col items-center gap-1">
+                    <input
+                      v-model.number="seqInput"
+                      type="number" min="1" max="9999"
+                      class="w-20 px-2 py-2 rounded-xl border-2 text-center font-mono text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                      :class="numState.available === false
+                        ? 'border-red-400 bg-red-50 text-red-700'
+                        : 'border-indigo-300 bg-indigo-50 text-indigo-800'"
+                    />
+                    <span class="text-xs text-gray-400">urutan</span>
+                  </div>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-700 text-sm font-semibold font-mono">{{ catCode }}</span>
+                    <span class="text-xs text-gray-400">kategori</span>
+                  </div>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono mb-5">INV</span>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono mb-5">MVC</span>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono">{{ issueMonth }}</span>
+                    <span class="text-xs text-gray-400">bulan</span>
+                  </div>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono">{{ issueYear }}</span>
+                    <span class="text-xs text-gray-400">tahun</span>
+                  </div>
+                </div>
+
+                <!-- Status -->
+                <div class="flex items-center gap-1.5 text-xs min-h-4">
+                  <template v-if="numState.loading">
+                    <svg class="w-3 h-3 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    <span class="text-gray-400">Mengecek ketersediaan...</span>
+                  </template>
+                  <template v-else-if="numState.available === true">
+                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span class="text-emerald-600 font-medium">{{ numState.number }} — tersedia</span>
+                  </template>
+                  <template v-else-if="numState.available === false">
+                    <svg class="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    <span class="text-red-600 font-medium">{{ numState.number }} — sudah digunakan tahun {{ issueYear }}</span>
+                  </template>
+                </div>
+
+                <p v-if="form.errors.invoice_number" class="err">{{ form.errors.invoice_number }}</p>
               </div>
             </div>
 
@@ -210,7 +280,8 @@
               class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-300 rounded-xl transition-colors bg-white">
               Batal
             </Link>
-            <button type="submit" :disabled="form.processing"
+            <button type="submit"
+              :disabled="form.processing || numState.loading || (readyPreview && numState.available === false)"
               class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">
               {{ form.processing ? 'Menyimpan...' : 'Simpan Invoice' }}
             </button>
@@ -225,7 +296,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, useForm } from '@inertiajs/vue3';
-import { watch } from 'vue';
+import { watch, computed, ref } from 'vue';
 
 const props = defineProps({
   clients: Array, projectCategories: Array,
@@ -233,7 +304,7 @@ const props = defineProps({
   signatures: Array, emailTemplates: Array, fromInvoice: Object,
 });
 
-const prefill      = props.fromInvoice ?? {};
+const prefill       = props.fromInvoice ?? {};
 const queryClientId = new URLSearchParams(window.location.search).get('client_id') ?? '';
 
 const form = useForm({
@@ -250,7 +321,60 @@ const form = useForm({
   status:              'draft',
   issue_date:          '',
   due_date:            '',
+  invoice_number:      '',
 });
+
+// ── Invoice number preview ──────────────────────────────────────
+const seqInput   = ref(null);
+const numState   = ref({ number: '', seq: null, available: null, loading: false });
+let   debounceTimer = null;
+
+const romanMonths  = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+const selectedCat  = computed(() => props.projectCategories.find(c => c.id == form.project_category_id));
+const catCode      = computed(() => selectedCat.value?.code ?? '???');
+const issueMonth   = computed(() => form.issue_date ? romanMonths[new Date(form.issue_date).getMonth()] : '?');
+const issueYear    = computed(() => form.issue_date ? new Date(form.issue_date).getFullYear() : '????');
+const readyPreview = computed(() => !!form.project_category_id && !!form.issue_date);
+
+async function fetchPreview(customSeq = null) {
+  if (!readyPreview.value) {
+    numState.value = { number: '', seq: null, available: null, loading: false };
+    form.invoice_number = '';
+    return;
+  }
+  numState.value = { ...numState.value, loading: true };
+  try {
+    const params = new URLSearchParams({
+      project_category_id: form.project_category_id,
+      issue_date:          form.issue_date,
+      invoice_type:        form.invoice_type,
+    });
+    if (customSeq !== null) params.set('seq', customSeq);
+    const res  = await fetch(`/invoices/number-preview?${params}`, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const data = await res.json();
+    numState.value = { ...data, loading: false };
+    if (customSeq === null) seqInput.value = data.seq;
+    form.invoice_number = data.number;
+  } catch {
+    numState.value = { ...numState.value, loading: false };
+  }
+}
+
+watch([() => form.project_category_id, () => form.issue_date], () => {
+  clearTimeout(debounceTimer);
+  fetchPreview();
+});
+
+watch(seqInput, (val) => {
+  if (val === numState.value?.seq) return;
+  clearTimeout(debounceTimer);
+  if (val && val >= 1) {
+    debounceTimer = setTimeout(() => fetchPreview(val), 400);
+  }
+});
+// ───────────────────────────────────────────────────────────────
 
 watch(() => form.issue_date, (val) => {
   if (!val) return;
@@ -259,11 +383,12 @@ watch(() => form.issue_date, (val) => {
   form.due_date = d.toISOString().slice(0, 10);
 });
 
-watch(() => form.invoice_type, () => {
-  form.interval_months = null;
-});
+watch(() => form.invoice_type, () => { form.interval_months = null; });
 
-function submit()      { form.post(route('invoices.store')); }
+function submit() {
+  if (readyPreview.value && numState.value.available === false) return;
+  form.post(route('invoices.store'));
+}
 </script>
 
 <style scoped>

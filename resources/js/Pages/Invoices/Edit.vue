@@ -55,6 +55,69 @@
               </div>
             </div>
 
+            <!-- Nomor Invoice -->
+            <div class="border-t border-gray-100 pt-5">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Nomor Invoice</p>
+              <div class="space-y-2">
+                <div class="flex items-center flex-wrap gap-1.5">
+                  <div class="flex flex-col items-center gap-1">
+                    <input
+                      v-model.number="seqInput"
+                      type="number" min="1" max="9999"
+                      class="w-20 px-2 py-2 rounded-xl border-2 text-center font-mono text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                      :class="numState.available === false
+                        ? 'border-red-400 bg-red-50 text-red-700'
+                        : 'border-indigo-300 bg-indigo-50 text-indigo-800'"
+                    />
+                    <span class="text-xs text-gray-400">urutan</span>
+                  </div>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-700 text-sm font-semibold font-mono">{{ catCode }}</span>
+                    <span class="text-xs text-gray-400">kategori</span>
+                  </div>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono mb-5">INV</span>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono mb-5">MVC</span>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono">{{ issueMonth }}</span>
+                    <span class="text-xs text-gray-400">bulan</span>
+                  </div>
+                  <span class="text-gray-300 text-xl pb-4">/</span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="px-3 py-2 bg-gray-100 rounded-xl text-gray-500 text-sm font-mono">{{ issueYear }}</span>
+                    <span class="text-xs text-gray-400">tahun</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 text-xs min-h-4">
+                  <template v-if="numState.loading">
+                    <svg class="w-3 h-3 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    <span class="text-gray-400">Mengecek...</span>
+                  </template>
+                  <template v-else-if="numState.available === true">
+                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span class="text-emerald-600 font-medium">{{ numState.number }} — tersedia</span>
+                  </template>
+                  <template v-else-if="numState.available === false">
+                    <svg class="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    <span class="text-red-600 font-medium">{{ numState.number }} — sudah digunakan</span>
+                  </template>
+                </div>
+
+                <p v-if="form.errors.invoice_number" class="err">{{ form.errors.invoice_number }}</p>
+              </div>
+            </div>
+
             <!-- SPK + Status -->
             <div class="grid grid-cols-2 gap-4">
               <div>
@@ -157,7 +220,7 @@
               class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-300 rounded-xl transition-colors bg-white">
               Batal
             </Link>
-            <button type="submit" :disabled="form.processing"
+            <button type="submit" :disabled="form.processing || numState.loading || numState.available === false"
               class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">
               {{ form.processing ? 'Menyimpan...' : 'Simpan Perubahan' }}
             </button>
@@ -172,7 +235,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, useForm } from '@inertiajs/vue3';
-import { watch } from 'vue';
+import { watch, computed, ref } from 'vue';
 
 const props = defineProps({
   invoice: Object, clients: Array, projectCategories: Array,
@@ -187,11 +250,60 @@ const form = useForm({
   signature_id:        props.invoice.signature_id  ?? '',
   with_signature:      props.invoice.with_signature,
   spk_number:          props.invoice.spk_number    ?? '',
-  invoice_type:        props.invoice.invoice_type ?? 'monthly',
+  invoice_type:        props.invoice.invoice_type  ?? 'monthly',
   status:              props.invoice.status,
   issue_date:          props.invoice.issue_date,
   due_date:            props.invoice.due_date,
+  invoice_number:      props.invoice.invoice_number ?? '',
 });
+
+// ── Invoice number editor ───────────────────────────────────────
+const initSeq     = parseInt(props.invoice.invoice_number?.split('/')[0]) || 1;
+const seqInput    = ref(initSeq);
+const numState    = ref({ number: props.invoice.invoice_number, seq: initSeq, available: true, loading: false });
+let   debounceTimer = null;
+
+const romanMonths  = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+const selectedCat  = computed(() => props.projectCategories.find(c => c.id == form.project_category_id));
+const catCode      = computed(() => selectedCat.value?.code ?? '???');
+const issueMonth   = computed(() => form.issue_date ? romanMonths[new Date(form.issue_date).getMonth()] : '?');
+const issueYear    = computed(() => form.issue_date ? new Date(form.issue_date).getFullYear() : '????');
+
+async function fetchPreview(customSeq) {
+  if (!form.project_category_id || !form.issue_date) return;
+  numState.value = { ...numState.value, loading: true };
+  try {
+    const params = new URLSearchParams({
+      project_category_id: form.project_category_id,
+      issue_date:          form.issue_date,
+      invoice_type:        form.invoice_type,
+      seq:                 customSeq,
+      exclude_id:          props.invoice.id,
+    });
+    const res  = await fetch(`/invoices/number-preview?${params}`, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const data = await res.json();
+    numState.value = { ...data, loading: false };
+    form.invoice_number = data.number;
+  } catch {
+    numState.value = { ...numState.value, loading: false };
+  }
+}
+
+watch(seqInput, (val) => {
+  if (val === numState.value?.seq) return;
+  clearTimeout(debounceTimer);
+  if (val && val >= 1) {
+    debounceTimer = setTimeout(() => fetchPreview(val), 400);
+  }
+});
+
+watch([() => form.project_category_id, () => form.issue_date], () => {
+  clearTimeout(debounceTimer);
+  fetchPreview(seqInput.value);
+});
+// ───────────────────────────────────────────────────────────────
 
 watch(() => form.issue_date, (val, old) => {
   if (!val || !old) return;
@@ -200,7 +312,10 @@ watch(() => form.issue_date, (val, old) => {
   form.due_date = d.toISOString().slice(0, 10);
 });
 
-function submit() { form.put(route('invoices.update', props.invoice.id)); }
+function submit() {
+  if (numState.value.available === false) return;
+  form.put(route('invoices.update', props.invoice.id));
+}
 </script>
 
 <style scoped>

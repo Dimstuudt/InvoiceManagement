@@ -148,6 +148,82 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function numberPreview(Request $request)
+    {
+        $request->validate([
+            'project_category_id' => 'required|exists:project_categories,id',
+            'issue_date'          => 'required|date',
+            'invoice_type'        => 'required|in:monthly,yearly',
+            'seq'                 => 'nullable|integer|min:1',
+        ]);
+
+        $category  = ProjectCategory::findOrFail($request->project_category_id);
+        $issueDate = Carbon::parse($request->issue_date);
+        $year      = $issueDate->year;
+        $roman     = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][$issueDate->month - 1];
+
+        if ($request->filled('seq')) {
+            $seqNum = (int) $request->seq;
+            $seq    = str_pad($seqNum, 3, '0', STR_PAD_LEFT);
+            $number = "{$seq}/{$category->code}/INV/MVC/{$roman}/{$year}";
+
+            // Cek apakah seq ini sudah dipakai di bulan manapun dalam tahun yang sama (exclude demo, exclude self saat edit)
+            $query = Invoice::whereYear('issue_date', $year)
+                ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
+                ->where('is_demo', false);
+            if ($request->filled('exclude_id')) {
+                $query->where('id', '!=', (int) $request->exclude_id);
+            }
+            $taken = $query->get()
+                ->filter(fn($inv) => (int) explode('/', $inv->invoice_number)[0] === $seqNum)
+                ->isNotEmpty();
+
+            return response()->json(['number' => $number, 'seq' => $seqNum, 'available' => !$taken]);
+        }
+
+        $number = Invoice::generateNumber($category->code, $issueDate, $request->invoice_type);
+        $seq    = (int) explode('/', $number)[0];
+        return response()->json(['number' => $number, 'seq' => $seq, 'available' => true]);
+    }
+
+    public function numbering(Request $request)
+    {
+        $currentYear = now()->year;
+        $year        = $request->integer('year', $currentYear);
+
+        $years = Invoice::selectRaw('YEAR(issue_date) as yr')
+            ->where('is_demo', false)
+            ->groupBy('yr')
+            ->orderByDesc('yr')
+            ->pluck('yr')
+            ->values();
+
+        if ($years->isEmpty()) {
+            $years = collect([$currentYear]);
+        }
+
+        $invoices = Invoice::with(['client', 'projectCategory', 'user'])
+            ->withSum('items', 'amount')
+            ->whereYear('issue_date', $year)
+            ->where('invoice_number', 'regexp', '^[0-9]+/')
+            ->where('is_demo', false)
+            ->get()
+            ->map(function ($inv) {
+                $parts    = explode('/', $inv->invoice_number);
+                $inv->seq = (int) ($parts[0] ?? 0);
+                return $inv;
+            })
+            ->filter(fn($inv) => $inv->seq > 0)
+            ->sortBy('seq')
+            ->values();
+
+        return Inertia::render('Invoices/Numbering', [
+            'invoices' => $invoices,
+            'year'     => $year,
+            'years'    => $years,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -167,11 +243,19 @@ class InvoiceController extends Controller
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'interval_months'     => 'nullable|integer|min:1|max:12',
             'invoice_type'        => 'required|in:monthly,yearly',
+            'invoice_number'      => 'nullable|string|unique:invoices,invoice_number',
         ]);
 
-        $category      = ProjectCategory::findOrFail($validated['project_category_id']);
-        $issueDate     = Carbon::parse($validated['issue_date']);
-        $invoiceNumber = Invoice::generateNumber($category->code, $issueDate, $validated['invoice_type']);
+        $category  = ProjectCategory::findOrFail($validated['project_category_id']);
+        $issueDate = Carbon::parse($validated['issue_date']);
+
+        $invoiceNumber = !empty($validated['invoice_number'])
+            ? $validated['invoice_number']
+            : Invoice::generateNumber($category->code, $issueDate, $validated['invoice_type']);
+
+        if (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
+            return back()->withErrors(['invoice_number' => 'Nomor invoice sudah digunakan, pilih nomor lain.'])->withInput();
+        }
 
         $invoice = Invoice::create([
             ...$validated,
@@ -349,18 +433,13 @@ class InvoiceController extends Controller
             'status'              => 'required|in:draft,sent,paid,unpaid',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'invoice_type'        => 'required|in:monthly,yearly',
+            'invoice_number'      => 'nullable|string|unique:invoices,invoice_number,' . $invoice->id,
         ]);
 
-        // Regenerate invoice number jika issue_date, category, atau type berubah
-        $dateChanged     = $invoice->issue_date->format('Y-m') !== Carbon::parse($validated['issue_date'])->format('Y-m');
-        $categoryChanged = $invoice->project_category_id != $validated['project_category_id'];
-        $typeChanged     = $invoice->invoice_type !== $validated['invoice_type'];
-
-        if ($dateChanged || $categoryChanged || $typeChanged) {
-            $category  = ProjectCategory::findOrFail($validated['project_category_id']);
-            $issueDate = Carbon::parse($validated['issue_date']);
-            $validated['invoice_number'] = Invoice::generateNumber($category->code, $issueDate, $validated['invoice_type']);
-        }
+        // Gunakan nomor dari form jika ada, jika tidak pakai nomor saat ini
+        $validated['invoice_number'] = !empty($validated['invoice_number'])
+            ? $validated['invoice_number']
+            : $invoice->invoice_number;
 
         $invoice->update([
             ...$validated,

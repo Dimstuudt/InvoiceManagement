@@ -17,7 +17,10 @@ class ProfileController extends Controller
         return Inertia::render('Profile/Index', [
             'user' => array_merge(
                 $user->only('id', 'name', 'email', 'role', 'created_at'),
-                ['avatar_url' => $user->avatar_url]
+                [
+                    'avatar_url' => $user->avatar_url,
+                    'has_2fa'    => !is_null($user->google2fa_secret),
+                ]
             ),
         ]);
     }

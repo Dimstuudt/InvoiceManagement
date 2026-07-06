@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'role',
         'avatar',
+        'google2fa_secret',
     ];
 
     public function getAvatarUrlAttribute(): ?string
@@ -44,6 +45,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'google2fa_secret',
     ];
 
     /**

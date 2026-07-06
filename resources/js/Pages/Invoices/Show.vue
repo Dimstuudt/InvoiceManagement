@@ -35,10 +35,10 @@
                 class="text-xs border border-indigo-200 bg-indigo-50 text-indigo-600 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
                 <option value="">↻ —</option>
                 <template v-if="invoice.invoice_type === 'yearly'">
-                  <option v-for="n in 5" :key="n" :value="n * 12">↻ {{ n }} thn</option>
+                  <option v-for="n in [1,2,3,4]" :key="n" :value="n * 12">↻ {{ n }} thn</option>
                 </template>
                 <template v-else>
-                  <option v-for="n in 12" :key="n" :value="n">↻ {{ n }} bln</option>
+                  <option v-for="n in [1,2,3,4,6]" :key="n" :value="n">↻ {{ n }} bln</option>
                 </template>
               </select>
             </template>
@@ -570,10 +570,10 @@
             <select v-model="resumeForm.interval_months"
               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
               <template v-if="invoice.invoice_type === 'yearly'">
-                <option v-for="n in 5" :key="n" :value="n * 12">{{ n }} tahun</option>
+                <option v-for="n in [1,2,3,4]" :key="n" :value="n * 12">{{ n }} tahun</option>
               </template>
               <template v-else>
-                <option v-for="n in 36" :key="n" :value="n">{{ n }} bulan</option>
+                <option v-for="n in [1,2,3,4,6]" :key="n" :value="n">{{ n }} bulan</option>
               </template>
             </select>
           </div>

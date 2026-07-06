@@ -17,6 +17,7 @@ class DashboardController extends Controller
 
         // Revenue bulan ini (paid)
         $paidThisMonth = Invoice::where('status', 'paid')
+            ->where('is_demo', false)
             ->whereBetween('issue_date', [$start, $end])
             ->with('items')
             ->get();
@@ -24,6 +25,7 @@ class DashboardController extends Controller
 
         // Outstanding (sent + unpaid, belum overdue)
         $outstanding = Invoice::whereIn('status', ['sent', 'unpaid'])
+            ->where('is_demo', false)
             ->where('due_date', '>=', $now->toDateString())
             ->with('items')
             ->get()
@@ -31,6 +33,7 @@ class DashboardController extends Controller
 
         // Overdue
         $overdueRaw = Invoice::whereNotIn('status', ['paid', 'frozen', 'carried'])
+            ->where('is_demo', false)
             ->where('due_date', '<', $now->toDateString())
             ->with(['client', 'items'])
             ->orderBy('due_date')
@@ -48,6 +51,7 @@ class DashboardController extends Controller
 
         // Jatuh tempo 7 hari ke depan
         $upcomingInvoices = Invoice::whereNotIn('status', ['paid', 'frozen', 'carried'])
+            ->where('is_demo', false)
             ->whereBetween('due_date', [$now->toDateString(), $now->copy()->addDays(7)->toDateString()])
             ->with(['client', 'items'])
             ->orderBy('due_date')
@@ -66,6 +70,7 @@ class DashboardController extends Controller
         $monthlyRevenue = collect(range(5, 0))->map(function ($i) use ($now) {
             $month = $now->copy()->subMonths($i);
             $value = Invoice::where('status', 'paid')
+                ->where('is_demo', false)
                 ->whereYear('issue_date', $month->year)
                 ->whereMonth('issue_date', $month->month)
                 ->with('items')
@@ -82,13 +87,15 @@ class DashboardController extends Controller
 
         $lastMonth        = $now->copy()->subMonth();
         $revenueLastMonth = Invoice::where('status', 'paid')
+            ->where('is_demo', false)
             ->whereYear('issue_date', $lastMonth->year)
             ->whereMonth('issue_date', $lastMonth->month)
             ->with('items')
             ->get()
             ->sum(fn($i) => $i->total);
 
-        $statusCounts = Invoice::selectRaw('status, COUNT(*) as count')
+        $statusCounts = Invoice::where('is_demo', false)
+            ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
 
@@ -99,7 +106,7 @@ class DashboardController extends Controller
                 'outstanding'         => $outstanding,
                 'overdue_count'       => $overdueRaw->count(),
                 'overdue_amount'      => $overdueRaw->sum(fn($i) => $i->total),
-                'invoices_this_month' => Invoice::whereBetween('issue_date', [$start, $end])->count(),
+                'invoices_this_month' => Invoice::where('is_demo', false)->whereBetween('issue_date', [$start, $end])->count(),
                 'active_clients'      => Client::where('is_active', true)->count(),
             ],
             'status_distribution' => [

@@ -235,10 +235,10 @@
                   <select v-model="form.interval_months" class="field">
                     <option :value="null">— One-time (tidak berulang) —</option>
                     <template v-if="form.invoice_type === 'yearly'">
-                      <option v-for="n in 5" :key="n" :value="n * 12">{{ n }} tahun</option>
+                      <option v-for="n in [1,2,3,4]" :key="n" :value="n * 12">{{ n }} tahun</option>
                     </template>
                     <template v-else>
-                      <option v-for="n in 12" :key="n" :value="n">{{ n }} bulan</option>
+                      <option v-for="n in [1,2,3,4,6]" :key="n" :value="n">{{ n }} bulan</option>
                     </template>
                   </select>
                 </div>

@@ -190,7 +190,14 @@ class InvoiceController extends Controller
     {
         $currentYear = now()->year;
         $year        = $request->integer('year', $currentYear);
-        $month       = $request->integer('month', 0); // 0 = semua bulan
+        $month       = $request->integer('month', 0);
+        $statuses    = array_values(array_filter(
+            (array) $request->input('statuses', []),
+            fn($s) => in_array($s, ['draft', 'sent', 'paid', 'unpaid', 'frozen', 'carried'])
+        ));
+        $clientId    = $request->integer('client_id', 0);
+        $overdueOnly = $request->boolean('overdue_only');
+        $markedOnly  = $request->boolean('is_marked');
 
         $years = Invoice::selectRaw('YEAR(issue_date) as yr')
             ->where('is_demo', false)
@@ -203,7 +210,6 @@ class InvoiceController extends Controller
             $years = collect([$currentYear]);
         }
 
-        // nextSeq pakai filter identik dengan generateNumber() agar hasilnya sama
         $nextSeq = (Invoice::whereYear('issue_date', $year)
             ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
             ->where('is_demo', false)
@@ -212,7 +218,6 @@ class InvoiceController extends Controller
             ->filter(fn($s) => $s > 0)
             ->max() ?? 0) + 1;
 
-        // Bulan yang punya invoice di tahun ini
         $availableMonths = Invoice::selectRaw('MONTH(issue_date) as m')
             ->whereYear('issue_date', $year)
             ->where('invoice_number', 'regexp', '^[0-9]+/')
@@ -221,6 +226,8 @@ class InvoiceController extends Controller
             ->orderBy('m')
             ->pluck('m')
             ->values();
+
+        $clients = Client::orderBy('company_name')->get(['id', 'company_name']);
 
         $invoices = Invoice::with([
                 'client', 'projectCategory', 'items',
@@ -233,20 +240,19 @@ class InvoiceController extends Controller
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
             ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
+            ->when(!empty($statuses), fn($q) => $q->whereIn('status', $statuses))
+            ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
+            ->when($markedOnly, fn($q) => $q->where('is_marked', true))
             ->get()
             ->map(function ($inv) {
                 $parts    = explode('/', $inv->invoice_number);
                 $inv->seq = (int) ($parts[0] ?? 0);
 
-                // Pilih grand total yang tepat sesuai tipe chain
                 if ($inv->carried_from_id) {
-                    // Carry HEAD: total sendiri + semua tunggakan di chain carry
                     $grandTotal = $inv->grand_total;
                 } elseif ($inv->is_prepay && ! $inv->prepay_chain_id) {
-                    // Prepay HEAD: total sendiri + semua periode prepay
                     $grandTotal = $inv->prepay_grand_total;
                 } elseif ($inv->is_reaktivasi && ! $inv->reaktivasi_chain_id) {
-                    // Reaktivasi HEAD: total sendiri + semua periode reaktivasi
                     $grandTotal = $inv->reaktivasi_grand_total;
                 } else {
                     $grandTotal = $inv->total;
@@ -260,6 +266,7 @@ class InvoiceController extends Controller
                 return $inv;
             })
             ->filter(fn($inv) => $inv->seq > 0)
+            ->when($overdueOnly, fn($c) => $c->where('is_overdue', true))
             ->sortBy('seq')
             ->values();
 
@@ -278,7 +285,185 @@ class InvoiceController extends Controller
             'availableMonths' => $availableMonths,
             'nextSeq'         => $nextSeq,
             'summary'         => $summary,
+            'clients'         => $clients,
+            'filters'         => [
+                'statuses'    => $statuses,
+                'client_id'   => $clientId ?: null,
+                'overdue_only'=> $overdueOnly,
+                'is_marked'   => $markedOnly,
+            ],
         ]);
+    }
+
+    public function numberingExport(Request $request)
+    {
+        $currentYear = now()->year;
+        $year        = $request->integer('year', $currentYear);
+        $month       = $request->integer('month', 0);
+        $statuses    = array_values(array_filter(
+            (array) $request->input('statuses', []),
+            fn($s) => in_array($s, ['draft', 'sent', 'paid', 'unpaid', 'frozen', 'carried'])
+        ));
+        $clientId    = $request->integer('client_id', 0);
+        $overdueOnly = $request->boolean('overdue_only');
+        $markedOnly  = $request->boolean('is_marked');
+
+        $invoices = Invoice::with([
+                'client', 'projectCategory', 'items',
+                'carriedFrom.items',
+                'carriedFrom.carriedFrom.items',
+                'prepayChain.items',
+                'reaktivasiChain.items',
+            ])
+            ->whereYear('issue_date', $year)
+            ->where('invoice_number', 'regexp', '^[0-9]+/')
+            ->where('is_demo', false)
+            ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
+            ->when(!empty($statuses), fn($q) => $q->whereIn('status', $statuses))
+            ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
+            ->when($markedOnly, fn($q) => $q->where('is_marked', true))
+            ->get()
+            ->map(function ($inv) {
+                $parts    = explode('/', $inv->invoice_number);
+                $inv->seq = (int) ($parts[0] ?? 0);
+
+                if ($inv->carried_from_id) {
+                    $grandTotal = $inv->grand_total;
+                } elseif ($inv->is_prepay && ! $inv->prepay_chain_id) {
+                    $grandTotal = $inv->prepay_grand_total;
+                } elseif ($inv->is_reaktivasi && ! $inv->reaktivasi_chain_id) {
+                    $grandTotal = $inv->reaktivasi_grand_total;
+                } else {
+                    $grandTotal = $inv->total;
+                }
+
+                $inv->setAttribute('computed_total', $grandTotal);
+                $inv->setAttribute('is_overdue',
+                    ! in_array($inv->status, ['paid', 'frozen'])
+                    && $inv->due_date && $inv->due_date->lt(now())
+                );
+                return $inv;
+            })
+            ->filter(fn($inv) => $inv->seq > 0)
+            ->when($overdueOnly, fn($c) => $c->where('is_overdue', true))
+            ->sortBy('seq')
+            ->values();
+
+        $statusLabels = [
+            'draft'   => 'Draft',
+            'sent'    => 'Terkirim',
+            'paid'    => 'Lunas',
+            'unpaid'  => 'Belum Dibayar',
+            'frozen'  => 'Dibekukan',
+            'carried' => 'Carry',
+        ];
+
+        // ── Column selector ───────────────────────────────────────
+        $allColDefs = [
+            'seq'            => ['Seq',            8],
+            'invoice_number' => ['Nomor Invoice', 28],
+            'client'         => ['Client',        28],
+            'category'       => ['Kategori',      20],
+            'issue_date'     => ['Terbit',        14],
+            'due_date'       => ['Jatuh Tempo',   14],
+            'status'         => ['Status',        14],
+            'overdue'        => ['Overdue',       10],
+            'is_marked'      => ['Antrean Kirim', 14],
+            'nominal'        => ['Nominal (Rp)',  20],
+        ];
+        $validKeys   = array_keys($allColDefs);
+        $selectedCols = array_values(array_filter(
+            (array) $request->input('columns', $validKeys),
+            fn($c) => in_array($c, $validKeys)
+        ));
+        if (empty($selectedCols)) $selectedCols = $validKeys;
+
+        // Map selected keys → excel column letters A, B, C ...
+        $colMap = [];
+        foreach ($selectedCols as $i => $key) {
+            $colMap[$key] = chr(65 + $i);
+        }
+        $lastCol = chr(65 + count($selectedCols) - 1);
+
+        // ── Spreadsheet setup ─────────────────────────────────────
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Urutan Nomor Invoice');
+
+        $headerStyle = [
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+            'fill'      => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']],
+            'alignment' => ['vertical' => 'center'],
+        ];
+
+        foreach ($selectedCols as $key) {
+            [$label, $width] = $allColDefs[$key];
+            $col = $colMap[$key];
+            $sheet->setCellValue("{$col}1", $label);
+            $sheet->getStyle("{$col}1")->applyFromArray($headerStyle);
+            $sheet->getColumnDimension($col)->setWidth($width);
+        }
+        $sheet->getRowDimension(1)->setRowHeight(22);
+
+        $numFmt  = '#,##0';
+        $altFill = ['fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'EEEEFF']]];
+        $redFill = ['fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'FEE2E2']]];
+
+        foreach ($invoices as $i => $inv) {
+            $row = $i + 2;
+
+            $rowValues = [
+                'seq'            => $inv->seq,
+                'invoice_number' => $inv->invoice_number,
+                'client'         => $inv->client?->company_name ?? '-',
+                'category'       => $inv->projectCategory?->name ?? '-',
+                'issue_date'     => $inv->issue_date->format('d/m/Y'),
+                'due_date'       => $inv->due_date?->format('d/m/Y') ?? '-',
+                'status'         => $statusLabels[$inv->status] ?? $inv->status,
+                'overdue'        => $inv->is_overdue ? 'Ya' : '-',
+                'is_marked'      => $inv->is_marked ? 'Dalam Antrean' : '-',
+                'nominal'        => (int) $inv->computed_total,
+            ];
+
+            foreach ($selectedCols as $key) {
+                $col = $colMap[$key];
+                $sheet->setCellValue("{$col}{$row}", $rowValues[$key]);
+                if ($key === 'nominal') {
+                    $sheet->getStyle("{$col}{$row}")->getNumberFormat()->setFormatCode($numFmt);
+                }
+            }
+
+            if ($inv->is_overdue) {
+                $sheet->getStyle("A{$row}:{$lastCol}{$row}")->applyFromArray($redFill);
+            } elseif ($i % 2 !== 0) {
+                $sheet->getStyle("A{$row}:{$lastCol}{$row}")->applyFromArray($altFill);
+            }
+        }
+
+        $sheet->freezePane('A2');
+        $lastRow = count($invoices) + 1;
+        $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
+        if (isset($colMap['nominal'])) {
+            $nomCol = $colMap['nominal'];
+            $sheet->getStyle("{$nomCol}1:{$nomCol}{$lastRow}")->getFont()->setBold(true);
+        }
+
+        $periodLabel = $month > 0 ? "-bln{$month}" : '';
+        $filename    = "urutan-nomor-{$year}{$periodLabel}.xlsx";
+        $tmpPath     = sys_get_temp_dir() . '/' . $filename;
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($tmpPath);
+
+        ActivityLogger::log('invoice.numbering_exported', null, [
+            'year'  => $year,
+            'month' => $month ?: 'all',
+            'count' => $invoices->count(),
+        ]);
+
+        return response()->download($tmpPath, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend();
     }
 
     public function store(Request $request)

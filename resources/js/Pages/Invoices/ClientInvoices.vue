@@ -222,11 +222,21 @@
                 <p class="text-xs font-semibold text-gray-700">Arti status</p>
                 <div class="flex flex-wrap gap-1.5 mt-1.5">
                   <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Draft</span>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Sent</span>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Dibayarkan</span>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600">Unpaid</span>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-600">Frozen</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 ring-1 ring-amber-200">Terverifikasi</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 ring-1 ring-blue-200">Sent</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Dibayarkan</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-600 ring-1 ring-sky-200">Frozen</span>
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 ring-1 ring-orange-200">Carried</span>
                 </div>
+                <p class="text-[10px] text-gray-400 mt-1.5 leading-relaxed">
+                  Titik-titik di samping status = progres pengiriman email: <span class="inline-flex gap-0.5 align-middle">
+                    <span class="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>
+                    <span class="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>
+                    <span class="w-2 h-2 rounded-full bg-gray-200 inline-block"></span>
+                    <span class="w-2 h-2 rounded-full bg-gray-200 inline-block"></span>
+                    <span class="w-2 h-2 rounded-full bg-gray-200 inline-block"></span>
+                  </span> = sudah 2x kirim (send2). Merah = send5 (peringatan nonaktif).
+                </p>
               </div>
             </div>
 
@@ -248,7 +258,7 @@
                   ? 'border-indigo-500 text-indigo-600 bg-indigo-50/60'
                   : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
                 <span class="w-2 h-2 rounded-full shrink-0"
-                  :class="hasOverdue(group) ? 'bg-red-400' : activeInvoice(group)?.status === 'sent' ? 'bg-blue-400' : activeInvoice(group)?.status === 'paid' ? 'bg-emerald-400' : 'bg-gray-300'"/>
+                  :class="hasOverdue(group) ? 'bg-red-400' : (activeInvoice(group)?.payment_status !== 'paid' && activeInvoice(group)?.document_status === 'verified') ? 'bg-blue-400' : activeInvoice(group)?.payment_status === 'paid' ? 'bg-emerald-400' : 'bg-gray-300'"/>
                 {{ recurringTabLabels[i] }}
                 <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                   :class="activeTab === i ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'">
@@ -313,14 +323,14 @@
                         :class="invoice.carried_from_id ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'hover:bg-gray-50/60'">
                         <div class="flex flex-col items-center w-[57px] shrink-0 pt-3.5 self-stretch">
                           <div class="w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm shrink-0 z-10" :class="dotClass(invoice)">
-                            <svg v-if="invoice.status === 'paid'" class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <svg v-if="invoice.payment_status === 'paid'" class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                             </svg>
                             <div v-else class="w-1.5 h-1.5 rounded-full bg-white"/>
                           </div>
                           <div v-if="idx < recurringGroups[activeTab].invoices.length - 1"
                             class="flex-1 w-px mt-1"
-                            :class="invoice.status === 'paid' ? 'bg-emerald-300' : 'bg-gray-200'"/>
+                            :class="invoice.payment_status === 'paid' ? 'bg-emerald-300' : 'bg-gray-200'"/>
                         </div>
                         <div class="flex-1 min-w-0 py-3 pr-4">
                           <div class="flex items-start justify-between gap-3">
@@ -335,19 +345,52 @@
                                   class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
                                   {{ invoice.invoice_number }}
                                 </Link>
-                                <span
-                                  class="px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 select-none"
-                                  :class="[statusClass(invoice.status), !['frozen','carried'].includes(invoice.status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
-                                  @click.stop="toggleStatusMenu($event, invoice)">
-                                  {{ statusLabel(invoice.status) }}
-                                </span>
-                                <span v-if="isPastDue(invoice)" class="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
+                              </div>
+                              <!-- Status track: 3 kolom eksplisit -->
+                              <div class="flex items-center gap-2.5 flex-wrap mt-1.5">
+                                <!-- document_status -->
+                                <div class="flex items-center gap-1">
+                                  <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">doc</span>
+                                  <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold select-none inline-flex items-center gap-0.5"
+                                    :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
+                                    @click.stop="toggleStatusMenu($event, invoice)">
+                                    {{ docBadgeLabel(invoice.document_status) }}
+                                    <svg v-if="!['frozen','carried'].includes(invoice.document_status)" class="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                  </span>
+                                </div>
+                                <!-- payment_status -->
+                                <div class="flex items-center gap-1">
+                                  <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">pay</span>
+                                  <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                                    :class="invoice.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-gray-50 text-gray-400'">
+                                    {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
+                                  </span>
+                                </div>
+                                <!-- send_status -->
+                                <div class="flex items-center gap-1">
+                                  <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">send</span>
+                                  <span class="inline-flex items-center gap-0.5">
+                                    <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                                      class="w-2 h-2 rounded-full transition-colors"
+                                      :class="stageReached(invoice.send_status, st)
+                                        ? (st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                                        : 'bg-gray-200'"/>
+                                  </span>
+                                  <span class="text-[10px] font-mono"
+                                    :class="invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
+                                    {{ invoice.send_status }}
+                                  </span>
+                                  <template v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid'">
+                                    <span v-if="nextSendInfo(invoice)" class="text-[10px]"
+                                      :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                                      → {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'secepatnya' : fmtDateShort(nextSendInfo(invoice).date) }}
+                                    </span>
+                                    <span v-else-if="invoice.send_status === 'send5'" class="text-[10px] text-red-400">· selesai</span>
+                                  </template>
+                                </div>
+                                <!-- Overdue -->
+                                <span v-if="isPastDue(invoice)" class="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
                                   lewat {{ daysPastDue(invoice) }} hari
-                                </span>
-                                <span v-if="invoice.is_marked"
-                                  class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded shrink-0">
-                                  <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                                  Dalam Antrean
                                 </span>
                               </div>
                               <p class="text-xs text-gray-500 mt-1">{{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span> {{ fmtDateShort(invoice.due_date) }}</p>
@@ -364,26 +407,9 @@
                                 </template>
                                 <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
                               </div>
-                              <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button v-if="invoice.status === 'sent'" @click="markPaid(invoice)" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">Paid</button>
-                                <button v-if="['draft','sent'].includes(invoice.status) && invoice.interval_months && !hasChild(invoice)" @click="carryInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-md transition-colors">Carry</button>
-                                <button v-if="['draft','sent'].includes(invoice.status) && invoice.interval_months && !invoice.prepay_chain_id" @click="prepayInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-md transition-colors">Prepay</button>
-                                <button v-if="invoice.status === 'unpaid' && invoice.interval_months && !hasChild(invoice) && !invoice.is_reaktivasi" @click="reactivateInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">Reaktivasi</button>
-                                <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id" @click="freezeInvoice(invoice)" class="px-2 py-1 text-[10px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors">Freeze</button>
-                                <button v-if="invoice.status === 'frozen' && !hasChild(invoice)" @click="openResume(invoice)" class="px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">Perbarui</button>
-                                <button @click="toggleMark(invoice)"
-                                  class="px-2 py-1 text-[10px] font-semibold rounded-md transition-colors flex items-center gap-0.5"
-                                  :class="invoice.is_marked ? 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'">
-                                  <svg class="w-2.5 h-2.5" :fill="invoice.is_marked ? 'currentColor' : 'none'" viewBox="0 0 20 20" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                                  {{ invoice.is_marked ? 'Antre ✓' : 'Antre Kirim' }}
-                                </button>
-                                <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
-                                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                                </button>
-                                <button @click="deleteInvoice(invoice)" class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-                                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                </button>
-                              </div>
+                              <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0" title="Aksi">
+                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -395,12 +421,12 @@
                         :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : invoice.invoice_number.startsWith('P-') ? 'hover:bg-teal-50/30' : invoice.invoice_number.startsWith('F-') ? 'hover:bg-sky-50/30' : 'hover:bg-violet-50/30'">
                         <div class="ml-7 flex items-start"
                           :class="idx < recurringGroups[activeTab].invoices.length - 1
-                            ? (invoice.status === 'paid' ? 'border-l-2 border-emerald-200' : 'border-l-2 border-gray-100')
+                            ? (invoice.payment_status === 'paid' ? 'border-l-2 border-emerald-200' : 'border-l-2 border-gray-100')
                             : ''">
                           <div class="flex items-start w-[30px] shrink-0 pt-2.5">
-                            <div class="w-3 h-px mt-1.5 shrink-0" :class="invoice.status === 'paid' ? 'bg-emerald-200' : 'bg-gray-200'"/>
+                            <div class="w-3 h-px mt-1.5 shrink-0" :class="invoice.payment_status === 'paid' ? 'bg-emerald-200' : 'bg-gray-200'"/>
                             <div class="w-3.5 h-3.5 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm shrink-0" :class="dotClass(invoice)">
-                              <svg v-if="invoice.status === 'paid'" class="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <svg v-if="invoice.payment_status === 'paid'" class="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                               </svg>
                               <div v-else class="w-1 h-1 rounded-full bg-white"/>
@@ -430,11 +456,30 @@
                                     class="font-mono text-xs font-semibold text-gray-500 hover:text-indigo-600 hover:underline truncate">
                                     {{ invoice.invoice_number }}
                                   </Link>
-                                  <span
-                                    class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0 select-none"
-                                    :class="[statusClass(invoice.status), !['frozen','carried'].includes(invoice.status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
+                                  <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0 select-none inline-flex items-center gap-0.5"
+                                    :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
                                     @click.stop="toggleStatusMenu($event, invoice)">
-                                    {{ statusLabel(invoice.status) }}
+                                    {{ docBadgeLabel(invoice.document_status) }}
+                                    <svg v-if="!['frozen','carried'].includes(invoice.document_status)" class="w-2 h-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                  </span>
+                                  <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0"
+                                    :class="invoice.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'">
+                                    {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
+                                  </span>
+                                  <span class="inline-flex items-center gap-0.5">
+                                    <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                                      class="w-1.5 h-1.5 rounded-full"
+                                      :class="stageReached(invoice.send_status, st)
+                                        ? (st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                                        : 'bg-gray-200'"/>
+                                  </span>
+                                  <span class="text-[9px] font-mono"
+                                    :class="invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500' : 'text-indigo-500'">
+                                    {{ invoice.send_status }}
+                                  </span>
+                                  <span v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid' && nextSendInfo(invoice)" class="text-[9px]"
+                                    :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                                    → {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'segera' : fmtDateShort(nextSendInfo(invoice).date) }}
                                   </span>
                                   <span v-if="isPastDue(invoice)" class="text-[9px] font-semibold text-red-500 shrink-0">lewat {{ daysPastDue(invoice) }}h</span>
                                 </div>
@@ -442,12 +487,9 @@
                               </div>
                               <div class="flex items-center gap-0.5 shrink-0">
                                 <p class="text-xs font-semibold text-gray-500 whitespace-nowrap mr-1">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
-                                <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Link :href="route('invoices.edit', invoice.id)" class="px-1.5 py-0.5 text-[9px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition-colors">Edit</Link>
-                                  <button @click="deleteInvoice(invoice)" class="p-1 rounded text-red-400 hover:bg-red-50 transition-colors">
-                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                  </button>
-                                </div>
+                                <button @click.stop="toggleMenu($event, invoice)" class="p-1 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0" title="Aksi">
+                                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -470,48 +512,69 @@
                 <div v-for="invoice in standaloneInvoices" :key="invoice.id"
                   class="flex items-center gap-4 px-5 py-3.5 border-t border-gray-50 transition-colors group"
                   :class="isPastDue(invoice) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50/50'">
-                  <span
-                    class="px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 select-none"
-                    :class="[statusClass(invoice.status), !['frozen','carried'].includes(invoice.status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
-                    @click.stop="toggleStatusMenu($event, invoice)">
-                    {{ statusLabel(invoice.status) }}
-                  </span>
                   <div class="flex-1 min-w-0">
-                    <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
-                      class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline block truncate">
-                      {{ invoice.invoice_number }}
-                    </Link>
-                    <p class="text-xs text-gray-400 mt-0.5">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
+                        class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
+                        {{ invoice.invoice_number }}
+                      </Link>
+                    </div>
+                    <!-- Status track: 3 kolom eksplisit -->
+                    <div class="flex items-center gap-2.5 flex-wrap mt-1.5">
+                      <div class="flex items-center gap-1">
+                        <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">doc</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold select-none"
+                          :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
+                          @click.stop="toggleStatusMenu($event, invoice)">
+                          {{ docBadgeLabel(invoice.document_status) }}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">pay</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                          :class="invoice.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-gray-50 text-gray-400'">
+                          {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">send</span>
+                        <span class="inline-flex items-center gap-0.5">
+                          <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                            class="w-2 h-2 rounded-full transition-colors"
+                            :class="stageReached(invoice.send_status, st)
+                              ? (st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                              : 'bg-gray-200'"/>
+                        </span>
+                        <span class="text-[10px] font-mono"
+                          :class="invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
+                          {{ invoice.send_status }}
+                        </span>
+                        <template v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid'">
+                          <span v-if="nextSendInfo(invoice)" class="text-[10px]"
+                            :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                            → {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'secepatnya' : fmtDateShort(nextSendInfo(invoice).date) }}
+                          </span>
+                          <span v-else-if="invoice.send_status === 'send5'" class="text-[10px] text-red-400">· selesai</span>
+                        </template>
+                      </div>
+                      <span v-if="isPastDue(invoice)" class="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                        lewat {{ daysPastDue(invoice) }} hari
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">
                       {{ invoice.project_category?.name ?? '—' }} &bull;
                       {{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span>
                       <span :class="isPastDue(invoice) ? 'text-red-500 font-medium' : ''">{{ fmtDateShort(invoice.due_date) }}</span>
-                      <span v-if="isPastDue(invoice)" class="ml-1 text-red-500 font-semibold">· lewat {{ daysPastDue(invoice) }} hari</span>
                     </p>
-                    <span v-if="invoice.is_marked"
-                      class="inline-flex items-center gap-0.5 mt-1 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded">
-                      <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                      Dalam Antrean
-                    </span>
                     <p class="text-[10px] text-gray-300 mt-0.5">Dibuat {{ fmtDateTime(invoice.created_at) }}</p>
                   </div>
                   <div class="text-right shrink-0">
                     <p class="text-sm font-semibold text-gray-800">{{ fmtCurrency(invoiceTotal(invoice)) }}</p>
                     <p v-if="invoice.tax_percentage" class="text-[10px] text-violet-500 mt-0.5">+PPN {{ invoice.tax_percentage }}%</p>
                   </div>
-                  <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button @click="toggleMark(invoice)"
-                      class="px-2 py-1 text-[10px] font-semibold rounded-md transition-colors flex items-center gap-0.5"
-                      :class="invoice.is_marked ? 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'">
-                      <svg class="w-2.5 h-2.5" :fill="invoice.is_marked ? 'currentColor' : 'none'" viewBox="0 0 20 20" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                      {{ invoice.is_marked ? 'Tandai ✓' : 'Tandai' }}
-                    </button>
-                    <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
-                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                    </button>
-                    <button @click="deleteInvoice(invoice)" class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    </button>
-                  </div>
+                  <button @click.stop="toggleMenu($event, invoice)" class="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0" title="Aksi">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                  </button>
                 </div>
               </div>
             </template>
@@ -523,32 +586,134 @@
       </template>
     </div>
 
-    <!-- Three-dot Dropdown -->
+    <!-- Three-dot Dropdown: comprehensive contextual menu -->
     <Teleport to="body">
       <div v-if="activeMenu !== null && menuInvoice"
-        class="fixed w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50"
+        class="fixed w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 overflow-hidden"
         :style="{ top: menuPosition.top + 'px', right: menuPosition.right + 'px' }">
-        <a :href="route('invoices.download', menuInvoice.id)"
-          class="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-          <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-          </svg>
-          Download PDF
-        </a>
-        <button @click="openReceipt(menuInvoice); activeMenu = null"
-          class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-          <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          Receipt
-        </button>
-        <a :href="route('invoices.print-view', menuInvoice.id)" target="_blank"
-          class="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-          <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-          </svg>
-          Print Invoice
-        </a>
+
+        <!-- Invoice number header -->
+        <div class="px-3 pt-1 pb-1.5 border-b border-gray-50">
+          <p class="text-[10px] font-mono font-semibold text-gray-500 truncate">{{ menuInvoice.invoice_number }}</p>
+        </div>
+
+        <!-- Status section -->
+        <template v-if="!['frozen','carried'].includes(menuInvoice.document_status)">
+          <div class="px-3 pt-2 pb-0.5">
+            <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Ubah Status</p>
+          </div>
+          <button v-if="menuInvoice.payment_status !== 'paid'"
+            @click="markPaid(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors text-left">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            Tandai Lunas
+          </button>
+          <button v-if="menuInvoice.document_status !== 'verified' && menuInvoice.payment_status !== 'paid'"
+            @click="toggleMark(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors text-left">
+            <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+            Masuk Antrean Kirim
+          </button>
+          <button v-if="menuInvoice.document_status === 'verified'"
+            @click="toggleMark(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors text-left">
+            <span class="w-2 h-2 rounded-full bg-gray-300 shrink-0"></span>
+            Keluarkan dari Antrean
+          </button>
+        </template>
+
+        <!-- Tindakan lanjutan section -->
+        <template v-if="hasLifecycleAction(menuInvoice)">
+          <div class="border-t border-gray-50 mt-1 px-3 pt-2 pb-0.5">
+            <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Tindakan</p>
+          </div>
+          <button v-if="menuInvoice.document_status === 'frozen' && !hasChild(menuInvoice)"
+            @click="openResume(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Perbarui — lanjutkan
+          </button>
+          <button v-if="isPastDue(menuInvoice) && menuInvoice.interval_months && !hasChild(menuInvoice) && !menuInvoice.is_reaktivasi"
+            @click="reactivateInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Reaktivasi
+          </button>
+          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.interval_months && !hasChild(menuInvoice)"
+            @click="carryInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
+            </svg>
+            Carry — bawa tunggakan
+          </button>
+          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.interval_months && !menuInvoice.prepay_chain_id"
+            @click="prepayInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Prepay
+          </button>
+          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.parent_invoice_id"
+            @click="freezeInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-sky-600 hover:bg-sky-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364"/>
+            </svg>
+            Freeze — tunda pembayaran
+          </button>
+        </template>
+
+        <!-- Dokumen section -->
+        <div class="border-t border-gray-50 mt-1">
+          <div class="px-3 pt-2 pb-0.5">
+            <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Dokumen</p>
+          </div>
+          <Link :href="route('invoices.edit', menuInvoice.id)"
+            class="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+            Edit Invoice
+          </Link>
+          <a :href="route('invoices.download', menuInvoice.id)"
+            class="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Download PDF
+          </a>
+          <button @click="openReceipt(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Receipt
+          </button>
+          <a :href="route('invoices.print-view', menuInvoice.id)" target="_blank"
+            class="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+            </svg>
+            Print Invoice
+          </a>
+        </div>
+
+        <!-- Hapus section -->
+        <div class="border-t border-gray-50 mt-1 pt-1">
+          <button @click="deleteInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Hapus Invoice
+          </button>
+        </div>
       </div>
     </Teleport>
 
@@ -635,7 +800,7 @@
         </div>
         <div class="p-1 pt-0">
           <button v-for="s in manualStatuses" :key="s.value"
-            v-show="s.value !== statusMenuInvoice.status"
+            v-show="s.value !== computedStatus(statusMenuInvoice)"
             @click="changeStatus(statusMenuInvoice, s.value)"
             class="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-2"
             :class="s.cls">
@@ -671,10 +836,10 @@ const menuPosition = ref({ top: 0, right: 0 });
 function toggleMenu(event, invoice) {
   if (activeMenu.value === invoice.id) { activeMenu.value = null; return; }
   const rect       = event.currentTarget.getBoundingClientRect();
-  const menuHeight = 116;
+  const menuHeight = 380;
   const spaceBelow = window.innerHeight - rect.bottom;
   const top = spaceBelow < menuHeight
-    ? rect.top + window.scrollY - menuHeight - 4
+    ? Math.max(8, rect.top + window.scrollY - menuHeight - 4)
     : rect.bottom + window.scrollY + 4;
   menuPosition.value = { top, right: window.innerWidth - rect.right };
   menuInvoice.value  = invoice;
@@ -688,14 +853,13 @@ const statusMenuPos     = ref({ top: 0, left: 0 })
 const statusMenuInvoice = ref(null)
 
 const manualStatuses = [
-  { value: 'draft',  label: 'Draft',   dot: 'bg-gray-400',    cls: 'text-gray-700 hover:bg-gray-100' },
-  { value: 'sent',   label: 'Sent',    dot: 'bg-blue-500',    cls: 'text-blue-700 hover:bg-blue-50' },
-  { value: 'unpaid', label: 'Unpaid',  dot: 'bg-red-500',     cls: 'text-red-600  hover:bg-red-50' },
-  { value: 'paid',   label: 'Lunas',   dot: 'bg-emerald-500', cls: 'text-emerald-700 hover:bg-emerald-50' },
+  { value: 'draft',    label: 'Draft — keluarkan antrean', dot: 'bg-gray-400',    cls: 'text-gray-700 hover:bg-gray-100' },
+  { value: 'verified', label: 'Antrean Kirim',             dot: 'bg-amber-400',   cls: 'text-amber-700 hover:bg-amber-50' },
+  { value: 'paid',     label: 'Lunas',                     dot: 'bg-emerald-500', cls: 'text-emerald-700 hover:bg-emerald-50' },
 ]
 
 function toggleStatusMenu(e, invoice) {
-  if (['frozen', 'carried'].includes(invoice.status)) return
+  if (['frozen', 'carried'].includes(invoice.document_status)) return
   if (activeStatusMenu.value === invoice.id) { activeStatusMenu.value = null; return }
   const rect    = e.currentTarget.getBoundingClientRect()
   const popH    = 152
@@ -710,7 +874,8 @@ function toggleStatusMenu(e, invoice) {
 
 function changeStatus(invoice, newStatus) {
   activeStatusMenu.value = null
-  const label = { draft: 'Draft', sent: 'Sent', unpaid: 'Unpaid', paid: 'Lunas' }[newStatus] ?? newStatus
+  const labelMap = { draft: 'Draft', verified: 'Antre Kirim', paid: 'Lunas' }
+  const label = labelMap[newStatus] ?? newStatus
   Swal.fire({
     title: `Ubah status ke ${label}?`,
     text: invoice.invoice_number,
@@ -721,7 +886,10 @@ function changeStatus(invoice, newStatus) {
     cancelButtonText: 'Batal',
   }).then(r => {
     if (r.isConfirmed) {
-      router.patch(route('invoices.status', invoice.id), { status: newStatus }, {
+      const payload = newStatus === 'paid'
+        ? { payment_status: 'paid' }
+        : { document_status: newStatus, ...(newStatus === 'draft' ? { payment_status: 'unpaid' } : {}) }
+      router.patch(route('invoices.status', invoice.id), payload, {
         preserveScroll: true,
         onSuccess: () => toast(`Status berubah ke ${label}`),
       })
@@ -798,8 +966,8 @@ function invoiceTotal(inv) {
 
   return afterDiscount + tax
 }
-function chainTotal(group)     { return group.invoices.filter(i => i.status !== 'frozen').reduce((s, inv) => s + invoiceTotal(inv), 0); }
-function chainPaidTotal(group) { return group.invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + invoiceTotal(inv), 0); }
+function chainTotal(group)     { return group.invoices.filter(i => i.document_status !== 'frozen').reduce((s, inv) => s + invoiceTotal(inv), 0) }
+function chainPaidTotal(group) { return group.invoices.filter(i => i.payment_status === 'paid').reduce((s, inv) => s + invoiceTotal(inv), 0) }
 
 // Chain amount breakdown untuk HEAD carry/prepay/reaktivasi
 function headChainTotal(invoice, groupInvoices) {
@@ -843,15 +1011,15 @@ function headChainLabel(invoice) {
 }
 
 const summary = computed(() => {
-  const paid    = props.invoices.filter(i => i.status === 'paid');
-  const pending = props.invoices.filter(i => !['paid','frozen','carried'].includes(i.status));
+  const paid    = props.invoices.filter(i => i.payment_status === 'paid')
+  const pending = props.invoices.filter(i => i.payment_status !== 'paid' && !['frozen','carried'].includes(i.document_status))
   return {
     paid:         paid.reduce((s, i) => s + invoiceTotal(i), 0),
     paidCount:    paid.length,
     pending:      pending.reduce((s, i) => s + invoiceTotal(i), 0),
     pendingCount: pending.length,
-  };
-});
+  }
+})
 
 // ── Date / currency helpers ─────────────────────────────────
 const fmtDate = d => d
@@ -870,46 +1038,91 @@ const fmtCurrency = v => v != null
   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
   : '-';
 
-const isPastDue    = inv => !['paid','frozen','carried'].includes(inv.status) && new Date(inv.due_date) < new Date(new Date().toDateString());
-const daysPastDue  = inv => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000);
-const hasOverdue   = group => group.invoices.some(isPastDue);
+const isPastDue    = inv => inv.payment_status !== 'paid' && inv.document_status !== 'frozen' && inv.document_status !== 'carried' && new Date(inv.due_date) < new Date(new Date().toDateString())
+const daysPastDue  = inv => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000)
+const hasOverdue   = group => group.invoices.some(isPastDue)
 
-// ── Status display ──────────────────────────────────────────
-const statusLabel = s => ({ draft: 'Draft', sent: 'Sent', paid: 'Dibayarkan', unpaid: 'Unpaid', frozen: 'Frozen', carried: 'Carried' }[s] ?? s);
+// ── Status helpers ──────────────────────────────────────────
+const SEND_ORDER  = { unsent: 0, send1: 1, send2: 2, send3: 3, send4: 4, send5: 5 }
+const SEND_NEXT   = { unsent: 'send1', send1: 'send2', send2: 'send3', send3: 'send4', send4: 'send5' }
+const SEND_OFFSET = { send1: 0, send2: 14, send3: 21, send4: 28, send5: 35 }
+const stageReached = (current, target) => (SEND_ORDER[current] ?? 0) >= (SEND_ORDER[target] ?? 99)
+const nextSendInfo = (inv) => {
+  if (inv.document_status !== 'verified' || inv.payment_status !== 'unpaid') return null
+  const nextStage = SEND_NEXT[inv.send_status]
+  if (!nextStage) return null
+  const d = new Date(inv.issue_date)
+  d.setDate(d.getDate() + SEND_OFFSET[nextStage])
+  return { stage: nextStage, date: d, soon: d <= new Date(new Date().toDateString()) }
+}
+
+function computedStatus(inv) {
+  if (!inv) return 'draft'
+  if (inv.document_status === 'frozen')  return 'frozen'
+  if (inv.document_status === 'carried') return 'carried'
+  if (inv.payment_status  === 'paid')    return 'paid'
+  if (inv.document_status === 'draft')   return 'draft'
+  return inv.send_status !== 'unsent' ? 'sent' : 'verified'
+}
+
+const statusLabel = s => ({
+  draft:    'Draft',
+  sent:     'Sent',
+  verified: 'Terverifikasi',
+  paid:     'Dibayarkan',
+  frozen:   'Frozen',
+  carried:  'Carried',
+}[s] ?? s)
+
+const docBadgeClass = (s) => ({
+  draft:    'bg-gray-100 text-gray-500',
+  verified: 'bg-amber-50 text-amber-600 ring-1 ring-amber-200',
+  frozen:   'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
+  carried:  'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+}[s] ?? 'bg-gray-100 text-gray-500')
+
+const docBadgeLabel = (s) => ({
+  draft:    'Draft',
+  verified: 'Antrean',
+  frozen:   'Frozen',
+  carried:  'Carried',
+}[s] ?? s)
+
 const statusClass = s => ({
-  draft:   'bg-gray-100 text-gray-500',
-  sent:    'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
-  paid:    'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  unpaid:  'bg-red-50 text-red-600 ring-1 ring-red-200',
-  frozen:  'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
-  carried: 'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
-}[s] ?? 'bg-gray-100 text-gray-500');
+  draft:    'bg-gray-100 text-gray-500',
+  sent:     'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
+  verified: 'bg-amber-50 text-amber-600 ring-1 ring-amber-200',
+  paid:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  frozen:   'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
+  carried:  'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+}[s] ?? 'bg-gray-100 text-gray-500')
 
 const dotClass = inv => {
-  if (inv.status === 'frozen')  return 'bg-sky-400';
-  if (inv.status === 'carried') return 'bg-orange-400';
-  if (isPastDue(inv))           return 'bg-red-500';
-  return { draft: 'bg-gray-300', sent: 'bg-blue-400', paid: 'bg-emerald-500', unpaid: 'bg-red-400' }[inv.status] ?? 'bg-gray-300';
-};
+  if (inv.document_status === 'frozen')  return 'bg-sky-400'
+  if (inv.document_status === 'carried') return 'bg-orange-400'
+  if (isPastDue(inv))                    return 'bg-red-500'
+  const s = computedStatus(inv)
+  return { draft: 'bg-gray-300', verified: 'bg-amber-400', sent: 'bg-blue-400', paid: 'bg-emerald-500' }[s] ?? 'bg-gray-300'
+}
 
 // ── Chain card styling ──────────────────────────────────────
 function chainBorderClass(group) {
-  if (hasOverdue(group))              return 'border-red-200';
-  const last = group.invoices.at(-1);
-  if (last?.status === 'paid')        return 'border-emerald-200';
-  return 'border-gray-100';
+  if (hasOverdue(group))                         return 'border-red-200'
+  const last = group.invoices.at(-1)
+  if (last?.payment_status === 'paid')           return 'border-emerald-200'
+  return 'border-gray-100'
 }
 function chainHeaderClass(group) {
-  if (hasOverdue(group))              return 'bg-red-50/60';
-  const last = group.invoices.at(-1);
-  if (last?.status === 'paid')        return 'bg-emerald-50/60';
-  return 'bg-gray-50/60';
+  if (hasOverdue(group))                         return 'bg-red-50/60'
+  const last = group.invoices.at(-1)
+  if (last?.payment_status === 'paid')           return 'bg-emerald-50/60'
+  return 'bg-gray-50/60'
 }
 function chainIconClass(group) {
-  if (hasOverdue(group))              return 'bg-red-100 text-red-500';
-  const last = group.invoices.at(-1);
-  if (last?.status === 'paid')        return 'bg-emerald-100 text-emerald-600';
-  return 'bg-indigo-100 text-indigo-500';
+  if (hasOverdue(group))                         return 'bg-red-100 text-red-500'
+  const last = group.invoices.at(-1)
+  if (last?.payment_status === 'paid')           return 'bg-emerald-100 text-emerald-600'
+  return 'bg-indigo-100 text-indigo-500'
 }
 
 // ── Month gap between two consecutive invoices ──────────────
@@ -925,6 +1138,19 @@ function monthGap(newer, older) {
 // ── Actions ─────────────────────────────────────────────────
 function hasChild(invoice) {
   return props.invoices.some(inv => inv.parent_invoice_id === invoice.id)
+}
+
+function hasLifecycleAction(inv) {
+  if (!inv) return false
+  const unpaid = inv.payment_status !== 'paid'
+  const active = !['frozen', 'carried'].includes(inv.document_status)
+  return (
+    (inv.document_status === 'frozen' && !hasChild(inv)) ||
+    (isPastDue(inv) && inv.interval_months && !hasChild(inv) && !inv.is_reaktivasi) ||
+    (unpaid && active && inv.interval_months && !hasChild(inv)) ||
+    (unpaid && active && inv.interval_months && !inv.prepay_chain_id) ||
+    (unpaid && active && !!inv.parent_invoice_id)
+  )
 }
 
 function isSmallSubCode(invoice) {
@@ -962,7 +1188,7 @@ function markPaid(invoice) {
     cancelButtonText: 'Batal',
   }).then(r => {
     if (r.isConfirmed) {
-      router.patch(route('invoices.status', invoice.id), { status: 'paid' }, {
+      router.patch(route('invoices.status', invoice.id), { payment_status: 'paid' }, {
         preserveScroll: true,
         onSuccess: () => toast('Invoice ditandai lunas ✓'),
       })
@@ -1070,7 +1296,7 @@ function submitResume() {
 function toggleMark(invoice) {
   router.patch(route('invoices.mark', invoice.id), {}, {
     preserveScroll: true,
-    onSuccess: () => toast(invoice.is_marked ? 'Antrean dibatalkan' : 'Invoice masuk antrean kirim otomatis'),
+    onSuccess: () => toast(invoice.document_status === 'verified' ? 'Antrean dibatalkan' : 'Invoice masuk antrean kirim otomatis'),
   })
 }
 

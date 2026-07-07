@@ -65,7 +65,7 @@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Sudah Lunas</p>
           <p class="text-xl font-bold text-emerald-600 mt-1 tabular-nums truncate">{{ fmtRp(summary.total_lunas) }}</p>
-          <p class="text-[11px] text-emerald-500 mt-1.5">{{ invoices.filter(i => i.status === 'paid').length }} invoice paid</p>
+          <p class="text-[11px] text-emerald-500 mt-1.5">{{ invoices.filter(i => i.payment_status === 'paid').length }} invoice paid</p>
         </div>
         <div :class="['rounded-2xl border shadow-sm p-4', summary.total_outstanding > 0 ? 'bg-amber-50 border-amber-100' : 'bg-white border-gray-100']">
           <p :class="['text-[11px] font-semibold uppercase tracking-wide', summary.total_outstanding > 0 ? 'text-amber-500' : 'text-gray-400']">Outstanding</p>
@@ -354,11 +354,11 @@
                 <!-- Status -->
                 <td class="px-4 py-4">
                   <div class="flex flex-col gap-1">
-                    <span :class="['inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold w-fit', statusClass(inv.status)]">
-                      {{ statusLabel(inv.status) }}
+                    <span :class="['inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold w-fit', statusClass(computedStatus(inv))]">
+                      {{ statusLabel(computedStatus(inv)) }}
                     </span>
                     <span v-if="inv.is_overdue" class="text-[10px] text-red-500 font-medium">Lewati jatuh tempo</span>
-                    <span v-if="inv.is_marked" class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded w-fit">
+                    <span v-if="inv.document_status === 'verified' && inv.send_status === 'unsent'" class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded w-fit">
                       <svg class="w-2.5 h-2.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
                       Dalam Antrean
                     </span>
@@ -368,15 +368,15 @@
                 <!-- Nominal -->
                 <td class="px-5 py-4 text-right">
                   <div class="flex flex-col items-end gap-0.5">
-                    <span class="text-sm font-bold tabular-nums" :class="inv.status === 'paid' ? 'text-emerald-600' : 'text-gray-900'">
+                    <span class="text-sm font-bold tabular-nums" :class="inv.payment_status === 'paid' ? 'text-emerald-600' : 'text-gray-900'">
                       {{ fmtRp(inv.computed_total) }}
                     </span>
                     <span v-if="inv.carried_from_id" class="text-[10px] text-orange-500 font-medium">incl. tunggakan carry</span>
                     <span v-else-if="inv.is_prepay && !inv.prepay_chain_id" class="text-[10px] text-teal-500 font-medium">incl. prepay chain</span>
                     <span v-else-if="inv.is_reaktivasi && !inv.reaktivasi_chain_id" class="text-[10px] text-violet-500 font-medium">incl. reaktivasi</span>
-                    <span v-if="inv.status === 'paid'" class="text-[10px] text-emerald-500 font-medium">✓ Lunas</span>
-                    <span v-else-if="inv.status === 'draft'" class="text-[10px] text-gray-400">Belum dikirim</span>
-                    <span v-else-if="inv.status === 'frozen'" class="text-[10px] text-violet-400">Frozen</span>
+                    <span v-if="inv.payment_status === 'paid'" class="text-[10px] text-emerald-500 font-medium">✓ Lunas</span>
+                    <span v-else-if="inv.document_status === 'draft'" class="text-[10px] text-gray-400">Belum dikirim</span>
+                    <span v-else-if="inv.document_status === 'frozen'" class="text-[10px] text-violet-400">Frozen</span>
                     <span v-else class="text-[10px] font-semibold" :class="inv.is_overdue ? 'text-red-500' : 'text-amber-500'">Belum dibayar</span>
                   </div>
                 </td>
@@ -477,12 +477,11 @@ const props = defineProps({
 
 // ── Filter state ─────────────────────────────────────────────
 const STATUS_OPTIONS = [
-  { value: 'draft',   label: 'Draft',       active: 'bg-gray-500   border-gray-500   text-white', inactive: 'border-gray-300   text-gray-600   hover:bg-gray-50',   tag: 'bg-gray-100 text-gray-600'   },
-  { value: 'sent',    label: 'Terkirim',    active: 'bg-blue-500   border-blue-500   text-white', inactive: 'border-blue-300   text-blue-700   hover:bg-blue-50',   tag: 'bg-blue-100 text-blue-700'   },
-  { value: 'paid',    label: 'Lunas',       active: 'bg-emerald-500 border-emerald-500 text-white', inactive: 'border-emerald-300 text-emerald-700 hover:bg-emerald-50', tag: 'bg-emerald-100 text-emerald-700' },
-  { value: 'unpaid',  label: 'Belum Bayar', active: 'bg-red-500    border-red-500    text-white', inactive: 'border-red-300    text-red-700    hover:bg-red-50',    tag: 'bg-red-100 text-red-700'     },
-  { value: 'frozen',  label: 'Frozen',      active: 'bg-violet-500 border-violet-500 text-white', inactive: 'border-violet-300 text-violet-700 hover:bg-violet-50', tag: 'bg-violet-100 text-violet-700' },
-  { value: 'carried', label: 'Carried',     active: 'bg-orange-500 border-orange-500 text-white', inactive: 'border-orange-300 text-orange-700 hover:bg-orange-50', tag: 'bg-orange-100 text-orange-700' },
+  { value: 'draft',    label: 'Draft',      active: 'bg-gray-500    border-gray-500    text-white', inactive: 'border-gray-300    text-gray-600    hover:bg-gray-50',    tag: 'bg-gray-100 text-gray-600'    },
+  { value: 'verified', label: 'Aktif',      active: 'bg-blue-500    border-blue-500    text-white', inactive: 'border-blue-300    text-blue-700    hover:bg-blue-50',    tag: 'bg-blue-100 text-blue-700'    },
+  { value: 'paid',     label: 'Lunas',      active: 'bg-emerald-500 border-emerald-500 text-white', inactive: 'border-emerald-300 text-emerald-700 hover:bg-emerald-50', tag: 'bg-emerald-100 text-emerald-700' },
+  { value: 'frozen',   label: 'Frozen',     active: 'bg-violet-500  border-violet-500  text-white', inactive: 'border-violet-300  text-violet-700  hover:bg-violet-50',  tag: 'bg-violet-100 text-violet-700'  },
+  { value: 'carried',  label: 'Carried',    active: 'bg-orange-500  border-orange-500  text-white', inactive: 'border-orange-300  text-orange-700  hover:bg-orange-50',  tag: 'bg-orange-100 text-orange-700'  },
 ]
 
 const showFilter = ref(false)
@@ -616,18 +615,34 @@ function fmtRp(v) {
   return 'Rp ' + Number(v).toLocaleString('id-ID', { maximumFractionDigits: 0 })
 }
 
+function computedStatus(inv) {
+  if (!inv) return 'draft'
+  if (inv.document_status === 'frozen')  return 'frozen'
+  if (inv.document_status === 'carried') return 'carried'
+  if (inv.payment_status  === 'paid')    return 'paid'
+  if (inv.document_status === 'draft')   return 'draft'
+  return inv.send_status !== 'unsent' ? 'sent' : 'verified'
+}
+
 function statusLabel(s) {
-  return { draft: 'Draft', sent: 'Terkirim', paid: 'Lunas', unpaid: 'Belum Bayar', frozen: 'Frozen', carried: 'Carried' }[s] ?? s
+  return {
+    draft:    'Draft',
+    verified: 'Terverifikasi',
+    sent:     'Terkirim',
+    paid:     'Lunas',
+    frozen:   'Frozen',
+    carried:  'Carried',
+  }[s] ?? s
 }
 
 function statusClass(s) {
   return {
-    draft:   'bg-gray-100 text-gray-500',
-    sent:    'bg-blue-100 text-blue-600',
-    paid:    'bg-emerald-100 text-emerald-600',
-    unpaid:  'bg-red-100 text-red-600',
-    frozen:  'bg-violet-100 text-violet-600',
-    carried: 'bg-orange-100 text-orange-600',
+    draft:    'bg-gray-100 text-gray-500',
+    verified: 'bg-amber-100 text-amber-600',
+    sent:     'bg-blue-100 text-blue-600',
+    paid:     'bg-emerald-100 text-emerald-600',
+    frozen:   'bg-violet-100 text-violet-600',
+    carried:  'bg-orange-100 text-orange-600',
   }[s] ?? 'bg-gray-100 text-gray-500'
 }
 </script>

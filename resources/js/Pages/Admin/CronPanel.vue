@@ -163,56 +163,34 @@
             <div class="flex-1">
               <p class="text-sm font-semibold text-gray-800">Kirim Email Invoice Otomatis</p>
               <p class="text-xs text-gray-500 mt-1 leading-relaxed">
-                Invoice yang <span class="font-medium text-gray-700">dalam antrean kirim (is_marked ✓)</span> dan
-                <span class="font-medium text-gray-700">issue_date sudah lewat atau hari ini</span> →
-                generate PDF, kirim via Brevo, status jadi
-                <span class="font-mono text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded">sent</span>.
+                Invoice <span class="font-medium text-gray-700">verified + unpaid</span> dikirim sesuai jadwal sejak issue_date:
+                <span class="font-mono text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">send1</span> hari H,
+                <span class="font-mono text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">send2</span> +14 hari,
+                <span class="font-mono text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">send3</span> +21,
+                <span class="font-mono text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">send4</span> +28,
+                <span class="font-mono text-xs bg-red-50 text-red-600 px-1.5 py-0.5 rounded">send5</span> +35 (peringatan nonaktif).
               </p>
               <div class="mt-2 flex flex-wrap gap-1.5">
-                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Skip: sent / paid / frozen</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Skip: paid / frozen / carried</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Skip: draft</span>
                 <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Skip: client tanpa email</span>
               </div>
               <div v-if="demoResult['auto-send']" class="mt-2 text-xs text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2 font-mono">
                 ✓ {{ demoResult['auto-send'] }}
+              </div>
+              <div v-if="demoResult['auto-send-history']" class="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 font-mono">
+                ✓ {{ demoResult['auto-send-history'] }}
               </div>
             </div>
             <div class="flex flex-col items-end gap-2 shrink-0">
               <span class="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">Aktif</span>
               <button @click="openDemoModal('auto-send')" :disabled="demoLoading['auto-send']"
                 class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 transition-colors disabled:opacity-50 whitespace-nowrap">
-                {{ demoLoading['auto-send'] ? 'Membuat...' : 'Buat Demo' }}
+                {{ demoLoading['auto-send'] ? 'Membuat...' : 'Demo send1' }}
               </button>
-            </div>
-          </div>
-
-          <!-- Auto overdue -->
-          <div class="px-5 py-4 flex items-start gap-4">
-            <div class="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center shrink-0 mt-0.5">
-              <svg class="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-            </div>
-            <div class="flex-1">
-              <p class="text-sm font-semibold text-gray-800">Auto Tandai Jatuh Tempo</p>
-              <p class="text-xs text-gray-500 mt-1 leading-relaxed">
-                Invoice status <span class="font-mono text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">sent</span> yang
-                <span class="font-medium text-gray-700">due_date sudah lewat</span> →
-                otomatis ubah ke <span class="font-mono text-xs bg-red-50 text-red-600 px-1.5 py-0.5 rounded">unpaid</span>.
-                Berubah di hari setelah due_date.
-              </p>
-              <div class="mt-2 flex flex-wrap gap-1.5">
-                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Hanya status: sent</span>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Skip: draft / paid / frozen</span>
-              </div>
-              <div v-if="demoResult['auto-overdue']" class="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 font-mono">
-                ✓ {{ demoResult['auto-overdue'] }}
-              </div>
-            </div>
-            <div class="flex flex-col items-end gap-2 shrink-0">
-              <span class="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">Aktif</span>
-              <button @click="openDemoModal('auto-overdue')" :disabled="demoLoading['auto-overdue']"
+              <button @click="openDemoModal('auto-send-history')" :disabled="demoLoading['auto-send-history']"
                 class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 transition-colors disabled:opacity-50 whitespace-nowrap">
-                {{ demoLoading['auto-overdue'] ? 'Membuat...' : 'Buat Demo' }}
+                {{ demoLoading['auto-send-history'] ? 'Membuat...' : 'Demo send5' }}
               </button>
             </div>
           </div>
@@ -298,8 +276,9 @@
                   :class="d.status === 'sent' ? 'bg-emerald-400' : d.status === 'skipped' ? 'bg-gray-300' : 'bg-red-400'"/>
                 <span class="font-mono text-gray-600">{{ d.invoice_number }}</span>
                 <span class="text-gray-400">{{ d.client }}</span>
+                <span v-if="d.stage" class="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                  :class="d.stage === 'send5' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'">{{ d.stage }}</span>
                 <span v-if="d.status === 'sent'" class="text-emerald-600 font-medium">Terkirim</span>
-                <span v-else-if="d.status === 'overdue'" class="text-red-500 font-medium">→ Unpaid (jatuh tempo)</span>
                 <span v-else-if="d.status === 'skipped'" class="text-gray-400">Dilewati</span>
                 <span v-else class="text-red-500">{{ d.error }}</span>
               </div>
@@ -385,7 +364,7 @@
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="demoModal = null"/>
         <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
           <p class="text-sm font-bold text-gray-900 mb-1">
-            Buat Demo — {{ demoModal === 'auto-send' ? 'Auto-Send' : 'Auto-Overdue' }}
+            Buat Demo — {{ demoModal === 'auto-send' ? 'Send1 (baru)' : 'Send5 (sudah send1–send4)' }}
           </p>
           <p class="text-xs text-gray-400 mb-4">Pilih client yang akan dibuatkan invoice demo</p>
 
@@ -407,7 +386,7 @@
             </button>
             <button @click="submitDemo" :disabled="!demoClientId"
               class="flex-1 px-4 py-2 text-sm font-medium text-white rounded-xl transition-colors disabled:opacity-50"
-              :class="demoModal === 'auto-send' ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-red-500 hover:bg-red-600'">
+              :class="demoModal === 'auto-send-history' ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-500 hover:bg-indigo-600'">
               Buat Invoice Demo
             </button>
           </div>
@@ -441,9 +420,9 @@ const copiedUrl   = ref(false)
 const expanded    = ref(null)
 const lastOutput  = ref(null)
 const guideOpen   = ref(false)
-const demoLoading   = ref({ 'auto-send': false, 'auto-overdue': false })
-const demoResult    = ref({ 'auto-send': null,  'auto-overdue': null })
-const demoModal     = ref(null)   // 'auto-send' | 'auto-overdue' | null
+const demoLoading   = ref({ 'auto-send': false, 'auto-send-history': false })
+const demoResult    = ref({ 'auto-send': null,  'auto-send-history': null })
+const demoModal     = ref(null)   // 'auto-send' | 'auto-send-history' | null
 const demoClientId  = ref(null)
 
 // reactive copy of runs so we can prepend new ones

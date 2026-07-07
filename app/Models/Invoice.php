@@ -9,7 +9,8 @@ class Invoice extends Model
     protected $fillable = [
         'user_id', 'client_id', 'project_category_id', 'document_issuer_id',
         'bank_account_id', 'signature_id', 'email_template_id', 'with_signature', 'spk_number',
-        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes', 'status', 'is_marked', 'is_demo',
+        'invoice_number', 'issue_date', 'due_date', 'attention', 'notes',
+        'payment_status', 'document_status', 'send_status', 'is_demo',
         'tax_percentage', 'discount_type', 'discount_value', 'is_dpp',
         'interval_months', 'parent_invoice_id', 'carried_from_id',
         'is_reaktivasi', 'reaktivasi_chain_id', 'invoice_type',
@@ -20,7 +21,6 @@ class Invoice extends Model
         'issue_date'         => 'date',
         'due_date'           => 'date',
         'with_signature'     => 'boolean',
-        'is_marked'          => 'boolean',
         'is_demo'            => 'boolean',
         'is_dpp'             => 'boolean',
         'is_reaktivasi'      => 'boolean',

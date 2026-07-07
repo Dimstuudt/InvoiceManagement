@@ -198,8 +198,8 @@
               <div class="text-right shrink-0">
                 <p class="text-[13px] font-semibold text-gray-800">{{ fmtCurrencyShort(inv.total) }}</p>
                 <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded mt-0.5 inline-block"
-                  :class="inv.status === 'unpaid' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'">
-                  {{ inv.status === 'unpaid' ? 'Unpaid' : 'Sent' }}
+                  :class="inv.send_status !== 'unsent' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-500'">
+                  {{ inv.send_status !== 'unsent' ? inv.send_status.toUpperCase() : 'Antrean' }}
                 </span>
               </div>
               <Link :href="route('invoices.show', inv.id)"
@@ -305,7 +305,7 @@ const areaOptions = computed(() => ({
 const donutSeries = computed(() => [
   props.status_distribution.paid,
   props.status_distribution.sent,
-  props.status_distribution.unpaid,
+  props.status_distribution.antrean,
   props.status_distribution.draft,
   props.status_distribution.carried,
   props.status_distribution.frozen,
@@ -319,8 +319,8 @@ const donutOptions = {
     fontFamily: 'inherit',
     animations: { enabled: true, speed: 600 },
   },
-  labels: ['Paid', 'Sent', 'Unpaid', 'Draft', 'Carried', 'Frozen'],
-  colors: ['#10b981', '#3b82f6', '#ef4444', '#94a3b8', '#f59e0b', '#6366f1'],
+  labels: ['Paid', 'Sent', 'Antrean', 'Draft', 'Carried', 'Frozen'],
+  colors: ['#10b981', '#3b82f6', '#a78bfa', '#94a3b8', '#f59e0b', '#6366f1'],
   legend: {
     position: 'bottom',
     fontSize: '11px',

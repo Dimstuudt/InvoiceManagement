@@ -78,18 +78,29 @@
     $prepayPeriodLabel = $s === $e ? $s : "{$s} s/d {$e}";
   }
   $displayTotal = $isPrepayHead ? $prepayGrand : ($isReaktivasiHead ? $reaktivasiGrand : $grandTotal);
-  $isPaid       = $invoice->status === 'paid';
-  $isOverdue    = !$isPaid && $invoice->due_date && $invoice->due_date->isPast();
-  $stampLabel   = [
-    'draft'   => 'DRAFT',
-    'sent'    => 'SENT',
-    'paid'    => 'LUNAS',
-    'unpaid'  => 'UNPAID',
-    'carried' => 'CARRIED',
-    'frozen'  => 'FROZEN',
+  $isPaid = $invoice->payment_status === 'paid';
+  $computedStatusKey = match(true) {
+    $invoice->document_status === 'frozen'   => 'frozen',
+    $invoice->document_status === 'carried'  => 'carried',
+    $invoice->payment_status  === 'paid'     => 'paid',
+    $invoice->document_status === 'draft'    => 'draft',
+    $invoice->send_status     !== 'unsent'   => 'sent',
+    default                                   => 'antrean',
+  };
+  $isOverdue  = !$isPaid
+    && !in_array($invoice->document_status, ['frozen', 'carried'])
+    && $invoice->due_date
+    && $invoice->due_date->isPast();
+  $stampLabel = [
+    'draft'    => 'DRAFT',
+    'antrean'  => 'ANTREAN',
+    'sent'     => 'SENT',
+    'paid'     => 'LUNAS',
+    'carried'  => 'CARRIED',
+    'frozen'   => 'FROZEN',
   ];
-  $stampClass = $isOverdue ? 'stamp-overdue' : 'stamp-' . $invoice->status;
-  $stampText  = $isOverdue ? 'JATUH TEMPO' : ($stampLabel[$invoice->status] ?? strtoupper($invoice->status));
+  $stampClass = $isOverdue ? 'stamp-overdue' : 'stamp-' . $computedStatusKey;
+  $stampText  = $isOverdue ? 'JATUH TEMPO' : ($stampLabel[$computedStatusKey] ?? strtoupper($computedStatusKey));
 
   $receiptNumber = 'RCP/' . $invoice->invoice_number;
 @endphp
@@ -158,8 +169,8 @@
           <td style="font-weight:700;color:#6b7280;padding-right:0.75rem;white-space:nowrap;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Status</td>
           <td>
             <span style="display:inline-block;padding:0.2rem 0.6rem;border-radius:0.375rem;font-size:0.75rem;font-weight:700;
-              {{ $invoice->status === 'paid' ? 'background:#dcfce7;color:#15803d' : ($invoice->status === 'unpaid' ? 'background:#fee2e2;color:#dc2626' : ($invoice->status === 'sent' ? 'background:#dbeafe;color:#1d4ed8' : 'background:#f3f4f6;color:#6b7280')) }}">
-              {{ strtoupper($invoice->status) }}
+              {{ $computedStatusKey === 'paid' ? 'background:#dcfce7;color:#15803d' : ($computedStatusKey === 'sent' ? 'background:#dbeafe;color:#1d4ed8' : ($computedStatusKey === 'frozen' ? 'background:#e0f2fe;color:#0369a1' : ($computedStatusKey === 'carried' ? 'background:#fff7ed;color:#c2410c' : 'background:#f3f4f6;color:#6b7280'))) }}">
+              {{ $isOverdue ? 'JATUH TEMPO' : ($stampLabel[$computedStatusKey] ?? strtoupper($computedStatusKey)) }}
             </span>
           </td>
         </tr>

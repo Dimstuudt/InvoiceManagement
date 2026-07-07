@@ -52,10 +52,8 @@
           <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_outstanding) }}</p>
           <p class="text-[10px] text-indigo-400 mt-1.5 font-medium">belum terbayar</p>
           <div class="flex items-center gap-1.5 mt-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"/>
-            <span class="text-[10px] text-gray-400">{{ summary.total_unpaid }} sent</span>
-            <span class="w-1.5 h-1.5 rounded-full bg-red-400 ml-1"/>
-            <span class="text-[10px] text-gray-400">{{ summary.total_invoices - (summary.total_invoices - (summary.total_unpaid ?? 0)) }} unpaid</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"/>
+            <span class="text-[10px] text-gray-400">{{ summary.total_unpaid }} dalam antrean</span>
           </div>
         </div>
 
@@ -210,26 +208,26 @@
 
             <!-- Status pills row -->
             <div class="flex flex-wrap gap-1 mt-3.5">
+              <!-- Paid -->
               <span v-if="client.paid_count"
                 class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
-                {{ client.paid_count }} Paid
+                {{ client.paid_count }} Lunas
               </span>
+              <!-- Antrean Kirim (verified+unpaid): sent_count = doc=verified, pay=unpaid -->
               <span v-if="client.sent_count"
-                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">
-                <span class="w-1.5 h-1.5 rounded-full bg-blue-400"/>
-                {{ client.sent_count }} Sent
+                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"/>
+                {{ client.sent_count }} Antrean
+                <span v-if="client.unpaid_count > 0" class="font-normal text-amber-400">({{ client.unpaid_count }}× kirim)</span>
               </span>
-              <span v-if="client.unpaid_count"
-                class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600">
-                <span class="w-1.5 h-1.5 rounded-full bg-red-400"/>
-                {{ client.unpaid_count }} Unpaid
-              </span>
+              <!-- Draft -->
               <span v-if="client.draft_count"
                 class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">
                 <span class="w-1.5 h-1.5 rounded-full bg-gray-300"/>
                 {{ client.draft_count }} Draft
               </span>
+              <!-- Frozen -->
               <span v-if="client.frozen_count"
                 class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-600">
                 <span class="w-1.5 h-1.5 rounded-full bg-sky-400"/>
@@ -476,12 +474,11 @@ const exportTo        = ref(thisMonth)
 const exportStatuses  = ref([])
 
 const exportStatusOptions = [
-  { value: 'paid',    label: 'Lunas',       activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
-  { value: 'sent',    label: 'Terkirim',    activeClass: 'border-blue-400 bg-blue-50 text-blue-700' },
-  { value: 'unpaid',  label: 'Belum Bayar', activeClass: 'border-red-400 bg-red-50 text-red-700' },
-  { value: 'draft',   label: 'Draft',       activeClass: 'border-gray-400 bg-gray-100 text-gray-700' },
-  { value: 'frozen',  label: 'Dibekukan',   activeClass: 'border-slate-400 bg-slate-100 text-slate-700' },
-  { value: 'carried', label: 'Carry',       activeClass: 'border-orange-400 bg-orange-50 text-orange-700' },
+  { value: 'paid',     label: 'Lunas',      activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
+  { value: 'verified', label: 'Aktif',      activeClass: 'border-blue-400 bg-blue-50 text-blue-700' },
+  { value: 'draft',    label: 'Draft',      activeClass: 'border-gray-400 bg-gray-100 text-gray-700' },
+  { value: 'frozen',   label: 'Dibekukan',  activeClass: 'border-slate-400 bg-slate-100 text-slate-700' },
+  { value: 'carried',  label: 'Carry',      activeClass: 'border-orange-400 bg-orange-50 text-orange-700' },
 ]
 
 function toggleExportStatus(val) {
@@ -499,8 +496,7 @@ function doExport() {
 
 // Helpers
 const totalInvoices = c =>
-  (c.draft_count ?? 0) + (c.sent_count ?? 0) + (c.paid_count ?? 0) +
-  (c.unpaid_count ?? 0) + (c.frozen_count ?? 0)
+  (c.draft_count ?? 0) + (c.sent_count ?? 0) + (c.paid_count ?? 0) + (c.frozen_count ?? 0)
 
 function fmtShort(v) {
   if (!v) return 'Rp 0'

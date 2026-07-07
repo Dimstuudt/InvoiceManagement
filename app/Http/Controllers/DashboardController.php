@@ -16,23 +16,25 @@ class DashboardController extends Controller
         $end   = $now->copy()->endOfMonth();
 
         // Revenue bulan ini (paid)
-        $paidThisMonth = Invoice::where('status', 'paid')
+        $paidThisMonth    = Invoice::where('payment_status', 'paid')
             ->where('is_demo', false)
             ->whereBetween('issue_date', [$start, $end])
             ->with('items')
             ->get();
         $revenueThisMonth = $paidThisMonth->sum(fn($i) => $i->total);
 
-        // Outstanding (sent + unpaid, belum overdue)
-        $outstanding = Invoice::whereIn('status', ['sent', 'unpaid'])
+        // Outstanding: verified + unpaid + belum jatuh tempo
+        $outstanding = Invoice::where('document_status', 'verified')
+            ->where('payment_status', 'unpaid')
             ->where('is_demo', false)
             ->where('due_date', '>=', $now->toDateString())
             ->with('items')
             ->get()
             ->sum(fn($i) => $i->total);
 
-        // Overdue
-        $overdueRaw = Invoice::whereNotIn('status', ['paid', 'frozen', 'carried'])
+        // Overdue: unpaid, tidak frozen/carried, due_date sudah lewat
+        $overdueRaw = Invoice::where('payment_status', 'unpaid')
+            ->whereNotIn('document_status', ['frozen', 'carried'])
             ->where('is_demo', false)
             ->where('due_date', '<', $now->toDateString())
             ->with(['client', 'items'])
@@ -40,36 +42,41 @@ class DashboardController extends Controller
             ->get();
 
         $overdueInvoices = $overdueRaw->map(fn($inv) => [
-            'id'             => $inv->id,
-            'invoice_number' => $inv->invoice_number,
-            'client_name'    => $inv->client?->company_name,
-            'due_date'       => $inv->due_date->toDateString(),
-            'days_overdue'   => (int) $inv->due_date->diffInDays($now),
-            'total'          => $inv->total,
-            'status'         => $inv->status,
+            'id'              => $inv->id,
+            'invoice_number'  => $inv->invoice_number,
+            'client_name'     => $inv->client?->company_name,
+            'due_date'        => $inv->due_date->toDateString(),
+            'days_overdue'    => (int) $inv->due_date->diffInDays($now),
+            'total'           => $inv->total,
+            'payment_status'  => $inv->payment_status,
+            'document_status' => $inv->document_status,
+            'send_status'     => $inv->send_status,
         ]);
 
-        // Jatuh tempo 7 hari ke depan
-        $upcomingInvoices = Invoice::whereNotIn('status', ['paid', 'frozen', 'carried'])
+        // Jatuh tempo 7 hari ke depan: unpaid, tidak frozen/carried
+        $upcomingInvoices = Invoice::where('payment_status', 'unpaid')
+            ->whereNotIn('document_status', ['frozen', 'carried'])
             ->where('is_demo', false)
             ->whereBetween('due_date', [$now->toDateString(), $now->copy()->addDays(7)->toDateString()])
             ->with(['client', 'items'])
             ->orderBy('due_date')
             ->get()
             ->map(fn($inv) => [
-                'id'             => $inv->id,
-                'invoice_number' => $inv->invoice_number,
-                'client_name'    => $inv->client?->company_name,
-                'due_date'       => $inv->due_date->toDateString(),
-                'days_until'     => (int) $now->diffInDays($inv->due_date),
-                'total'          => $inv->total,
-                'status'         => $inv->status,
+                'id'              => $inv->id,
+                'invoice_number'  => $inv->invoice_number,
+                'client_name'     => $inv->client?->company_name,
+                'due_date'        => $inv->due_date->toDateString(),
+                'days_until'      => (int) $now->diffInDays($inv->due_date),
+                'total'           => $inv->total,
+                'payment_status'  => $inv->payment_status,
+                'document_status' => $inv->document_status,
+                'send_status'     => $inv->send_status,
             ]);
 
         // Revenue 6 bulan terakhir
         $monthlyRevenue = collect(range(5, 0))->map(function ($i) use ($now) {
             $month = $now->copy()->subMonths($i);
-            $value = Invoice::where('status', 'paid')
+            $value = Invoice::where('payment_status', 'paid')
                 ->where('is_demo', false)
                 ->whereYear('issue_date', $month->year)
                 ->whereMonth('issue_date', $month->month)
@@ -86,7 +93,7 @@ class DashboardController extends Controller
         })->values();
 
         $lastMonth        = $now->copy()->subMonth();
-        $revenueLastMonth = Invoice::where('status', 'paid')
+        $revenueLastMonth = Invoice::where('payment_status', 'paid')
             ->where('is_demo', false)
             ->whereYear('issue_date', $lastMonth->year)
             ->whereMonth('issue_date', $lastMonth->month)
@@ -94,10 +101,16 @@ class DashboardController extends Controller
             ->get()
             ->sum(fn($i) => $i->total);
 
-        $statusCounts = Invoice::where('is_demo', false)
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status');
+        // Status distribution berdasarkan 3 kolom baru
+        $base = Invoice::where('is_demo', false);
+        $statusCounts = [
+            'paid'    => (clone $base)->where('payment_status', 'paid')->count(),
+            'sent'    => (clone $base)->where('document_status', 'verified')->where('payment_status', 'unpaid')->where('send_status', '!=', 'unsent')->count(),
+            'antrean' => (clone $base)->where('document_status', 'verified')->where('payment_status', 'unpaid')->where('send_status', 'unsent')->count(),
+            'draft'   => (clone $base)->where('document_status', 'draft')->count(),
+            'carried' => (clone $base)->where('document_status', 'carried')->count(),
+            'frozen'  => (clone $base)->where('document_status', 'frozen')->count(),
+        ];
 
         return Inertia::render('Dashboard', [
             'stats' => [
@@ -109,17 +122,10 @@ class DashboardController extends Controller
                 'invoices_this_month' => Invoice::where('is_demo', false)->whereBetween('issue_date', [$start, $end])->count(),
                 'active_clients'      => Client::where('is_active', true)->count(),
             ],
-            'status_distribution' => [
-                'paid'    => (int) ($statusCounts['paid']    ?? 0),
-                'sent'    => (int) ($statusCounts['sent']    ?? 0),
-                'unpaid'  => (int) ($statusCounts['unpaid']  ?? 0),
-                'draft'   => (int) ($statusCounts['draft']   ?? 0),
-                'carried' => (int) ($statusCounts['carried'] ?? 0),
-                'frozen'  => (int) ($statusCounts['frozen']  ?? 0),
-            ],
-            'monthly_revenue'   => $monthlyRevenue,
-            'overdue_invoices'  => $overdueInvoices->take(8),
-            'upcoming_invoices' => $upcomingInvoices,
+            'status_distribution' => $statusCounts,
+            'monthly_revenue'     => $monthlyRevenue,
+            'overdue_invoices'    => $overdueInvoices->take(8),
+            'upcoming_invoices'   => $upcomingInvoices,
         ]);
     }
 }

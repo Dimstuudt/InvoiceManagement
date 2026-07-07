@@ -15,27 +15,45 @@ use finfo;
 class InvoiceAutoSend extends Command
 {
     protected $signature   = 'invoice:auto-send {--triggered-by=schedule : Source of trigger (schedule|http|manual)}';
-    protected $description = 'Kirim invoice yang sudah ditandai dan telah melewati tanggal terbit';
+    protected $description = 'Kirim invoice berdasarkan jadwal send1–send5 (verified + unpaid + issue_date tiba)';
+
+    // Interval hari sejak issue_date untuk setiap tahap pengiriman
+    private const SEND_SCHEDULE = [
+        'send1' => 0,   // hari H (issue_date)
+        'send2' => 14,  // +14 hari
+        'send3' => 21,  // +7 hari dari send2
+        'send4' => 28,  // +7 hari dari send3
+        'send5' => 35,  // +7 hari dari send4 — pesan nonaktif
+    ];
 
     public function handle(PdfService $pdfService): int
     {
-        $start = microtime(true);
+        $start   = microtime(true);
+        $today   = Carbon::today();
+        $details = [];
+        $sent    = 0;
+        $failed  = 0;
 
-        $invoices = Invoice::with([
+        // Ambil semua invoice yang perlu dicek:
+        // verified + unpaid + tidak frozen/carried + issue_date sudah lewat atau hari ini
+        $candidates = Invoice::with([
                 'client.emails', 'projectCategory', 'documentIssuer',
                 'bankAccount', 'signature', 'items', 'user',
                 'emailTemplate', 'carriedFrom.items',
             ])
-            ->where('is_marked', true)
-            ->whereDate('issue_date', '<=', Carbon::today())
-            ->whereNotIn('status', ['sent', 'paid', 'frozen'])
+            ->where('document_status', 'verified')
+            ->where('payment_status', 'unpaid')
+            ->whereDate('issue_date', '<=', $today)
             ->get();
 
-        $details  = [];
-        $sent     = 0;
-        $failed   = 0;
+        foreach ($candidates as $invoice) {
+            $nextStage = $this->getNextSendStage($invoice, $today);
 
-        foreach ($invoices as $invoice) {
+            if ($nextStage === null) {
+                // Belum waktunya dikirim lagi
+                continue;
+            }
+
             $emails = $invoice->client->emails->pluck('email')->toArray();
 
             if (empty($emails)) {
@@ -43,6 +61,7 @@ class InvoiceAutoSend extends Command
                     'invoice_id'     => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'client'         => $invoice->client->company_name ?? '-',
+                    'stage'          => $nextStage,
                     'status'         => 'skipped',
                     'error'          => 'Client tidak punya email terdaftar',
                 ];
@@ -50,16 +69,21 @@ class InvoiceAutoSend extends Command
                 continue;
             }
 
-            // Resolve template: assigned → default → lowest-id fallback
             $tpl = $invoice->emailTemplate
                 ?? EmailTemplate::where('is_default', true)->first()
                 ?? EmailTemplate::orderBy('id')->first();
 
-            $renderedSubject = $tpl ? $this->renderTemplate($tpl->subject ?? '', $invoice) : '';
-            $renderedBody    = $tpl ? $this->renderTemplate($tpl->body ?? '', $invoice)    : '';
+            $subject = $tpl ? $this->renderTemplate($tpl->subject ?? '', $invoice, $nextStage) : '';
+            $body    = $tpl ? $this->renderTemplate($tpl->body    ?? '', $invoice, $nextStage) : '';
 
-            $subject = $renderedSubject ?: "Invoice {$invoice->invoice_number}";
-            $body    = $renderedBody    ?: "Terlampir invoice {$invoice->invoice_number}.";
+            // Pesan khusus untuk send5 (peringatan nonaktif)
+            if ($nextStage === 'send5') {
+                if (!$subject) $subject = "[PENTING] Invoice {$invoice->invoice_number} — Layanan akan dinonaktifkan";
+                $body = $this->buildSend5Body($invoice, $body);
+            }
+
+            $subject = $subject ?: "Invoice {$invoice->invoice_number}";
+            $body    = $body    ?: "Terlampir invoice {$invoice->invoice_number}.";
 
             try {
                 $html = view('invoices.pdf', [
@@ -69,8 +93,7 @@ class InvoiceAutoSend extends Command
 
                 $pdfBase64 = $pdfService->generate($html);
                 $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
-
-                $toList = array_map(fn($e) => ['email' => $e], $emails);
+                $toList    = array_map(fn($e) => ['email' => $e], $emails);
 
                 $response = Http::withHeaders([
                     'api-key'      => config('services.brevo.key'),
@@ -93,14 +116,18 @@ class InvoiceAutoSend extends Command
                     throw new \RuntimeException($response->json('message', 'Brevo error'));
                 }
 
-                $invoice->update(['status' => 'sent', 'is_marked' => false]);
-                ActivityLogger::log('invoice.auto_sent', $invoice, ['to' => $emails]);
+                $invoice->update(['send_status' => $nextStage]);
+                ActivityLogger::log('invoice.auto_sent', $invoice, [
+                    'to'    => $emails,
+                    'stage' => $nextStage,
+                ]);
 
                 $details[] = [
                     'invoice_id'     => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'client'         => $invoice->client->company_name ?? '-',
                     'emails'         => $emails,
+                    'stage'          => $nextStage,
                     'status'         => 'sent',
                     'error'          => null,
                 ];
@@ -111,43 +138,24 @@ class InvoiceAutoSend extends Command
                     'invoice_id'     => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'client'         => $invoice->client->company_name ?? '-',
+                    'stage'          => $nextStage,
                     'status'         => 'failed',
                     'error'          => $e->getMessage(),
                 ];
                 $failed++;
-                $this->error("Gagal kirim {$invoice->invoice_number}: " . $e->getMessage());
+                $this->error("Gagal kirim {$invoice->invoice_number} [{$nextStage}]: " . $e->getMessage());
             }
         }
 
-        // ── Auto-ubah ke unpaid: sent + due_date sudah lewat ──
-        $overdueInvoices = Invoice::with('client')
-            ->where('status', 'sent')
-            ->whereDate('due_date', '<', Carbon::today())
-            ->get();
-
-        $overdueCount = 0;
-        foreach ($overdueInvoices as $ov) {
-            $ov->update(['status' => 'unpaid']);
-            ActivityLogger::log('invoice.auto_overdue', $ov, ['due_date' => $ov->due_date->toDateString()]);
-            $details[] = [
-                'invoice_id'     => $ov->id,
-                'invoice_number' => $ov->invoice_number,
-                'client'         => $ov->client->company_name ?? '-',
-                'status'         => 'overdue',
-                'error'          => null,
-            ];
-            $overdueCount++;
-        }
-
-        $found    = $invoices->count() + $overdueCount;
+        $found    = count($details);
         $duration = (int) round((microtime(true) - $start) * 1000);
 
         $runStatus = match(true) {
-            $found === 0        => 'empty',
-            $failed === 0       => 'success',
-            $sent === 0 && $overdueCount === 0 && $failed > 0 => 'error',
-            $failed > 0         => 'partial',
-            default             => 'success',
+            $found === 0              => 'empty',
+            $failed === 0             => 'success',
+            $sent === 0 && $failed > 0 => 'error',
+            $failed > 0               => 'partial',
+            default                   => 'success',
         };
 
         CronRun::create([
@@ -160,12 +168,53 @@ class InvoiceAutoSend extends Command
             'duration_ms'     => $duration,
         ]);
 
-        $this->info("Selesai: {$found} ditemukan, {$sent} terkirim, {$failed} gagal ({$duration} ms)");
+        $this->info("Selesai: {$found} kandidat, {$sent} terkirim, {$failed} gagal ({$duration} ms)");
 
         return self::SUCCESS;
     }
 
-    private function renderTemplate(?string $text, Invoice $invoice): string
+    /**
+     * Tentukan tahap pengiriman berikutnya untuk invoice ini.
+     * Return null jika belum waktunya.
+     */
+    private function getNextSendStage(Invoice $invoice, Carbon $today): ?string
+    {
+        $issueDate = Carbon::parse($invoice->issue_date);
+
+        $stages = ['send1', 'send2', 'send3', 'send4', 'send5'];
+
+        foreach ($stages as $stage) {
+            $triggerDate = $issueDate->copy()->addDays(self::SEND_SCHEDULE[$stage]);
+
+            // Sudah waktunya DAN belum pernah dikirim di tahap ini atau lebih
+            if ($today->gte($triggerDate) && $this->isBeforeStage($invoice->send_status, $stage)) {
+                return $stage;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cek apakah current_status masih "sebelum" target_stage.
+     * send_status: unsent < send1 < send2 < send3 < send4 < send5
+     */
+    private function isBeforeStage(string $currentStatus, string $targetStage): bool
+    {
+        $order = ['unsent' => 0, 'send1' => 1, 'send2' => 2, 'send3' => 3, 'send4' => 4, 'send5' => 5];
+        return ($order[$currentStatus] ?? 0) < ($order[$targetStage] ?? 99);
+    }
+
+    private function buildSend5Body(Invoice $invoice, string $baseBody): string
+    {
+        $warning = "PERHATIAN: Tagihan ini belum dibayarkan hingga batas waktu yang ditentukan. "
+            . "Layanan akan segera dinonaktifkan jika pembayaran tidak dilakukan. "
+            . "Segera hubungi tim kami jika Anda memiliki pertanyaan atau ingin menjadwalkan pembayaran.\n\n";
+
+        return $baseBody ? $warning . $baseBody : $warning . "Terlampir invoice {$invoice->invoice_number}.";
+    }
+
+    private function renderTemplate(?string $text, Invoice $invoice, string $stage = 'send1'): string
     {
         if (!$text) return '';
         $fmtDate = fn($d) => $d instanceof \Carbon\Carbon
@@ -188,6 +237,7 @@ class InvoiceAutoSend extends Command
             '{{bank_name}}'           => $invoice->bankAccount->bank_name ?? '',
             '{{bank_account_number}}' => $invoice->bankAccount->account_number ?? '',
             '{{bank_holder}}'         => $invoice->bankAccount->name ?? '',
+            '{{send_stage}}'          => $stage,
         ];
 
         return str_replace(array_keys($vars), array_values($vars), $text);

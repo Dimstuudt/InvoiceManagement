@@ -136,16 +136,32 @@ const pdfFilename = computed(() =>
   (props.invoice.invoice_number ?? 'invoice').replace(/\//g, '-') + '.pdf'
 );
 
-const statusClass = computed(() => ({
-  draft:  'bg-gray-100 text-gray-500',
-  sent:   'bg-blue-50 text-blue-600',
-  paid:   'bg-emerald-50 text-emerald-700',
-  unpaid: 'bg-red-50 text-red-600',
-}[props.invoice.status] ?? 'bg-gray-100 text-gray-500'));
+function computedStatus(inv) {
+  if (!inv) return 'draft'
+  if (inv.document_status === 'frozen')  return 'frozen'
+  if (inv.document_status === 'carried') return 'carried'
+  if (inv.payment_status  === 'paid')    return 'paid'
+  if (inv.document_status === 'draft')   return 'draft'
+  return inv.send_status !== 'unsent' ? 'sent' : 'verified'
+}
 
-const statusLabel = computed(() =>
-  ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[props.invoice.status] ?? props.invoice.status)
-);
+const statusClass = computed(() => ({
+  draft:    'bg-gray-100 text-gray-500',
+  verified: 'bg-amber-50 text-amber-600',
+  sent:     'bg-blue-50 text-blue-600',
+  paid:     'bg-emerald-50 text-emerald-700',
+  frozen:   'bg-sky-100 text-sky-600',
+  carried:  'bg-orange-50 text-orange-600',
+}[computedStatus(props.invoice)] ?? 'bg-gray-100 text-gray-500'));
+
+const statusLabel = computed(() => ({
+  draft:    'Draft',
+  verified: 'Terverifikasi',
+  sent:     'Sent',
+  paid:     'Paid',
+  frozen:   'Frozen',
+  carried:  'Carried',
+}[computedStatus(props.invoice)] ?? computedStatus(props.invoice)));
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })

@@ -21,16 +21,15 @@
             <p class="font-mono text-sm font-semibold text-gray-800 truncate">{{ invoice.invoice_number }}</p>
             <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
               :class="{
-                'bg-gray-100 text-gray-500': invoice.status === 'draft',
-                'bg-blue-50 text-blue-600 ring-1 ring-blue-200': invoice.status === 'sent',
-                'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.status === 'paid',
-                'bg-red-50 text-red-600 ring-1 ring-red-200': invoice.status === 'unpaid',
-                'bg-sky-100 text-sky-600 ring-1 ring-sky-200': invoice.status === 'frozen',
-                'bg-orange-50 text-orange-600 ring-1 ring-orange-200': invoice.status === 'carried',
+                'bg-gray-100 text-gray-500':                   invoice.document_status === 'draft',
+                'bg-blue-50 text-blue-600 ring-1 ring-blue-200': invoice.document_status === 'verified' && invoice.payment_status === 'unpaid',
+                'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.payment_status === 'paid',
+                'bg-sky-100 text-sky-600 ring-1 ring-sky-200': invoice.document_status === 'frozen',
+                'bg-orange-50 text-orange-600 ring-1 ring-orange-200': invoice.document_status === 'carried',
               }">
-              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid', frozen: 'Frozen', carried: 'Carried' }[invoice.status] }}
+              {{ invoice.payment_status === 'paid' ? 'Paid' : invoice.document_status === 'frozen' ? 'Frozen' : invoice.document_status === 'carried' ? 'Carried' : invoice.document_status === 'verified' ? (invoice.send_status === 'unsent' ? 'Verified' : 'Sent') : 'Draft' }}
             </span>
-            <template v-if="!['paid','frozen','carried'].includes(invoice.status)">
+            <template v-if="invoice.payment_status !== 'paid' && !['frozen','carried'].includes(invoice.document_status)">
               <select :value="localInterval" @change="saveInterval($event.target.value)"
                 class="text-xs border border-indigo-200 bg-indigo-50 text-indigo-600 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0">
                 <option value="">↻ —</option>
@@ -70,17 +69,23 @@
           <!-- Aksi utama (kanan) -->
           <div class="flex items-center gap-1.5 shrink-0">
 
-            <!-- Status select -->
-            <select v-if="!['frozen','carried'].includes(invoice.status)" :value="invoice.status" @change="changeStatus($event.target.value)"
+            <!-- Payment status select -->
+            <select v-if="!['frozen','carried'].includes(invoice.document_status)"
+              :value="invoice.payment_status" @change="changePaymentStatus($event.target.value)"
+              class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
+              <option value="unpaid">Belum Bayar</option>
+              <option value="paid">Lunas</option>
+            </select>
+            <!-- Document status select -->
+            <select v-if="invoice.payment_status !== 'paid' && !['frozen','carried'].includes(invoice.document_status)"
+              :value="invoice.document_status" @change="changeDocumentStatus($event.target.value)"
               class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
               <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="paid">Paid</option>
-              <option value="unpaid">Unpaid</option>
+              <option value="verified">Terverifikasi</option>
             </select>
 
             <!-- Perbarui (frozen) -->
-            <button v-if="invoice.status === 'frozen' && !invoice.children?.length"
+            <button v-if="invoice.document_status === 'frozen' && !invoice.children?.length"
               @click="resumeModal = true"
               class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -90,7 +95,7 @@
             </button>
 
             <!-- Edit -->
-            <Link v-if="!['paid','frozen','carried'].includes(invoice.status) && !invoice.is_marked"
+            <Link v-if="invoice.payment_status !== 'paid' && !['frozen','carried'].includes(invoice.document_status) && invoice.document_status !== 'verified'"
               :href="route('invoices.edit', invoice.id)"
               class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -100,7 +105,7 @@
             </Link>
 
             <!-- Kirim Email -->
-            <button v-if="!['paid','carried'].includes(invoice.status) && invoice.is_marked" @click="emailModal = true"
+            <button v-if="invoice.payment_status !== 'paid' && invoice.document_status !== 'carried' && invoice.document_status === 'verified'" @click="emailModal = true"
               class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition">
               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -119,7 +124,7 @@
               <div v-if="moreMenuOpen"
                 class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                 <!-- Carry (utang ke periode berikutnya) -->
-                <button v-if="['draft','sent','unpaid'].includes(invoice.status) && invoice.interval_months && !invoice.children?.length && !isChainMember"
+                <button v-if="invoice.payment_status !== 'paid' && !['frozen','carried'].includes(invoice.document_status) && invoice.interval_months && !invoice.children?.length && !isChainMember"
                   @click="carryInvoice(); moreMenuOpen = false"
                   class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors text-left">
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -128,7 +133,7 @@
                   Carry (Utang)
                 </button>
                 <!-- Freeze -->
-                <button v-if="['draft','sent'].includes(invoice.status) && invoice.parent_invoice_id && !isChainMember"
+                <button v-if="invoice.payment_status !== 'paid' && !['frozen','carried'].includes(invoice.document_status) && invoice.parent_invoice_id && !isChainMember"
                   @click="freezeInvoice(); moreMenuOpen = false"
                   class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-sky-600 hover:bg-sky-50 transition-colors text-left">
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -142,7 +147,7 @@
                   <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
-                  {{ invoice.is_marked ? 'Batal Antre' : 'Antre Kirim' }}
+                  {{ invoice.document_status === 'verified' ? 'Batal Antre' : 'Antre Kirim' }}
                 </button>
                 <div class="my-1 border-t border-gray-100"/>
                 <!-- Hapus -->
@@ -160,7 +165,7 @@
         </div>
 
         <!-- NOTIF DITANDAI -->
-        <div v-if="invoice.is_marked"
+        <div v-if="invoice.document_status === 'verified'"
           class="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2.5">
           <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
@@ -190,7 +195,7 @@
         </div>
 
         <!-- NOTIF CARRIED -->
-        <div v-if="invoice.status === 'carried'"
+        <div v-if="invoice.document_status === 'carried'"
           class="bg-orange-50 border-b border-orange-200 px-6 py-2.5 flex items-center gap-2.5">
           <svg class="w-4 h-4 text-orange-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
@@ -201,7 +206,7 @@
         </div>
 
         <!-- NOTIF FROZEN -->
-        <div v-if="invoice.status === 'frozen'"
+        <div v-if="invoice.document_status === 'frozen'"
           class="bg-sky-50 border-b border-sky-200 px-6 py-2.5 flex items-center gap-2.5">
           <svg class="w-4 h-4 text-sky-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364"/>
@@ -222,12 +227,19 @@
             <span class="font-mono text-sm font-bold text-gray-900 truncate">{{ invoice.invoice_number }}</span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold shrink-0"
               :class="{
-                'bg-gray-100 text-gray-500': invoice.status === 'draft',
-                'bg-blue-50 text-blue-600 ring-1 ring-blue-200': invoice.status === 'sent',
-                'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.status === 'paid',
-                'bg-red-50 text-red-600 ring-1 ring-red-200': invoice.status === 'unpaid',
+                'bg-sky-50 text-sky-600 ring-1 ring-sky-200': invoice.document_status === 'frozen',
+                'bg-orange-50 text-orange-600 ring-1 ring-orange-200': invoice.document_status === 'carried',
+                'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200': invoice.payment_status === 'paid',
+                'bg-gray-100 text-gray-500': invoice.document_status === 'draft' && invoice.payment_status !== 'paid',
+                'bg-blue-50 text-blue-600 ring-1 ring-blue-200': invoice.document_status === 'verified' && invoice.payment_status !== 'paid',
               }">
-              {{ { draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[invoice.status] }}
+              {{
+                invoice.document_status === 'frozen' ? 'Dibekukan' :
+                invoice.document_status === 'carried' ? 'Carry' :
+                invoice.payment_status === 'paid' ? 'Lunas' :
+                invoice.document_status === 'draft' ? 'Draft' :
+                ({ unsent: 'Terverifikasi', send1: 'Terkirim 1×', send2: 'Terkirim 2×', send3: 'Terkirim 3×', send4: 'Terkirim 4×', send5: 'Terkirim 5×' })[invoice.send_status] ?? 'Aktif'
+              }}
             </span>
           </div>
           <div class="flex items-center gap-2 shrink-0">
@@ -264,7 +276,7 @@
 
             <div>
               <p class="text-xs text-gray-400 font-medium mb-1">SPK Number</p>
-              <input v-if="invoice.status !== 'paid'"
+              <input v-if="invoice.payment_status !== 'paid'"
                 v-model="localSpkNumber" @blur="saveMeta"
                 placeholder="—"
                 class="text-sm text-gray-900 w-full border-b border-transparent hover:border-gray-300 focus:border-indigo-400 focus:outline-none bg-transparent transition-colors py-0.5"/>
@@ -303,7 +315,7 @@
             </div>
             <div>
               <p class="text-xs text-gray-400 font-medium mb-1">Attention</p>
-              <input v-if="invoice.status !== 'paid'"
+              <input v-if="invoice.payment_status !== 'paid'"
                 v-model="localAttention" @blur="saveMeta"
                 placeholder="—"
                 class="text-sm text-gray-900 w-full border-b border-transparent hover:border-gray-300 focus:border-indigo-400 focus:outline-none bg-transparent transition-colors py-0.5"/>
@@ -349,7 +361,7 @@
                 <th class="text-right text-xs font-semibold text-gray-400 px-4 py-3 w-44">Amount</th>
                 <th class="text-right text-xs font-semibold text-gray-400 px-4 py-3 w-44">Discount</th>
                 <th class="text-right text-xs font-semibold text-gray-400 px-4 py-3 w-44">Total</th>
-                <th v-if="invoice.status !== 'paid'" class="w-12 px-4 py-3"/>
+                <th v-if="invoice.payment_status !== 'paid'" class="w-12 px-4 py-3"/>
               </tr>
             </thead>
             <tbody>
@@ -357,7 +369,7 @@
                 class="border-b border-gray-100 hover:bg-gray-50/60 group transition-colors">
                 <td class="px-4 py-3 text-sm text-gray-400 text-center">{{ i + 1 }}</td>
                 <td class="px-4 py-3">
-                  <input v-if="invoice.status !== 'paid'" v-model="item.description" type="text"
+                  <input v-if="invoice.payment_status !== 'paid'" v-model="item.description" type="text"
                     placeholder="Deskripsi item..."
                     class="w-full text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-indigo-400 focus:outline-none py-0.5 transition-colors placeholder:text-gray-300"/>
                   <span v-else class="text-sm text-gray-900">{{ item.description }}</span>
@@ -365,13 +377,13 @@
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-1.5">
                     <span class="text-xs text-gray-400 shrink-0">Rp</span>
-                    <input v-if="invoice.status !== 'paid'" v-model.number="item.amount" type="number" min="0"
+                    <input v-if="invoice.payment_status !== 'paid'" v-model.number="item.amount" type="number" min="0"
                       class="w-full text-sm text-right font-mono text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-indigo-400 focus:outline-none py-0.5 transition-colors"/>
                     <span v-else class="text-sm font-mono text-gray-900">{{ formatNumber(item.amount) }}</span>
                   </div>
                 </td>
                 <td class="px-4 py-3 text-right">
-                  <template v-if="invoice.status !== 'paid'">
+                  <template v-if="invoice.payment_status !== 'paid'">
                     <div v-if="item.discount !== null" class="flex items-center justify-end gap-1">
                       <span class="text-xs text-gray-400 shrink-0">Rp</span>
                       <input v-model.number="item.discount" type="number" min="0"
@@ -391,7 +403,7 @@
                 <td class="px-4 py-3 text-right">
                   <span class="text-sm font-mono font-semibold text-gray-900">{{ formatCurrency(itemTotal(item)) }}</span>
                 </td>
-                <td v-if="invoice.status !== 'paid'" class="px-3 py-3 text-center">
+                <td v-if="invoice.payment_status !== 'paid'" class="px-3 py-3 text-center">
                   <button @click="removeItem(i)" :disabled="items.length === 1"
                     class="opacity-0 group-hover:opacity-100 disabled:!opacity-0 text-gray-300 hover:text-red-400 transition-all">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -402,7 +414,7 @@
               </tr>
             </tbody>
           </table>
-          <button v-if="invoice.status !== 'paid'" @click="addItem"
+          <button v-if="invoice.payment_status !== 'paid'" @click="addItem"
             class="px-5 py-3 text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1.5 transition-colors w-full hover:bg-indigo-50/30">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -425,17 +437,17 @@
 
             <div class="flex items-center gap-3 py-0.5">
               <input type="checkbox" id="discountCheck" v-model="localDiscount.enabled"
-                :disabled="invoice.status === 'paid'"
+                :disabled="invoice.payment_status === 'paid'"
                 class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0 disabled:cursor-not-allowed"/>
               <label for="discountCheck" class="text-sm text-gray-600 cursor-pointer select-none w-36 shrink-0">Invoice Discount</label>
               <template v-if="localDiscount.enabled">
-                <select v-model="localDiscount.type" :disabled="invoice.status === 'paid'"
+                <select v-model="localDiscount.type" :disabled="invoice.payment_status === 'paid'"
                   class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0 disabled:opacity-60">
                   <option value="percent">%</option>
                   <option value="amount">Rp</option>
                 </select>
                 <input v-model.number="localDiscount.value" type="number" min="0"
-                  :disabled="invoice.status === 'paid'"
+                  :disabled="invoice.payment_status === 'paid'"
                   placeholder="0"
                   class="w-32 text-sm text-right font-mono border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"/>
                 <span v-if="localDiscount.type === 'percent'" class="text-xs text-gray-400 shrink-0">%</span>
@@ -448,7 +460,7 @@
 
             <div class="flex items-center gap-3 py-0.5">
               <input type="checkbox" id="dppCheck" v-model="localIsDpp"
-                :disabled="invoice.status === 'paid'"
+                :disabled="invoice.payment_status === 'paid'"
                 class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0 disabled:cursor-not-allowed"/>
               <label for="dppCheck" class="text-sm text-gray-600 cursor-pointer select-none shrink-0">DPP (11/12)</label>
               <span v-if="localIsDpp" class="text-xs text-gray-400 ml-1">
@@ -459,12 +471,12 @@
 
             <div class="flex items-center gap-3 py-0.5">
               <input type="checkbox" id="vatCheck" v-model="localTaxEnabled"
-                :disabled="invoice.status === 'paid'"
+                :disabled="invoice.payment_status === 'paid'"
                 class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0 disabled:cursor-not-allowed"/>
               <label for="vatCheck" class="text-sm text-gray-600 cursor-pointer select-none w-36 shrink-0">VAT (PPN)</label>
               <template v-if="localTaxEnabled">
                 <input v-model.number="localTaxPct" type="number" min="0" max="100" step="0.01"
-                  :disabled="invoice.status === 'paid'"
+                  :disabled="invoice.payment_status === 'paid'"
                   class="w-20 text-sm text-center font-mono border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"/>
                 <span class="text-sm text-gray-500 shrink-0">%</span>
                 <span class="ml-auto text-sm font-mono font-semibold text-gray-900 whitespace-nowrap">{{ formatCurrency(taxAmount) }}</span>
@@ -500,7 +512,7 @@
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Notes</p>
           </div>
           <div class="px-8 py-5">
-            <textarea v-if="invoice.status !== 'paid'"
+            <textarea v-if="invoice.payment_status !== 'paid'"
               v-model="localNotes" @blur="saveMeta"
               placeholder="Enter additional notes (optional)"
               rows="3"
@@ -528,7 +540,7 @@
             </button>
           </div>
 
-          <button v-if="!['paid','carried'].includes(invoice.status) && !invoice.is_marked"
+          <button v-if="invoice.payment_status !== 'paid' && invoice.document_status !== 'carried' && invoice.document_status !== 'verified'"
             @click="save()" :disabled="saving"
             class="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white rounded-xl transition shadow-sm disabled:opacity-60">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -667,7 +679,8 @@ const chainHeadId   = computed(() =>
 )
 
 const isOverdue = computed(() => {
-  if (['paid','frozen','carried'].includes(props.invoice.status)) return false
+  if (props.invoice.payment_status === 'paid') return false
+  if (props.invoice.document_status === 'frozen' || props.invoice.document_status === 'carried') return false
   return new Date(props.invoice.due_date) < new Date(new Date().toDateString())
 })
 const overdueDays = computed(() => {
@@ -725,15 +738,19 @@ function save(onSuccess) {
 }
 
 function openPrint() {
-  if (props.invoice.status === 'paid') {
+  if (props.invoice.payment_status === 'paid') {
     window.open(route('invoices.print-view', props.invoice.id), '_blank')
     return
   }
   save(() => window.open(route('invoices.print-view', props.invoice.id), '_blank'))
 }
 
-function changeStatus(status) {
-  router.patch(route('invoices.status', props.invoice.id), { status }, { preserveScroll: true })
+function changePaymentStatus(val) {
+  router.patch(route('invoices.status', props.invoice.id), { payment_status: val }, { preserveScroll: true })
+}
+
+function changeDocumentStatus(val) {
+  router.patch(route('invoices.status', props.invoice.id), { document_status: val }, { preserveScroll: true })
 }
 
 function freezeInvoice() {

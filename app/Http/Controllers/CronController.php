@@ -108,39 +108,42 @@ class CronController extends Controller
 
         if ($type === 'auto-send') {
             $invoice = Invoice::create(array_merge($base, [
-                'invoice_number' => "DEMO-SEND-{$rand}/INV/MVC/VII/2026",
-                'issue_date'     => Carbon::today(),
-                'due_date'       => Carbon::today()->addDays(14),
-                'status'         => 'draft',
-                'is_marked'      => true,
-                'attention'      => 'Demo Auto-Send',
-                'notes'          => '[DEMO] Auto-Send: is_marked=true + issue_date=hari ini → cron akan kirim email',
+                'invoice_number'  => "DEMO-SEND-{$rand}/INV/MVC/VII/2026",
+                'issue_date'      => Carbon::today(),
+                'due_date'        => Carbon::today()->addDays(35),
+                'document_status' => 'verified',
+                'payment_status'  => 'unpaid',
+                'send_status'     => 'unsent',
+                'attention'       => 'Demo Auto-Send',
+                'notes'           => '[DEMO] Auto-Send: document_status=verified + issue_date=hari ini → cron akan kirim send1',
             ]));
             InvoiceItem::create(['invoice_id' => $invoice->id, 'description' => 'Layanan Demo Auto-Send', 'amount' => 100000, 'discount' => 0, 'sort_order' => 0]);
 
             return response()->json([
                 'invoice_number' => $invoice->invoice_number,
                 'client'         => $client->company_name,
-                'info'           => 'Invoice sudah ditandai (is_marked=true) dan issue_date hari ini. Jalankan cron → akan terkirim.',
+                'info'           => 'Invoice verified + issue_date hari ini. Jalankan cron → akan terkirim (send1).',
             ]);
         }
 
-        if ($type === 'auto-overdue') {
+        if ($type === 'auto-send-history') {
+            // Demo invoice yang sudah melewati send1-send4, siap untuk send5
             $invoice = Invoice::create(array_merge($base, [
-                'invoice_number' => "DEMO-OVERDUE-{$rand}/INV/MVC/VII/2026",
-                'issue_date'     => Carbon::today()->subDays(30),
-                'due_date'       => Carbon::yesterday(),
-                'status'         => 'sent',
-                'is_marked'      => false,
-                'attention'      => 'Demo Auto-Overdue',
-                'notes'          => '[DEMO] Auto-Overdue: status=sent + due_date=kemarin → cron akan ubah ke unpaid',
+                'invoice_number'  => "DEMO-S5-{$rand}/INV/MVC/VII/2026",
+                'issue_date'      => Carbon::today()->subDays(35),
+                'due_date'        => Carbon::today()->addDays(7),
+                'document_status' => 'verified',
+                'payment_status'  => 'unpaid',
+                'send_status'     => 'send4',
+                'attention'       => 'Demo Send5',
+                'notes'           => '[DEMO] Sudah send1-send4, issue_date 35 hari lalu → cron akan kirim send5 (peringatan nonaktif)',
             ]));
-            InvoiceItem::create(['invoice_id' => $invoice->id, 'description' => 'Layanan Demo Auto-Overdue', 'amount' => 100000, 'discount' => 0, 'sort_order' => 0]);
+            InvoiceItem::create(['invoice_id' => $invoice->id, 'description' => 'Layanan Demo Send5', 'amount' => 100000, 'discount' => 0, 'sort_order' => 0]);
 
             return response()->json([
                 'invoice_number' => $invoice->invoice_number,
                 'client'         => $client->company_name,
-                'info'           => 'Invoice status sent dengan due_date kemarin. Jalankan cron → status berubah ke unpaid.',
+                'info'           => 'Invoice sudah send4, issue_date 35 hari lalu. Jalankan cron → akan kirim send5 (peringatan nonaktif).',
             ]);
         }
 

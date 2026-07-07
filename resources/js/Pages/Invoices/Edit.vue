@@ -125,12 +125,10 @@
                 <input v-model="form.spk_number" type="text" class="field" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select v-model="form.status" class="field">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status Dokumen</label>
+                <select v-model="form.document_status" class="field">
                   <option value="draft">Draft</option>
-                  <option value="sent">Sent</option>
-                  <option value="paid">Paid</option>
-                  <option value="unpaid">Unpaid</option>
+                  <option value="verified">Terverifikasi</option>
                 </select>
               </div>
             </div>
@@ -251,7 +249,7 @@ const form = useForm({
   with_signature:      props.invoice.with_signature,
   spk_number:          props.invoice.spk_number    ?? '',
   invoice_type:        props.invoice.invoice_type  ?? 'monthly',
-  status:              props.invoice.status,
+  document_status:     props.invoice.document_status,
   issue_date:          props.invoice.issue_date,
   due_date:            props.invoice.due_date,
   invoice_number:      props.invoice.invoice_number ?? '',

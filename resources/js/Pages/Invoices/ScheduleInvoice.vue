@@ -77,18 +77,36 @@
             </thead>
             <tbody class="divide-y divide-indigo-50/50">
               <tr v-for="invoice in filteredPriority" :key="invoice.id"
-                :class="invoice.is_marked ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-indigo-50/30'"
+                :class="invoice.document_status === 'verified' ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-indigo-50/30'"
                 class="transition-colors group">
                 <!-- Checkbox -->
                 <td class="px-4 py-4">
-                  <input type="checkbox" :checked="invoice.is_marked"
+                  <input type="checkbox" :checked="invoice.document_status === 'verified'"
                     @change="toggleMark(invoice)"
                     class="w-4 h-4 rounded border-gray-300 text-amber-500 cursor-pointer focus:ring-amber-400"/>
                 </td>
                 <td class="px-3 py-4">
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(invoice.status)">
-                    {{ statusLabel(invoice.status) }}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(computedStatus(invoice))">
+                    {{ statusLabel(computedStatus(invoice)) }}
                   </span>
+                  <template v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid'">
+                    <div class="flex items-center gap-0.5 mt-1.5">
+                      <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                        class="w-2 h-2 rounded-full"
+                        :class="stageReached(invoice.send_status, st)
+                          ? (st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                          : 'bg-gray-200'"/>
+                      <span class="text-[10px] font-mono ml-1"
+                        :class="invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
+                        {{ invoice.send_status }}
+                      </span>
+                    </div>
+                    <p v-if="nextSendInfo(invoice)" class="text-[10px] mt-1 leading-none"
+                      :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                      {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'secepatnya' : fmtDateShort(nextSendInfo(invoice).date) }}
+                    </p>
+                    <p v-else-if="invoice.send_status === 'send5'" class="text-[10px] mt-1 text-red-400">sudah 5× kirim</p>
+                  </template>
                 </td>
                 <td class="px-4 py-4">
                   <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
@@ -97,18 +115,19 @@
                     class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-xs font-medium rounded-md">
                     ↻ {{ invoice.invoice_type === 'yearly' ? (invoice.interval_months / 12) + ' thn' : invoice.interval_months + ' bln' }}
                   </span>
-                  <span v-if="invoice.parent_invoice_id"
-                    class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-500 text-xs font-medium rounded-md">
-                    warisan
+                  <span v-if="invoice.is_chain_head"
+                    class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-md"
+                    :class="chainBadgeClass(invoice.chain_type)">
+                    {{ invoice.chain_type }}
                   </span>
                 </td>
                 <td class="px-4 py-4">
                   <p class="text-sm font-medium text-gray-800">{{ invoice.client?.company_name ?? '-' }}</p>
                 </td>
                 <td class="px-4 py-4">
-                  <p class="text-sm text-gray-700">{{ fmtDate(invoice.issue_date) }}</p>
+                  <p class="text-sm text-gray-700">{{ fmtDate(invoice.chain_issue_date ?? invoice.issue_date) }}</p>
                   <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
-                    → {{ fmtDate(invoice.due_date) }}
+                    → {{ fmtDate(invoice.chain_due_date ?? invoice.due_date) }}
                   </p>
                   <span v-if="isPastDue(invoice)"
                     class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-md">
@@ -116,14 +135,21 @@
                   </span>
                 </td>
                 <td class="px-4 py-4 text-right">
-                  <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
-                  <span v-if="invoice.tax_percentage"
-                    class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
-                    PPN {{ invoice.tax_percentage }}%
+                  <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.is_chain_head ? invoice.chain_total : invoice.items_sum_amount) }}</p>
+                  <span v-if="invoice.is_chain_head"
+                    class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs font-semibold rounded-md"
+                    :class="chainBadgeClass(invoice.chain_type)">
+                    total {{ invoice.chain_type }}
                   </span>
-                  <span v-else class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs text-gray-300">
-                    No tax
-                  </span>
+                  <template v-else>
+                    <span v-if="invoice.tax_percentage"
+                      class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
+                      PPN {{ invoice.tax_percentage }}%
+                    </span>
+                    <span v-else class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs text-gray-300">
+                      No tax
+                    </span>
+                  </template>
                 </td>
                 <td class="px-5 py-4">
                   <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
@@ -132,7 +158,7 @@
                       Lihat
                     </Link>
                     <!-- Paid / Unpaid -->
-                    <button v-if="invoice.status === 'sent'"
+                    <button v-if="invoice.payment_status !== 'paid' && invoice.document_status === 'verified'"
                       @click="changeStatus(invoice, 'paid')"
                       class="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-semibold whitespace-nowrap">
                       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -140,8 +166,8 @@
                       </svg>
                       Paid
                     </button>
-                    <template v-if="invoice.status !== 'paid'">
-                      <button v-if="invoice.is_marked"
+                    <template v-if="invoice.payment_status !== 'paid'">
+                      <button v-if="invoice.document_status === 'verified'"
                         @click="openEmailModal(invoice)"
                         class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -197,17 +223,17 @@
           </thead>
           <tbody class="divide-y divide-gray-50">
             <tr v-for="invoice in filteredOther" :key="invoice.id"
-              :class="invoice.is_marked ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50/50'"
+              :class="invoice.document_status === 'verified' ? 'bg-amber-50/60' : isPastDue(invoice) ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50/50'"
               class="transition-colors group">
               <!-- Checkbox -->
               <td class="px-4 py-4">
-                <input type="checkbox" :checked="invoice.is_marked"
+                <input type="checkbox" :checked="invoice.document_status === 'verified'"
                   @change="toggleMark(invoice)"
                   class="w-4 h-4 rounded border-gray-300 text-amber-500 cursor-pointer focus:ring-amber-400"/>
               </td>
               <td class="px-3 py-4">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(invoice.status)">
-                  {{ statusLabel(invoice.status) }}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(computedStatus(invoice))">
+                  {{ statusLabel(computedStatus(invoice)) }}
                 </span>
               </td>
               <td class="px-4 py-4">
@@ -217,18 +243,19 @@
                   class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-xs font-medium rounded-md">
                   ↻ {{ invoice.interval_months }} bln
                 </span>
-                <span v-if="invoice.parent_invoice_id"
-                  class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-500 text-xs font-medium rounded-md">
-                  warisan
+                <span v-if="invoice.is_chain_head"
+                  class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-md"
+                  :class="chainBadgeClass(invoice.chain_type)">
+                  {{ invoice.chain_type }}
                 </span>
               </td>
               <td class="px-4 py-4">
                 <p class="text-sm font-medium text-gray-800">{{ invoice.client?.company_name ?? '-' }}</p>
               </td>
               <td class="px-4 py-4">
-                <p class="text-sm text-gray-700">{{ fmtDate(invoice.issue_date) }}</p>
+                <p class="text-sm text-gray-700">{{ fmtDate(invoice.chain_issue_date ?? invoice.issue_date) }}</p>
                 <p class="text-xs mt-0.5 font-medium" :class="isPastDue(invoice) ? 'text-red-500' : 'text-gray-400'">
-                  → {{ fmtDate(invoice.due_date) }}
+                  → {{ fmtDate(invoice.chain_due_date ?? invoice.due_date) }}
                 </p>
                 <span v-if="isPastDue(invoice)"
                   class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-md">
@@ -236,14 +263,21 @@
                 </span>
               </td>
               <td class="px-4 py-4 text-right">
-                <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.items_sum_amount) }}</p>
-                <span v-if="invoice.tax_percentage"
-                  class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
-                  PPN {{ invoice.tax_percentage }}%
+                <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">{{ fmtCurrency(invoice.is_chain_head ? invoice.chain_total : invoice.items_sum_amount) }}</p>
+                <span v-if="invoice.is_chain_head"
+                  class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs font-semibold rounded-md"
+                  :class="chainBadgeClass(invoice.chain_type)">
+                  total {{ invoice.chain_type }}
                 </span>
-                <span v-else class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs text-gray-300">
-                  No tax
-                </span>
+                <template v-else>
+                  <span v-if="invoice.tax_percentage"
+                    class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-md ring-1 ring-violet-200">
+                    PPN {{ invoice.tax_percentage }}%
+                  </span>
+                  <span v-else class="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs text-gray-300">
+                    No tax
+                  </span>
+                </template>
               </td>
               <td class="px-5 py-4">
                 <div class="flex items-center gap-2 justify-end opacity-60 group-hover:opacity-100 transition-opacity">
@@ -252,7 +286,7 @@
                     Lihat
                   </Link>
                   <!-- Paid -->
-                  <button v-if="invoice.status === 'sent'"
+                  <button v-if="invoice.payment_status !== 'paid' && invoice.document_status === 'verified'"
                     @click="changeStatus(invoice, 'paid')"
                     class="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-semibold whitespace-nowrap">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -260,7 +294,7 @@
                     </svg>
                     Paid
                   </button>
-                  <button v-if="invoice.is_marked"
+                  <button v-if="invoice.document_status === 'verified'"
                     @click="openEmailModal(invoice)"
                     class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -345,22 +379,62 @@ function applyFilters() {
   }, { preserveState: true, replace: true });
 }
 
+function computedStatus(inv) {
+  if (!inv) return 'draft'
+  if (inv.document_status === 'frozen')  return 'frozen'
+  if (inv.document_status === 'carried') return 'carried'
+  if (inv.payment_status  === 'paid')    return 'paid'
+  if (inv.document_status === 'draft')   return 'draft'
+  return inv.send_status !== 'unsent' ? 'sent' : 'verified'
+}
+
 const statusClass = (s) => ({
-  draft:  'bg-gray-100 text-gray-500',
-  sent:   'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
-  paid:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  unpaid: 'bg-red-50 text-red-600 ring-1 ring-red-200',
-}[s] ?? 'bg-gray-100 text-gray-500');
+  draft:    'bg-gray-100 text-gray-500',
+  sent:     'bg-blue-50 text-blue-600 ring-1 ring-blue-200',
+  verified: 'bg-amber-50 text-amber-600 ring-1 ring-amber-200',
+  paid:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  frozen:   'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
+  carried:  'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+}[s] ?? 'bg-gray-100 text-gray-500')
 
-const statusLabel = (s) => ({ draft: 'Draft', sent: 'Sent', paid: 'Paid', unpaid: 'Unpaid' }[s] ?? s);
+const statusLabel = (s) => ({
+  draft:    'Draft',
+  sent:     'Sent',
+  verified: 'Terverifikasi',
+  paid:     'Paid',
+  frozen:   'Frozen',
+  carried:  'Carried',
+}[s] ?? s)
 
-const isPastDue = (inv) => inv.status !== 'paid' && new Date(inv.due_date) < new Date(new Date().toDateString());
+const isPastDue = (inv) => inv.payment_status !== 'paid' && inv.document_status !== 'frozen' && inv.document_status !== 'carried' && new Date(inv.chain_due_date ?? inv.due_date) < new Date(new Date().toDateString())
 
-const daysPastDue = (inv) => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000);
+const daysPastDue = (inv) => Math.floor((new Date(new Date().toDateString()) - new Date(inv.chain_due_date ?? inv.due_date)) / 86400000);
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
   : '-';
+
+const fmtDateShort = (d) => d
+  ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' })
+  : '-';
+
+const SEND_ORDER  = { unsent: 0, send1: 1, send2: 2, send3: 3, send4: 4, send5: 5 }
+const SEND_NEXT   = { unsent: 'send1', send1: 'send2', send2: 'send3', send3: 'send4', send4: 'send5' }
+const SEND_OFFSET = { send1: 0, send2: 14, send3: 21, send4: 28, send5: 35 }
+const stageReached  = (current, target) => (SEND_ORDER[current] ?? 0) >= (SEND_ORDER[target] ?? 99)
+const chainBadgeClass = (type) => ({
+  carry:      'bg-orange-50 text-orange-600',
+  prepay:     'bg-teal-50 text-teal-600',
+  reaktivasi: 'bg-violet-50 text-violet-600',
+}[type] ?? 'bg-gray-100 text-gray-500')
+const nextSendInfo  = (inv) => {
+  if (inv.document_status !== 'verified' || inv.payment_status !== 'unpaid') return null
+  const nextStage = SEND_NEXT[inv.send_status]
+  if (!nextStage) return null
+  const d = new Date(inv.issue_date)
+  d.setDate(d.getDate() + SEND_OFFSET[nextStage])
+  return { stage: nextStage, date: d, soon: d <= new Date(new Date().toDateString()) }
+}
 
 const fmtCurrency = (v) => v != null
   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
@@ -371,7 +445,8 @@ function toggleMark(invoice) {
 }
 
 function changeStatus(invoice, status) {
-  router.patch(route('invoices.status', invoice.id), { status }, { preserveScroll: true });
+  const payload = status === 'paid' ? { payment_status: 'paid' } : { document_status: status }
+  router.patch(route('invoices.status', invoice.id), payload, { preserveScroll: true })
 }
 
 function deleteInvoice(invoice) {

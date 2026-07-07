@@ -17,6 +17,45 @@ use Inertia\Inertia;
 
 class InvoiceController extends Controller
 {
+    // ── Helper: gabungkan 3 kolom status jadi label tunggal ──────────
+    private function statusLabel(Invoice $inv): string
+    {
+        if ($inv->document_status === 'frozen')   return 'Dibekukan';
+        if ($inv->document_status === 'carried')  return 'Carry';
+        if ($inv->payment_status  === 'paid')     return 'Lunas';
+        if ($inv->document_status === 'draft')    return 'Draft';
+        // verified + unpaid
+        return match($inv->send_status) {
+            'unsent' => 'Terverifikasi',
+            'send1'  => 'Terkirim 1×',
+            'send2'  => 'Terkirim 2×',
+            'send3'  => 'Terkirim 3×',
+            'send4'  => 'Terkirim 4×',
+            'send5'  => 'Terkirim 5×',
+            default  => 'Aktif',
+        };
+    }
+
+    // ── Helper: apply "status" filter ke query (untuk numbering/export) ──
+    private function applyStatusFilter($query, array $statuses)
+    {
+        if (empty($statuses)) return $query;
+        return $query->where(function ($q) use ($statuses) {
+            foreach ($statuses as $s) {
+                $q->orWhere(function ($inner) use ($s) {
+                    match ($s) {
+                        'draft'    => $inner->where('document_status', 'draft'),
+                        'verified' => $inner->where('document_status', 'verified')->where('payment_status', 'unpaid'),
+                        'paid'     => $inner->where('payment_status', 'paid'),
+                        'frozen'   => $inner->where('document_status', 'frozen'),
+                        'carried'  => $inner->where('document_status', 'carried'),
+                        default    => null,
+                    };
+                });
+            }
+        });
+    }
+
     public function resetAll()
     {
         $totalInvoices = Invoice::count();
@@ -39,12 +78,12 @@ class InvoiceController extends Controller
         $clients = Client::where('is_active', true)
             ->with(['category', 'invoices' => fn($q) => $q->with('items')])
             ->withCount([
-                'invoices as draft_count'   => fn($q) => $q->where('status', 'draft'),
-                'invoices as sent_count'    => fn($q) => $q->where('status', 'sent'),
-                'invoices as paid_count'    => fn($q) => $q->where('status', 'paid'),
-                'invoices as unpaid_count'  => fn($q) => $q->where('status', 'unpaid'),
-                'invoices as frozen_count'  => fn($q) => $q->where('status', 'frozen'),
-                'invoices as overdue_count' => fn($q) => $q->whereNotIn('status', ['paid', 'frozen'])->where('due_date', '<', now()),
+                'invoices as draft_count'   => fn($q) => $q->where('document_status', 'draft'),
+                'invoices as sent_count'    => fn($q) => $q->where('document_status', 'verified')->where('payment_status', 'unpaid'),
+                'invoices as paid_count'    => fn($q) => $q->where('payment_status', 'paid'),
+                'invoices as unpaid_count'  => fn($q) => $q->where('payment_status', 'unpaid')->where('document_status', 'verified')->where('send_status', '!=', 'unsent'),
+                'invoices as frozen_count'  => fn($q) => $q->where('document_status', 'frozen'),
+                'invoices as overdue_count' => fn($q) => $q->where('payment_status', '!=', 'paid')->where('document_status', '!=', 'frozen')->where('due_date', '<', now()),
             ])
             ->withMax('invoices', 'issue_date')
             ->orderBy('company_name')
@@ -52,8 +91,10 @@ class InvoiceController extends Controller
 
         $clients->each(function ($c) {
             $c->product_type_count = $c->invoices->pluck('project_category_id')->unique()->filter()->count();
-            $c->unpaid_amount      = (float) $c->invoices->whereIn('status', ['sent', 'unpaid'])->sum(fn($inv) => $inv->total);
-            $c->total_amount       = (float) $c->invoices->sum(fn($inv) => $inv->total);
+            $c->unpaid_amount      = (float) $c->invoices
+                ->filter(fn($inv) => $inv->payment_status === 'unpaid' && $inv->document_status === 'verified')
+                ->sum(fn($inv) => $inv->total);
+            $c->total_amount = (float) $c->invoices->sum(fn($inv) => $inv->total);
         });
 
         $summary = [
@@ -61,8 +102,8 @@ class InvoiceController extends Controller
             'total_overdue'     => $clients->sum('overdue_count'),
             'total_unpaid'      => $clients->sum('sent_count'),
             'total_frozen'      => $clients->sum('frozen_count'),
-            'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->unpaid_count + $c->frozen_count)),
-            'total_paid_amount' => $clients->sum(fn($c) => (float) $c->invoices->where('status', 'paid')->sum(fn($inv) => $inv->total)),
+            'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->frozen_count)),
+            'total_paid_amount' => $clients->sum(fn($c) => (float) $c->invoices->where('payment_status', 'paid')->sum(fn($inv) => $inv->total)),
         ];
 
         return Inertia::render('Invoices/Index', compact('clients', 'summary'));
@@ -70,34 +111,93 @@ class InvoiceController extends Controller
 
     public function schedule(Request $request)
     {
-        $now  = Carbon::now();
+        $now   = Carbon::now();
         $month = $request->integer('month', $now->month);
         $year  = $request->integer('year',  $now->year);
 
-        // Invoice yang issue_date = bulan berikutnya dari bulan referensi
         $next = Carbon::create($year, $month, 1)->addMonth();
+        $with = [
+            'client.emails', 'projectCategory', 'user', 'bankAccount', 'documentIssuer', 'emailTemplate',
+            'items',
+            'carriedFrom.items', 'carriedFrom.carriedFrom.items',
+            'reaktivasiChain.items',
+            'prepayChain.items',
+        ];
 
-        $with = ['client.emails', 'projectCategory', 'user', 'bankAccount', 'documentIssuer', 'emailTemplate'];
+        $mainOnly = fn($q) => $q
+            ->where('is_demo', false)
+            ->whereNotIn('document_status', ['frozen', 'carried'])
+            ->where('invoice_number', 'not like', 'C-%')
+            ->where('invoice_number', 'not like', 'R-%')
+            ->where('invoice_number', 'not like', 'P-%')
+            ->where('invoice_number', 'not like', 'F-%');
 
         $priorityInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
             ->where('user_id', auth()->id())
-            ->where('status', '!=', 'frozen')
             ->whereYear('issue_date',  $next->year)
             ->whereMonth('issue_date', $next->month)
+            ->tap($mainOnly)
             ->orderBy('due_date')
             ->get();
 
         $otherInvoices = Invoice::with($with)
             ->withSum('items', 'amount')
             ->where('user_id', auth()->id())
-            ->where('status', '!=', 'frozen')
             ->where(fn($q) => $q
                 ->whereYear('issue_date', '!=', $next->year)
                 ->orWhereMonth('issue_date', '!=', $next->month)
             )
+            ->tap($mainOnly)
             ->orderByDesc('issue_date')
             ->get();
+
+        $addChainData = function (Invoice $inv): void {
+            $isCarryHead  = (bool) $inv->carried_from_id;
+            $isReakHead   = $inv->is_reaktivasi && !$inv->reaktivasi_chain_id && $inv->reaktivasiChain->isNotEmpty();
+            $isPrepayHead = $inv->is_prepay && !$inv->prepay_chain_id && $inv->prepayChain->isNotEmpty();
+
+            // Earliest issue_date across chain
+            $chainIssue = $inv->issue_date;
+            if ($isCarryHead) {
+                $cursor = $inv;
+                while ($cursor->carried_from_id && $cursor->relationLoaded('carriedFrom') && $cursor->carriedFrom) {
+                    $cursor = $cursor->carriedFrom;
+                    if ($cursor->issue_date && (!$chainIssue || $cursor->issue_date < $chainIssue)) {
+                        $chainIssue = $cursor->issue_date;
+                    }
+                }
+            } elseif ($isReakHead || $isPrepayHead) {
+                $members = $isReakHead ? $inv->reaktivasiChain : $inv->prepayChain;
+                $min = $members->min('issue_date');
+                if ($min && (!$chainIssue || $min < $chainIssue)) $chainIssue = $min;
+            }
+
+            // Latest due_date across chain (carry head's own is already the newest)
+            $chainDue = $inv->due_date;
+            if ($isPrepayHead || $isReakHead) {
+                $members = $isPrepayHead ? $inv->prepayChain : $inv->reaktivasiChain;
+                $max = $members->max('due_date');
+                if ($max && (!$chainDue || $max > $chainDue)) $chainDue = $max;
+            }
+
+            // Total across chain
+            $chainTotal = match(true) {
+                $isCarryHead  => $inv->grand_total,
+                $isPrepayHead => $inv->prepay_grand_total,
+                $isReakHead   => $inv->reaktivasi_grand_total,
+                default       => null,
+            };
+
+            $inv->setAttribute('chain_issue_date', $chainIssue instanceof \Carbon\Carbon ? $chainIssue->toDateString() : ($chainIssue ? (string) $chainIssue : null));
+            $inv->setAttribute('chain_due_date',   $chainDue   instanceof \Carbon\Carbon ? $chainDue->toDateString()   : ($chainDue   ? (string) $chainDue   : null));
+            $inv->setAttribute('chain_total',      $chainTotal);
+            $inv->setAttribute('is_chain_head',    $isCarryHead || $isReakHead || $isPrepayHead);
+            $inv->setAttribute('chain_type',       $isCarryHead ? 'carry' : ($isPrepayHead ? 'prepay' : ($isReakHead ? 'reaktivasi' : null)));
+        };
+
+        $priorityInvoices->each($addChainData);
+        $otherInvoices->each($addChainData);
 
         return Inertia::render('Invoices/ScheduleInvoice', [
             'priorityInvoices' => $priorityInvoices,
@@ -131,20 +231,20 @@ class InvoiceController extends Controller
         if ($request->filled('from')) {
             $fromInvoice = Invoice::with('items')->findOrFail($request->from);
 
-            if ($fromInvoice->status !== 'paid') {
+            if ($fromInvoice->payment_status !== 'paid') {
                 return redirect()->route('invoices.show', $fromInvoice->id)
                     ->with('error', "Invoice {$fromInvoice->invoice_number} belum lunas. Lunasi dulu sebelum perpanjang.");
             }
         }
 
         return Inertia::render('Invoices/Create', [
-            'clients'          => Client::where('is_active', true)->get(['id', 'company_name', 'address', 'city', 'pic']),
-            'projectCategories'=> ProjectCategory::all(['id', 'name', 'code']),
-            'documentIssuers'  => DocumentIssuer::all(['id', 'name']),
-            'bankAccounts'     => BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
-            'signatures'       => Signature::all(['id', 'name', 'position']),
-            'emailTemplates'   => EmailTemplate::orderBy('name')->get(['id', 'name', 'is_default']),
-            'fromInvoice'      => $fromInvoice,
+            'clients'           => Client::where('is_active', true)->get(['id', 'company_name', 'address', 'city', 'pic']),
+            'projectCategories' => ProjectCategory::all(['id', 'name', 'code']),
+            'documentIssuers'   => DocumentIssuer::all(['id', 'name']),
+            'bankAccounts'      => BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
+            'signatures'        => Signature::all(['id', 'name', 'position']),
+            'emailTemplates'    => EmailTemplate::orderBy('name')->get(['id', 'name', 'is_default']),
+            'fromInvoice'       => $fromInvoice,
         ]);
     }
 
@@ -167,7 +267,6 @@ class InvoiceController extends Controller
             $seq    = str_pad($seqNum, 3, '0', STR_PAD_LEFT);
             $number = "{$seq}/{$category->code}/INV/MVC/{$roman}/{$year}";
 
-            // Cek apakah seq ini sudah dipakai di bulan manapun dalam tahun yang sama (exclude demo, exclude self saat edit)
             $query = Invoice::whereYear('issue_date', $year)
                 ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
                 ->where('is_demo', false);
@@ -193,11 +292,11 @@ class InvoiceController extends Controller
         $month       = $request->integer('month', 0);
         $statuses    = array_values(array_filter(
             (array) $request->input('statuses', []),
-            fn($s) => in_array($s, ['draft', 'sent', 'paid', 'unpaid', 'frozen', 'carried'])
+            fn($s) => in_array($s, ['draft', 'verified', 'paid', 'frozen', 'carried'])
         ));
         $clientId    = $request->integer('client_id', 0);
         $overdueOnly = $request->boolean('overdue_only');
-        $markedOnly  = $request->boolean('is_marked');
+        $verifiedOnly = $request->boolean('is_marked'); // is_marked sekarang = verified
 
         $years = Invoice::selectRaw('YEAR(issue_date) as yr')
             ->where('is_demo', false)
@@ -229,7 +328,7 @@ class InvoiceController extends Controller
 
         $clients = Client::orderBy('company_name')->get(['id', 'company_name']);
 
-        $invoices = Invoice::with([
+        $query = Invoice::with([
                 'client', 'projectCategory', 'items',
                 'carriedFrom.items',
                 'carriedFrom.carriedFrom.items',
@@ -240,10 +339,12 @@ class InvoiceController extends Controller
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
             ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
-            ->when(!empty($statuses), fn($q) => $q->whereIn('status', $statuses))
             ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
-            ->when($markedOnly, fn($q) => $q->where('is_marked', true))
-            ->get()
+            ->when($verifiedOnly, fn($q) => $q->where('document_status', 'verified'));
+
+        $query = $this->applyStatusFilter($query, $statuses);
+
+        $invoices = $query->get()
             ->map(function ($inv) {
                 $parts    = explode('/', $inv->invoice_number);
                 $inv->seq = (int) ($parts[0] ?? 0);
@@ -260,7 +361,8 @@ class InvoiceController extends Controller
 
                 $inv->setAttribute('computed_total', $grandTotal);
                 $inv->setAttribute('is_overdue',
-                    ! in_array($inv->status, ['paid', 'frozen'])
+                    $inv->payment_status !== 'paid'
+                    && $inv->document_status !== 'frozen'
                     && $inv->due_date && $inv->due_date->lt(now())
                 );
                 return $inv;
@@ -272,8 +374,8 @@ class InvoiceController extends Controller
 
         $summary = [
             'total_nilai'       => $invoices->sum('computed_total'),
-            'total_lunas'       => $invoices->where('status', 'paid')->sum('computed_total'),
-            'total_outstanding' => $invoices->whereIn('status', ['sent', 'unpaid'])->sum('computed_total'),
+            'total_lunas'       => $invoices->where('payment_status', 'paid')->sum('computed_total'),
+            'total_outstanding' => $invoices->filter(fn($inv) => $inv->payment_status === 'unpaid' && $inv->document_status === 'verified')->sum('computed_total'),
             'count_overdue'     => $invoices->where('is_overdue', true)->count(),
         ];
 
@@ -290,7 +392,7 @@ class InvoiceController extends Controller
                 'statuses'    => $statuses,
                 'client_id'   => $clientId ?: null,
                 'overdue_only'=> $overdueOnly,
-                'is_marked'   => $markedOnly,
+                'is_marked'   => $verifiedOnly,
             ],
         ]);
     }
@@ -302,13 +404,13 @@ class InvoiceController extends Controller
         $month       = $request->integer('month', 0);
         $statuses    = array_values(array_filter(
             (array) $request->input('statuses', []),
-            fn($s) => in_array($s, ['draft', 'sent', 'paid', 'unpaid', 'frozen', 'carried'])
+            fn($s) => in_array($s, ['draft', 'verified', 'paid', 'frozen', 'carried'])
         ));
         $clientId    = $request->integer('client_id', 0);
         $overdueOnly = $request->boolean('overdue_only');
-        $markedOnly  = $request->boolean('is_marked');
+        $verifiedOnly = $request->boolean('is_marked');
 
-        $invoices = Invoice::with([
+        $query = Invoice::with([
                 'client', 'projectCategory', 'items',
                 'carriedFrom.items',
                 'carriedFrom.carriedFrom.items',
@@ -319,10 +421,12 @@ class InvoiceController extends Controller
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
             ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
-            ->when(!empty($statuses), fn($q) => $q->whereIn('status', $statuses))
             ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
-            ->when($markedOnly, fn($q) => $q->where('is_marked', true))
-            ->get()
+            ->when($verifiedOnly, fn($q) => $q->where('document_status', 'verified'));
+
+        $query = $this->applyStatusFilter($query, $statuses);
+
+        $invoices = $query->get()
             ->map(function ($inv) {
                 $parts    = explode('/', $inv->invoice_number);
                 $inv->seq = (int) ($parts[0] ?? 0);
@@ -339,7 +443,8 @@ class InvoiceController extends Controller
 
                 $inv->setAttribute('computed_total', $grandTotal);
                 $inv->setAttribute('is_overdue',
-                    ! in_array($inv->status, ['paid', 'frozen'])
+                    $inv->payment_status !== 'paid'
+                    && $inv->document_status !== 'frozen'
                     && $inv->due_date && $inv->due_date->lt(now())
                 );
                 return $inv;
@@ -349,15 +454,6 @@ class InvoiceController extends Controller
             ->sortBy('seq')
             ->values();
 
-        $statusLabels = [
-            'draft'   => 'Draft',
-            'sent'    => 'Terkirim',
-            'paid'    => 'Lunas',
-            'unpaid'  => 'Belum Dibayar',
-            'frozen'  => 'Dibekukan',
-            'carried' => 'Carry',
-        ];
-
         // ── Column selector ───────────────────────────────────────
         $allColDefs = [
             'seq'            => ['Seq',            8],
@@ -366,20 +462,19 @@ class InvoiceController extends Controller
             'category'       => ['Kategori',      20],
             'issue_date'     => ['Terbit',        14],
             'due_date'       => ['Jatuh Tempo',   14],
-            'status'         => ['Status',        14],
+            'status'         => ['Status',        18],
             'overdue'        => ['Overdue',       10],
-            'is_marked'      => ['Antrean Kirim', 14],
+            'is_marked'      => ['Terverifikasi', 14],
             'nominal'        => ['Nominal (Rp)',  20],
         ];
-        $validKeys   = array_keys($allColDefs);
+        $validKeys    = array_keys($allColDefs);
         $selectedCols = array_values(array_filter(
             (array) $request->input('columns', $validKeys),
             fn($c) => in_array($c, $validKeys)
         ));
         if (empty($selectedCols)) $selectedCols = $validKeys;
 
-        // Map selected keys → excel column letters A, B, C ...
-        $colMap = [];
+        $colMap  = [];
         foreach ($selectedCols as $i => $key) {
             $colMap[$key] = chr(65 + $i);
         }
@@ -419,9 +514,9 @@ class InvoiceController extends Controller
                 'category'       => $inv->projectCategory?->name ?? '-',
                 'issue_date'     => $inv->issue_date->format('d/m/Y'),
                 'due_date'       => $inv->due_date?->format('d/m/Y') ?? '-',
-                'status'         => $statusLabels[$inv->status] ?? $inv->status,
+                'status'         => $this->statusLabel($inv),
                 'overdue'        => $inv->is_overdue ? 'Ya' : '-',
-                'is_marked'      => $inv->is_marked ? 'Dalam Antrean' : '-',
+                'is_marked'      => $inv->document_status === 'verified' ? 'Ya' : '-',
                 'nominal'        => (int) $inv->computed_total,
             ];
 
@@ -481,7 +576,7 @@ class InvoiceController extends Controller
             'due_date'            => 'required|date|after_or_equal:issue_date',
             'attention'           => 'nullable|string|max:255',
             'notes'               => 'nullable|string',
-            'status'              => 'required|in:draft,sent,paid,unpaid',
+            'document_status'     => 'nullable|in:draft',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'interval_months'     => 'nullable|integer|min:1|max:12',
             'invoice_type'        => 'required|in:monthly,yearly',
@@ -501,9 +596,12 @@ class InvoiceController extends Controller
 
         $invoice = Invoice::create([
             ...$validated,
-            'user_id'        => auth()->id(),
-            'invoice_number' => $invoiceNumber,
-            'with_signature' => $request->boolean('with_signature'),
+            'user_id'         => auth()->id(),
+            'invoice_number'  => $invoiceNumber,
+            'with_signature'  => $request->boolean('with_signature'),
+            'document_status' => $validated['document_status'] ?? 'draft',
+            'payment_status'  => 'unpaid',
+            'send_status'     => 'unsent',
         ]);
 
         ActivityLogger::log('invoice.created', $invoice, ['client' => $invoice->client?->company_name]);
@@ -638,7 +736,7 @@ class InvoiceController extends Controller
 
     public function edit(Invoice $invoice)
     {
-        if ($invoice->status === 'paid') {
+        if ($invoice->payment_status === 'paid') {
             return redirect()->route('invoices.show', $invoice)
                 ->with('error', 'Invoice yang sudah lunas tidak dapat diedit.');
         }
@@ -646,15 +744,15 @@ class InvoiceController extends Controller
         $invoice->load('items', 'projectCategory');
 
         return Inertia::render('Invoices/Edit', [
-            'invoice'          => array_merge($invoice->toArray(), [
+            'invoice'           => array_merge($invoice->toArray(), [
                 'items' => $invoice->items->toArray(),
                 'total' => $invoice->total,
             ]),
-            'clients'          => Client::where('is_active', true)->get(['id', 'company_name', 'address', 'city', 'pic']),
-            'projectCategories'=> ProjectCategory::all(['id', 'name', 'code']),
-            'documentIssuers'  => DocumentIssuer::all(['id', 'name']),
-            'bankAccounts'     => BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
-            'signatures'       => Signature::all(['id', 'name', 'position']),
+            'clients'           => Client::where('is_active', true)->get(['id', 'company_name', 'address', 'city', 'pic']),
+            'projectCategories' => ProjectCategory::all(['id', 'name', 'code']),
+            'documentIssuers'   => DocumentIssuer::all(['id', 'name']),
+            'bankAccounts'      => BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
+            'signatures'        => Signature::all(['id', 'name', 'position']),
         ]);
     }
 
@@ -672,13 +770,11 @@ class InvoiceController extends Controller
             'due_date'            => 'required|date|after_or_equal:issue_date',
             'attention'           => 'nullable|string|max:255',
             'notes'               => 'nullable|string',
-            'status'              => 'required|in:draft,sent,paid,unpaid',
             'tax_percentage'      => 'nullable|numeric|min:0|max:100',
             'invoice_type'        => 'required|in:monthly,yearly',
             'invoice_number'      => 'nullable|string|unique:invoices,invoice_number,' . $invoice->id,
         ]);
 
-        // Gunakan nomor dari form jika ada, jika tidak pakai nomor saat ini
         $validated['invoice_number'] = !empty($validated['invoice_number'])
             ? $validated['invoice_number']
             : $invoice->invoice_number;
@@ -695,14 +791,16 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
-        // Jika ini HEAD carry, restore C- parent: lepas prefix C- dan kembalikan ke draft
+        // Jika HEAD carry dihapus, restore C- parent
         if ($invoice->carried_from_id) {
             $carriedParent = Invoice::find($invoice->carried_from_id);
             if ($carriedParent && str_starts_with($carriedParent->invoice_number, 'C-')) {
                 $restoredNumber = substr($carriedParent->invoice_number, 2);
                 $carriedParent->update([
-                    'invoice_number' => $restoredNumber,
-                    'status'         => 'draft',
+                    'invoice_number'  => $restoredNumber,
+                    'document_status' => 'draft',
+                    'payment_status'  => 'unpaid',
+                    'send_status'     => 'unsent',
                 ]);
                 ActivityLogger::log('invoice.restored', $carriedParent, [
                     'reason'          => 'HEAD carry dihapus',
@@ -711,14 +809,14 @@ class InvoiceController extends Controller
             }
         }
 
-        // Jika ini HEAD resume, restore F- parent: lepas prefix F- dan kembalikan ke frozen
+        // Jika HEAD resume dihapus, restore F- parent
         if ($invoice->parent_invoice_id) {
             $frozenParent = Invoice::find($invoice->parent_invoice_id);
             if ($frozenParent && str_starts_with($frozenParent->invoice_number, 'F-')) {
                 $restoredNumber = substr($frozenParent->invoice_number, 2);
                 $frozenParent->update([
-                    'invoice_number' => $restoredNumber,
-                    'status'         => 'frozen',
+                    'invoice_number'  => $restoredNumber,
+                    'document_status' => 'frozen',
                 ]);
                 ActivityLogger::log('invoice.restored', $frozenParent, [
                     'reason'          => 'HEAD resume dihapus',
@@ -735,10 +833,10 @@ class InvoiceController extends Controller
     public function sendEmail(Request $request, Invoice $invoice)
     {
         $validated = $request->validate([
-            'emails'  => 'required|array|min:1',
-            'emails.*'=> 'required|email',
-            'subject' => 'required|string|max:255',
-            'body'    => 'required|string',
+            'emails'   => 'required|array|min:1',
+            'emails.*' => 'required|email',
+            'subject'  => 'required|string|max:255',
+            'body'     => 'required|string',
         ]);
 
         $invoice->load(['client', 'projectCategory', 'documentIssuer',
@@ -751,8 +849,7 @@ class InvoiceController extends Controller
 
         $pdfBase64 = app(\App\Services\PdfService::class)->generate($html);
         $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
-
-        $toList = array_map(fn($e) => ['email' => $e], $validated['emails']);
+        $toList    = array_map(fn($e) => ['email' => $e], $validated['emails']);
 
         $response = \Illuminate\Support\Facades\Http::withHeaders([
             'api-key'      => config('services.brevo.key'),
@@ -775,13 +872,24 @@ class InvoiceController extends Controller
             return back()->with('error', 'Gagal mengirim email: ' . $response->json('message', 'Unknown error'));
         }
 
-        $invoice->update(['status' => 'sent', 'is_marked' => false]);
+        // Advance send_status: unsent → send1, send1 → send2, dst.
+        $nextSendStatus = match($invoice->send_status) {
+            'unsent' => 'send1',
+            'send1'  => 'send2',
+            'send2'  => 'send3',
+            'send3'  => 'send4',
+            'send4'  => 'send5',
+            default  => $invoice->send_status,
+        };
+
+        $invoice->update([
+            'send_status'     => $nextSendStatus,
+            'document_status' => 'verified',
+        ]);
 
         ActivityLogger::log('invoice.email_sent', $invoice, ['to' => $validated['emails']]);
 
-        $emailList = implode(', ', $validated['emails']);
-
-        return back()->with('success', "Invoice berhasil dikirim ke {$emailList}.");
+        return back()->with('success', 'Invoice berhasil dikirim ke ' . implode(', ', $validated['emails']) . '.');
     }
 
     public function download(Invoice $invoice)
@@ -792,9 +900,9 @@ class InvoiceController extends Controller
             'reaktivasiChain.items', 'prepayChain.items',
         ]);
 
-        $html      = view('invoices.pdf', ['invoice' => $invoice, 'imgB64' => fn($url) => $this->urlToBase64($url)])->render();
-        $pdf       = base64_decode(app(\App\Services\PdfService::class)->generate($html));
-        $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
+        $html     = view('invoices.pdf', ['invoice' => $invoice, 'imgB64' => fn($url) => $this->urlToBase64($url)])->render();
+        $pdf      = base64_decode(app(\App\Services\PdfService::class)->generate($html));
+        $filename = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
 
         ActivityLogger::log('invoice.downloaded', $invoice);
 
@@ -843,7 +951,7 @@ class InvoiceController extends Controller
             ? Carbon::parse($request->input('to') . '-01')->endOfMonth()
             : now()->endOfMonth();
 
-        $validStatuses = ['draft', 'sent', 'paid', 'unpaid', 'frozen', 'carried'];
+        $validStatuses = ['draft', 'verified', 'paid', 'frozen', 'carried'];
         $statuses = array_values(array_filter(
             (array) $request->input('status', []),
             fn($s) => in_array($s, $validStatuses)
@@ -852,26 +960,14 @@ class InvoiceController extends Controller
         $query = Invoice::with(['client', 'projectCategory', 'items'])
             ->whereBetween('issue_date', [$from->toDateString(), $to->toDateString()]);
 
-        if (!empty($statuses)) {
-            $query->whereIn('status', $statuses);
-        }
+        $query = $this->applyStatusFilter($query, $statuses);
 
         $invoices = $query->orderBy('issue_date')->orderBy('invoice_number')->get();
-
-        $statusLabels = [
-            'draft'   => 'Draft',
-            'sent'    => 'Terkirim',
-            'paid'    => 'Lunas',
-            'unpaid'  => 'Belum Dibayar',
-            'frozen'  => 'Dibekukan',
-            'carried' => 'Carry',
-        ];
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Laporan Invoice');
 
-        // Header style
         $headerStyle = [
             'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
             'fill'      => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']],
@@ -885,7 +981,7 @@ class InvoiceController extends Controller
             'D' => ['Kategori Proyek',  20],
             'E' => ['Tanggal Issue',    14],
             'F' => ['Jatuh Tempo',      14],
-            'G' => ['Status',           14],
+            'G' => ['Status',           18],
             'H' => ['Subtotal (Rp)',    18],
             'I' => ['Diskon (Rp)',      16],
             'J' => ['DPP (Rp)',         16],
@@ -901,13 +997,11 @@ class InvoiceController extends Controller
         }
         $sheet->getRowDimension(1)->setRowHeight(22);
 
-        // Number format
-        $numFmt = '#,##0';
+        $numFmt  = '#,##0';
         $altFill = ['fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'EEEEFF']]];
 
         foreach ($invoices as $i => $inv) {
-            $row  = $i + 2;
-            $odd  = $i % 2 !== 0;
+            $row = $i + 2;
 
             $sheet->setCellValue("A{$row}", $i + 1);
             $sheet->setCellValue("B{$row}", $inv->invoice_number);
@@ -915,7 +1009,7 @@ class InvoiceController extends Controller
             $sheet->setCellValue("D{$row}", $inv->projectCategory?->name ?? '-');
             $sheet->setCellValue("E{$row}", $inv->issue_date->format('d/m/Y'));
             $sheet->setCellValue("F{$row}", $inv->due_date->format('d/m/Y'));
-            $sheet->setCellValue("G{$row}", $statusLabels[$inv->status] ?? $inv->status);
+            $sheet->setCellValue("G{$row}", $this->statusLabel($inv));
             $sheet->setCellValue("H{$row}", (int) $inv->subtotal);
             $sheet->setCellValue("I{$row}", (int) $inv->discount_amount);
             $sheet->setCellValue("J{$row}", (int) $inv->dpp_base);
@@ -927,19 +1021,14 @@ class InvoiceController extends Controller
                 $sheet->getStyle("{$numCol}{$row}")->getNumberFormat()->setFormatCode($numFmt);
             }
 
-            if ($odd) {
+            if ($i % 2 !== 0) {
                 $sheet->getStyle("A{$row}:M{$row}")->applyFromArray($altFill);
             }
         }
 
-        // Freeze header row
         $sheet->freezePane('A2');
-
-        // Auto filter
         $lastRow = count($invoices) + 1;
         $sheet->setAutoFilter("A1:M{$lastRow}");
-
-        // Bold total column
         $sheet->getStyle("M1:M{$lastRow}")->getFont()->setBold(true);
 
         $filename = 'laporan-invoice-' . $from->format('Y-m') . '-sd-' . $to->format('Y-m') . '.xlsx';
@@ -970,18 +1059,25 @@ class InvoiceController extends Controller
 
     public function toggleMark(Invoice $invoice)
     {
-        $invoice->update(['is_marked' => ! $invoice->is_marked]);
-        ActivityLogger::log($invoice->is_marked ? 'invoice.marked' : 'invoice.unmarked', $invoice);
-        return back()->with('success', $invoice->is_marked ? 'Invoice masuk antrean kirim otomatis.' : 'Antrean kirim dibatalkan.');
+        if ($invoice->payment_status === 'paid') {
+            return back()->with('error', 'Invoice yang sudah lunas tidak perlu dimasukkan ke antrean kirim.');
+        }
+
+        $isVerified    = $invoice->document_status === 'verified';
+        $newDocStatus  = $isVerified ? 'draft' : 'verified';
+        $invoice->update(['document_status' => $newDocStatus]);
+        ActivityLogger::log($isVerified ? 'invoice.unmarked' : 'invoice.marked', $invoice);
+        return back()->with('success', $isVerified
+            ? 'Invoice dikeluarkan dari antrean.'
+            : 'Invoice diverifikasi dan masuk antrean kirim.'
+        );
     }
 
     public function updateInterval(Request $request, Invoice $invoice)
     {
         $request->validate(['interval_months' => 'nullable|integer|min:1|max:12']);
         $invoice->update(['interval_months' => $request->interval_months]);
-        ActivityLogger::log('invoice.interval_changed', $invoice, [
-            'interval' => $request->interval_months,
-        ]);
+        ActivityLogger::log('invoice.interval_changed', $invoice, ['interval' => $request->interval_months]);
         return back()->with('success', 'Interval diperbarui.');
     }
 
@@ -999,37 +1095,58 @@ class InvoiceController extends Controller
 
     public function updateStatus(Request $request, Invoice $invoice)
     {
-        $request->validate(['status' => 'required|in:draft,sent,paid,unpaid']);
-        $oldStatus = $invoice->status;
-        $invoice->update(['status' => $request->status]);
-        $invoice->refresh();
-
-        ActivityLogger::log('invoice.status_changed', $invoice, [
-            'from' => $oldStatus,
-            'to'   => $request->status,
+        $request->validate([
+            'payment_status'  => 'nullable|in:unpaid,paid',
+            'document_status' => 'nullable|in:draft,verified',
         ]);
 
-        if ($request->status === 'paid') {
-            $this->payCarriedAncestors($invoice);
-            $this->payReaktivasiChain($invoice);
-            $this->payPrepayChain($invoice);
+        $changes = [];
 
-            if ($invoice->interval_months) {
-                // Prepay HEAD: buat recurring setelah P- terakhir dalam chain
-                if ($invoice->is_prepay && !$invoice->prepay_chain_id) {
-                    $lastPrepay = Invoice::where('prepay_chain_id', $invoice->id)
-                        ->orderByDesc('issue_date')
-                        ->first();
-                    $recurringBase = $lastPrepay ?? $invoice;
-                    if ($recurringBase->children()->doesntExist()) {
-                        $this->generateRecurring($recurringBase);
-                        return back()->with('success', 'Status diperbarui. Invoice perpanjangan setelah periode prepay dibuat sebagai draft.');
+        if ($request->filled('payment_status')) {
+            $oldPayment = $invoice->payment_status;
+            $changes['payment_status'] = $request->payment_status;
+
+            $invoice->update(['payment_status' => $request->payment_status]);
+            $invoice->refresh();
+
+            ActivityLogger::log('invoice.status_changed', $invoice, [
+                'from' => $oldPayment,
+                'to'   => $request->payment_status,
+                'type' => 'payment',
+            ]);
+
+            if ($request->payment_status === 'paid') {
+                $this->payCarriedAncestors($invoice);
+                $this->payReaktivasiChain($invoice);
+                $this->payPrepayChain($invoice);
+
+                if ($invoice->interval_months) {
+                    if ($invoice->is_prepay && !$invoice->prepay_chain_id) {
+                        $lastPrepay    = Invoice::where('prepay_chain_id', $invoice->id)->orderByDesc('issue_date')->first();
+                        $recurringBase = $lastPrepay ?? $invoice;
+                        if ($recurringBase->children()->doesntExist()) {
+                            $this->generateRecurring($recurringBase);
+                            return back()->with('success', 'Status diperbarui. Invoice perpanjangan setelah periode prepay dibuat sebagai draft.');
+                        }
+                    } elseif ($invoice->children()->doesntExist()) {
+                        $this->generateRecurring($invoice);
+                        return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
                     }
-                } elseif ($invoice->children()->doesntExist()) {
-                    $this->generateRecurring($invoice);
-                    return back()->with('success', 'Status diperbarui. Invoice perpanjangan ' . $invoice->interval_months . ' bulan ke depan dibuat sebagai draft.');
                 }
             }
+        }
+
+        if ($request->filled('document_status')) {
+            if ($request->document_status === 'verified' && $invoice->payment_status === 'paid') {
+                return back()->with('error', 'Invoice yang sudah lunas tidak bisa dimasukkan ke antrean kirim.');
+            }
+            $oldDoc = $invoice->document_status;
+            $invoice->update(['document_status' => $request->document_status]);
+            ActivityLogger::log('invoice.status_changed', $invoice, [
+                'from' => $oldDoc,
+                'to'   => $request->document_status,
+                'type' => 'document',
+            ]);
         }
 
         return back()->with('success', 'Status diperbarui.');
@@ -1037,8 +1154,8 @@ class InvoiceController extends Controller
 
     public function prepay(Invoice $invoice)
     {
-        if (!in_array($invoice->status, ['draft', 'sent', 'unpaid'])) {
-            return back()->with('error', 'Hanya invoice draft, sent, atau unpaid yang bisa di-prepay.');
+        if ($invoice->payment_status === 'paid' || in_array($invoice->document_status, ['frozen', 'carried'])) {
+            return back()->with('error', 'Hanya invoice aktif yang bisa di-prepay.');
         }
         if (!$invoice->interval_months) {
             return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
@@ -1054,11 +1171,7 @@ class InvoiceController extends Controller
         $code        = $invoice->projectCategory->code;
         $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
 
-        // Cari P- terakhir dalam chain, atau gunakan HEAD sebagai base
-        $lastInChain = Invoice::where('prepay_chain_id', $invoice->id)
-            ->orderByDesc('issue_date')
-            ->first();
-
+        $lastInChain     = Invoice::where('prepay_chain_id', $invoice->id)->orderByDesc('issue_date')->first();
         $baseDate        = Carbon::parse($lastInChain ? $lastInChain->issue_date : $invoice->issue_date);
         $previousInvoice = $lastInChain ?? $invoice;
         $cursor          = $baseDate->copy()->addMonths($interval);
@@ -1088,7 +1201,9 @@ class InvoiceController extends Controller
                 'invoice_type'        => $invoice->invoice_type,
                 'issue_date'          => $cursor->toDateString(),
                 'due_date'            => $dueDate->toDateString(),
-                'status'              => 'draft',
+                'payment_status'      => 'unpaid',
+                'document_status'     => 'draft',
+                'send_status'         => 'unsent',
                 'tax_percentage'      => $invoice->tax_percentage,
                 'discount_type'       => $invoice->discount_type,
                 'discount_value'      => $invoice->discount_value,
@@ -1128,8 +1243,8 @@ class InvoiceController extends Controller
         if (preg_match('/^[CRPF]-/', $invoice->invoice_number)) {
             return back()->with('error', 'Carry hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
         }
-        if (!in_array($invoice->status, ['draft', 'sent', 'unpaid'])) {
-            return back()->with('error', 'Hanya invoice draft, sent, atau unpaid yang bisa di-carry.');
+        if ($invoice->payment_status === 'paid' || in_array($invoice->document_status, ['frozen', 'carried'])) {
+            return back()->with('error', 'Hanya invoice aktif yang belum lunas yang bisa di-carry.');
         }
         if (!$invoice->interval_months) {
             return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
@@ -1140,22 +1255,17 @@ class InvoiceController extends Controller
 
         $invoice->load('items', 'projectCategory');
 
-        $issueDate = Carbon::parse($invoice->issue_date)->addMonths($invoice->interval_months);
-        $dueDate   = $issueDate->copy()->addDays(14);
+        $issueDate    = Carbon::parse($invoice->issue_date)->addMonths($invoice->interval_months);
+        $dueDate      = $issueDate->copy()->addDays(14);
+        $oldNumber    = $invoice->invoice_number;
+        $oldSeq       = explode('/', $oldNumber)[0];
+        $inheritedSeq = ltrim($oldSeq, 'C-');
+        $romanMonths  = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $roman        = $romanMonths[(int) $issueDate->format('n') - 1];
+        $year         = $issueDate->format('Y');
+        $categoryCode = $invoice->projectCategory->code;
+        $newNumber    = "{$inheritedSeq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
 
-        // Nomor invoice lama berpindah ke invoice baru (inherit), lama dapat prefix C-
-        $statusBefore  = $invoice->status;
-        $oldNumber     = $invoice->invoice_number;
-        $oldSeq        = explode('/', $oldNumber)[0]; // e.g. "001" atau "C-001"
-        $inheritedSeq  = ltrim($oldSeq, 'C-');        // ambil angka murni
-        $romanMonths   = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
-        $roman         = $romanMonths[(int) $issueDate->format('n') - 1];
-        $year          = $issueDate->format('Y');
-        $categoryCode  = $invoice->projectCategory->code;
-
-        $newNumber = "{$inheritedSeq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
-
-        // Lepas nomor dari invoice lama → prefix C-
         $invoice->update(['invoice_number' => "C-" . $oldNumber]);
 
         $child = Invoice::create([
@@ -1173,7 +1283,9 @@ class InvoiceController extends Controller
             'invoice_type'        => $invoice->invoice_type,
             'issue_date'          => $issueDate,
             'due_date'            => $dueDate,
-            'status'              => 'draft',
+            'payment_status'      => 'unpaid',
+            'document_status'     => 'draft',
+            'send_status'         => 'unsent',
             'tax_percentage'      => $invoice->tax_percentage,
             'discount_type'       => $invoice->discount_type,
             'discount_value'      => $invoice->discount_value,
@@ -1186,22 +1298,18 @@ class InvoiceController extends Controller
         foreach ($invoice->items as $item) {
             $child->items()->create([
                 'description' => $item->description,
-                'quantity'    => $item->quantity,
-                'unit'        => $item->unit,
-                'unit_price'  => $item->unit_price,
                 'amount'      => $item->amount,
                 'discount'    => $item->discount ?? 0,
                 'sort_order'  => $item->sort_order,
             ]);
         }
 
-        $invoice->update(['status' => 'carried']);
+        $invoice->update(['document_status' => 'carried']);
 
         ActivityLogger::log('invoice.carried', $invoice, [
             'original_number' => $oldNumber,
             'renamed_to'      => "C-{$oldNumber}",
             'child_number'    => $child->invoice_number,
-            'status_sebelum'  => $statusBefore,
             'client'          => $invoice->client->company_name ?? '-',
             'jumlah'          => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
             'periode_asal'    => Carbon::parse($invoice->issue_date)->format('M Y'),
@@ -1212,19 +1320,18 @@ class InvoiceController extends Controller
 
     public function freeze(Invoice $invoice)
     {
-        abort_if(preg_match('/^[CRPF]-/', $invoice->invoice_number), 403, 'Freeze hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
-        abort_if(!in_array($invoice->status, ['draft', 'sent']), 403, 'Hanya draft atau sent yang bisa dibekukan.');
-        $invoice->update(['status' => 'frozen']);
+        abort_if(preg_match('/^[CRPF]-/', $invoice->invoice_number), 403, 'Freeze hanya bisa dilakukan dari invoice utama (head).');
+        abort_if($invoice->payment_status === 'paid' || in_array($invoice->document_status, ['frozen', 'carried']), 403, 'Hanya invoice aktif yang belum lunas yang bisa dibekukan.');
+        $invoice->update(['document_status' => 'frozen']);
         ActivityLogger::log('invoice.frozen', $invoice);
         return back()->with('success', 'Invoice dibekukan.');
     }
 
     public function resume(Request $request, Invoice $invoice)
     {
-        if ($invoice->status !== 'frozen') {
-            return back()->with('error', 'Invoice tidak dalam status frozen.');
+        if ($invoice->document_status !== 'frozen') {
+            return back()->with('error', 'Invoice tidak dalam kondisi frozen.');
         }
-
         if ($invoice->children()->exists()) {
             return back()->with('error', 'Perpanjangan sudah dilanjutkan sebelumnya.');
         }
@@ -1245,7 +1352,6 @@ class InvoiceController extends Controller
         $year        = $issueDate->format('Y');
         $newNumber   = "{$seqPart}/{$invoice->projectCategory->code}/INV/MVC/{$roman}/{$year}";
 
-        // Frozen invoice dapat prefix F-, HEAD baru inherit nomor asli
         $invoice->update(['invoice_number' => "F-{$oldNumber}"]);
 
         $child = Invoice::create([
@@ -1263,7 +1369,9 @@ class InvoiceController extends Controller
             'invoice_type'        => $invoice->invoice_type,
             'issue_date'          => $issueDate,
             'due_date'            => $dueDate,
-            'status'              => 'draft',
+            'payment_status'      => 'unpaid',
+            'document_status'     => 'draft',
+            'send_status'         => 'unsent',
             'tax_percentage'      => $invoice->tax_percentage,
             'discount_type'       => $invoice->discount_type,
             'discount_value'      => $invoice->discount_value,
@@ -1292,10 +1400,10 @@ class InvoiceController extends Controller
     public function reactivate(Invoice $invoice)
     {
         if (preg_match('/^[CRPF]-/', $invoice->invoice_number)) {
-            return back()->with('error', 'Reaktivasi hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
+            return back()->with('error', 'Reaktivasi hanya bisa dilakukan dari invoice utama (head).');
         }
-        if ($invoice->status !== 'unpaid') {
-            return back()->with('error', 'Hanya invoice unpaid yang bisa direaktivasi.');
+        if ($invoice->payment_status !== 'unpaid' || $invoice->document_status !== 'verified') {
+            return back()->with('error', 'Hanya invoice aktif yang belum dibayar (verified + unpaid) yang bisa direaktivasi.');
         }
         if (!$invoice->interval_months) {
             return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');
@@ -1306,96 +1414,90 @@ class InvoiceController extends Controller
 
         $invoice->load('items', 'projectCategory');
 
-        $now              = Carbon::now();
-        $originalDate     = Carbon::parse($invoice->issue_date);
-        $originalDay      = $originalDate->day;
-        $interval         = $invoice->interval_months;
+        $now          = Carbon::now();
+        $originalDate = Carbon::parse($invoice->issue_date);
+        $originalDay  = $originalDate->day;
+        $interval     = $invoice->interval_months;
 
-        // Head = bulan ini, pakai hari yang sama dengan invoice asli
         $headDate = Carbon::create($now->year, $now->month, 1);
         $headDate->setDay(min($originalDay, $headDate->daysInMonth));
 
         $oldNumber       = $invoice->invoice_number;
-        $seqPart         = explode('/', $oldNumber)[0]; // e.g. "004"
+        $seqPart         = explode('/', $oldNumber)[0];
         $cursor          = $originalDate->copy()->addMonths($interval);
         $previousInvoice = $invoice;
         $generated       = [];
 
         DB::transaction(function () use ($invoice, $cursor, $headDate, $originalDay, $interval, $originalDate, $oldNumber, $seqPart, &$previousInvoice, &$generated) {
-        while ($cursor->lte($headDate)) {
-            $cursorDay = min($originalDay, $cursor->daysInMonth);
-            $cursor->setDay($cursorDay);
+            while ($cursor->lte($headDate)) {
+                $cursorDay = min($originalDay, $cursor->daysInMonth);
+                $cursor->setDay($cursorDay);
 
-            $dueDate     = $cursor->copy()->addDays(14);
-            $isHead      = $cursor->format('Y-m') === $headDate->format('Y-m');
-            $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
-            $roman       = $romanMonths[(int) $cursor->format('n') - 1];
-            $year        = $cursor->format('Y');
-            $code        = $invoice->projectCategory->code;
-            $invType     = 'INV';
+                $dueDate     = $cursor->copy()->addDays(14);
+                $isHead      = $cursor->format('Y-m') === $headDate->format('Y-m');
+                $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+                $roman       = $romanMonths[(int) $cursor->format('n') - 1];
+                $year        = $cursor->format('Y');
+                $code        = $invoice->projectCategory->code;
 
-            // HEAD inherit nomor asli (tanpa R-), backlog pakai R-{seqPart}
-            $number = $isHead
-                ? "{$seqPart}/{$code}/{$invType}/MVC/{$roman}/{$year}"
-                : 'R-TEMP-' . uniqid();
+                $number = $isHead
+                    ? "{$seqPart}/{$code}/INV/MVC/{$roman}/{$year}"
+                    : 'R-TEMP-' . uniqid();
 
-            $child = Invoice::create([
-                'user_id'             => $invoice->user_id,
-                'client_id'           => $invoice->client_id,
-                'project_category_id' => $invoice->project_category_id,
-                'document_issuer_id'  => $invoice->document_issuer_id,
-                'bank_account_id'     => $invoice->bank_account_id,
-                'signature_id'        => $invoice->signature_id,
-                'email_template_id'   => $invoice->email_template_id,
-                'with_signature'      => $invoice->with_signature,
-                'attention'           => $invoice->attention,
-                'notes'               => $invoice->notes,
-                'invoice_number'      => $number,
-                'invoice_type'        => $invoice->invoice_type,
-                'issue_date'          => $cursor->toDateString(),
-                'due_date'            => $dueDate->toDateString(),
-                'status'              => $isHead ? 'draft' : 'unpaid',
-                'interval_months'     => $interval,
-                'parent_invoice_id'   => $previousInvoice->id,
-                'tax_percentage'      => $invoice->tax_percentage,
-                'discount_type'       => $invoice->discount_type,
-                'discount_value'      => $invoice->discount_value,
-                'is_dpp'              => $invoice->is_dpp,
-                'is_reaktivasi'       => true,
-            ]);
-
-            // Update backlog dengan R-{seqPart} (bukan R-{id})
-            if (!$isHead) {
-                $child->update(['invoice_number' => "R-{$seqPart}/{$code}/{$invType}/MVC/{$roman}/{$year}"]);
-            }
-
-            foreach ($invoice->items as $item) {
-                $child->items()->create([
-                    'description' => $item->description,
-                    'quantity'    => $item->quantity,
-                    'unit'        => $item->unit,
-                    'unit_price'  => $item->unit_price,
-                    'amount'      => $item->amount,
-                    'discount'    => $item->discount ?? 0,
-                    'sort_order'  => $item->sort_order,
+                $child = Invoice::create([
+                    'user_id'             => $invoice->user_id,
+                    'client_id'           => $invoice->client_id,
+                    'project_category_id' => $invoice->project_category_id,
+                    'document_issuer_id'  => $invoice->document_issuer_id,
+                    'bank_account_id'     => $invoice->bank_account_id,
+                    'signature_id'        => $invoice->signature_id,
+                    'email_template_id'   => $invoice->email_template_id,
+                    'with_signature'      => $invoice->with_signature,
+                    'attention'           => $invoice->attention,
+                    'notes'               => $invoice->notes,
+                    'invoice_number'      => $number,
+                    'invoice_type'        => $invoice->invoice_type,
+                    'issue_date'          => $cursor->toDateString(),
+                    'due_date'            => $dueDate->toDateString(),
+                    'payment_status'      => 'unpaid',
+                    'document_status'     => $isHead ? 'draft' : 'verified',
+                    'send_status'         => $isHead ? 'unsent' : 'send1',
+                    'interval_months'     => $interval,
+                    'parent_invoice_id'   => $previousInvoice->id,
+                    'tax_percentage'      => $invoice->tax_percentage,
+                    'discount_type'       => $invoice->discount_type,
+                    'discount_value'      => $invoice->discount_value,
+                    'is_dpp'              => $invoice->is_dpp,
+                    'is_reaktivasi'       => true,
                 ]);
+
+                if (!$isHead) {
+                    $child->update(['invoice_number' => "R-{$seqPart}/{$code}/INV/MVC/{$roman}/{$year}"]);
+                }
+
+                foreach ($invoice->items as $item) {
+                    $child->items()->create([
+                        'description' => $item->description,
+                        'amount'      => $item->amount,
+                        'discount'    => $item->discount ?? 0,
+                        'sort_order'  => $item->sort_order,
+                    ]);
+                }
+
+                $generated[]     = $child;
+                $previousInvoice = $child;
+                $cursor->addMonths($interval);
             }
 
-            $generated[]     = $child;
-            $previousInvoice = $child;
-            $cursor->addMonths($interval);
-        }
+            $head   = end($generated);
+            $headId = $head->id;
 
-        $head   = end($generated);
-        $headId = $head->id;
-
-        // Original dapat prefix R-, serahkan nomor asli ke HEAD
-        $invoice->update(['is_reaktivasi' => true, 'reaktivasi_chain_id' => $headId, 'invoice_number' => "R-{$oldNumber}"]);
-        $nonHeadIds = collect($generated)->slice(0, -1)->pluck('id')->toArray();
-        if (!empty($nonHeadIds)) {
-            Invoice::whereIn('id', $nonHeadIds)->update(['reaktivasi_chain_id' => $headId]);
-        }
-        }); // end DB::transaction
+            $invoice->update(['is_reaktivasi' => true, 'reaktivasi_chain_id' => $headId, 'invoice_number' => "R-{$oldNumber}"]);
+            $nonHeadIds = collect($generated)->slice(0, -1)->pluck('id')->toArray();
+            if (!empty($nonHeadIds)) {
+                Invoice::whereIn('id', $nonHeadIds)->update(['reaktivasi_chain_id' => $headId]);
+            }
+        });
 
         $head           = end($generated);
         $backlogNumbers = collect($generated)->slice(0, -1)->pluck('invoice_number')->values()->toArray();
@@ -1419,9 +1521,9 @@ class InvoiceController extends Controller
     {
         if (!$invoice->carried_from_id) return;
         $carried = Invoice::find($invoice->carried_from_id);
-        if ($carried && $carried->status === 'carried') {
-            $carried->update(['status' => 'paid']);
-            ActivityLogger::log('invoice.status_changed', $carried, ['from' => 'carried', 'to' => 'paid']);
+        if ($carried && $carried->document_status === 'carried') {
+            $carried->update(['payment_status' => 'paid']);
+            ActivityLogger::log('invoice.status_changed', $carried, ['from' => 'carried', 'to' => 'paid', 'type' => 'payment']);
             $this->payCarriedAncestors($carried);
         }
     }
@@ -1432,25 +1534,22 @@ class InvoiceController extends Controller
 
         $members = Invoice::where('prepay_chain_id', $invoice->id)->get();
         foreach ($members as $member) {
-            if ($member->status !== 'paid') {
-                $oldStatus = $member->status;
-                $member->update(['status' => 'paid']);
-                ActivityLogger::log('invoice.status_changed', $member, ['from' => $oldStatus, 'to' => 'paid', 'note' => 'cascade prepay']);
+            if ($member->payment_status !== 'paid') {
+                $member->update(['payment_status' => 'paid']);
+                ActivityLogger::log('invoice.status_changed', $member, ['to' => 'paid', 'note' => 'cascade prepay']);
             }
         }
     }
 
     private function payReaktivasiChain(Invoice $invoice): void
     {
-        // Only cascade if this is the reaktivasi head (is_reaktivasi = true, no chain_id = it IS the head)
         if (!$invoice->is_reaktivasi || $invoice->reaktivasi_chain_id) return;
 
         $members = Invoice::where('reaktivasi_chain_id', $invoice->id)->get();
         foreach ($members as $member) {
-            if ($member->status !== 'paid') {
-                $oldStatus = $member->status;
-                $member->update(['status' => 'paid']);
-                ActivityLogger::log('invoice.status_changed', $member, ['from' => $oldStatus, 'to' => 'paid', 'note' => 'cascade reaktivasi']);
+            if ($member->payment_status !== 'paid') {
+                $member->update(['payment_status' => 'paid']);
+                ActivityLogger::log('invoice.status_changed', $member, ['to' => 'paid', 'note' => 'cascade reaktivasi']);
             }
         }
     }
@@ -1459,12 +1558,9 @@ class InvoiceController extends Controller
     {
         $parent->load('items', 'projectCategory');
 
-        // issue = issue_date parent + interval (maju N bulan dari tanggal mulai)
         $issueDate = Carbon::parse($parent->issue_date)->addMonths($parent->interval_months);
-        // due = issue baru + interval - 1 hari
-        $dueDate = $issueDate->copy()->addDays(14);
-
-        $number = Invoice::generateNumber($parent->projectCategory->code, $issueDate, $parent->invoice_type ?? 'monthly');
+        $dueDate   = $issueDate->copy()->addDays(14);
+        $number    = Invoice::generateNumber($parent->projectCategory->code, $issueDate, $parent->invoice_type ?? 'monthly');
 
         $child = Invoice::create([
             'user_id'             => $parent->user_id,
@@ -1481,7 +1577,9 @@ class InvoiceController extends Controller
             'invoice_type'        => $parent->invoice_type ?? 'monthly',
             'issue_date'          => $issueDate,
             'due_date'            => $dueDate,
-            'status'              => 'draft',
+            'payment_status'      => 'unpaid',
+            'document_status'     => 'draft',
+            'send_status'         => 'unsent',
             'tax_percentage'      => $parent->tax_percentage,
             'discount_type'       => $parent->discount_type,
             'discount_value'      => $parent->discount_value,
@@ -1506,7 +1604,6 @@ class InvoiceController extends Controller
     {
         if (! $url) return null;
         try {
-            // Path relatif /storage/xxx → filesystem langsung
             if (str_starts_with($url, '/storage/')) {
                 $filePath = storage_path('app/public/' . substr($url, 9));
                 if (file_exists($filePath)) {
@@ -1515,7 +1612,6 @@ class InvoiceController extends Controller
                     return "data:{$mime};base64," . base64_encode($content);
                 }
             }
-            // URL absolut lokal
             $appUrl = rtrim(config('app.url'), '/');
             if (str_starts_with($url, $appUrl)) {
                 $path     = ltrim(substr($url, strlen($appUrl)), '/');
@@ -1528,7 +1624,6 @@ class InvoiceController extends Controller
                     return "data:{$mime};base64," . base64_encode($content);
                 }
             }
-            // External URL
             $content = @file_get_contents($url);
             if (! $content) return null;
             $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($content);

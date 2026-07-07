@@ -142,13 +142,9 @@
                 <input v-model="form.spk_number" type="text" placeholder="e.g. SPK/001/2026" class="field" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select v-model="form.status" class="field">
-                  <option value="draft">Draft</option>
-                  <option value="sent">Sent</option>
-                  <option value="paid">Paid</option>
-                  <option value="unpaid">Unpaid</option>
-                </select>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status Dokumen</label>
+                <div class="field bg-gray-50 text-gray-400 cursor-not-allowed select-none">Draft</div>
+                <p class="text-xs text-gray-400 mt-1">Invoice baru selalu dimulai sebagai Draft. Ubah ke Antrean Kirim setelah dicek.</p>
               </div>
             </div>
 
@@ -318,7 +314,7 @@ const form = useForm({
   invoice_type:        prefill.invoice_type         ?? 'monthly',
   with_signature:      prefill.with_signature       ?? false,
   spk_number:          '',
-  status:              'draft',
+  document_status:     'draft',
   issue_date:          '',
   due_date:            '',
   invoice_number:      '',

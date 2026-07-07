@@ -89,15 +89,15 @@
                   <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(computedStatus(invoice))">
                     {{ statusLabel(computedStatus(invoice)) }}
                   </span>
-                  <template v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid'">
+                  <template v-if="invoice.send_status !== 'unsent' || (invoice.document_status === 'verified' && invoice.payment_status === 'unpaid')">
                     <div class="flex items-center gap-0.5 mt-1.5">
                       <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
                         class="w-2 h-2 rounded-full"
                         :class="stageReached(invoice.send_status, st)
-                          ? (st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                          ? (invoice.payment_status === 'paid' ? 'bg-emerald-300' : st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
                           : 'bg-gray-200'"/>
                       <span class="text-[10px] font-mono ml-1"
-                        :class="invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
+                        :class="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent' ? 'text-emerald-500' : invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
                         {{ invoice.send_status }}
                       </span>
                     </div>
@@ -105,7 +105,8 @@
                       :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
                       {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'secepatnya' : fmtDateShort(nextSendInfo(invoice).date) }}
                     </p>
-                    <p v-else-if="invoice.send_status === 'send5'" class="text-[10px] mt-1 text-red-400">sudah 5× kirim</p>
+                    <p v-else-if="invoice.send_status === 'send5' && invoice.payment_status === 'unpaid'" class="text-[10px] mt-1 text-red-400">sudah 5× kirim</p>
+                    <p v-else-if="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent'" class="text-[10px] mt-1 text-emerald-600">tidak dilanjutkan · lunas</p>
                   </template>
                 </td>
                 <td class="px-4 py-4">

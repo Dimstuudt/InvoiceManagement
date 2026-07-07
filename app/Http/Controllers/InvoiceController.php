@@ -740,6 +740,10 @@ class InvoiceController extends Controller
             return redirect()->route('invoices.show', $invoice)
                 ->with('error', 'Invoice yang sudah lunas tidak dapat diedit.');
         }
+        if ($invoice->document_status === 'verified') {
+            return redirect()->route('invoices.show', $invoice)
+                ->with('error', 'Invoice dalam antrean kirim tidak dapat diedit. Keluarkan dari antrean terlebih dahulu.');
+        }
 
         $invoice->load('items', 'projectCategory');
 
@@ -758,6 +762,13 @@ class InvoiceController extends Controller
 
     public function update(Request $request, Invoice $invoice)
     {
+        if ($invoice->payment_status === 'paid') {
+            return back()->with('error', 'Invoice yang sudah lunas tidak dapat diedit.');
+        }
+        if ($invoice->document_status === 'verified') {
+            return back()->with('error', 'Invoice dalam antrean kirim tidak dapat diedit. Keluarkan dari antrean terlebih dahulu.');
+        }
+
         $validated = $request->validate([
             'client_id'           => 'required|exists:clients,id',
             'project_category_id' => 'required|exists:project_categories,id',
@@ -1099,6 +1110,11 @@ class InvoiceController extends Controller
             'payment_status'  => 'nullable|in:unpaid,paid',
             'document_status' => 'nullable|in:draft,verified',
         ]);
+
+        // Blokir reversal: invoice yang sudah paid tidak boleh dikembalikan ke unpaid
+        if ($request->filled('payment_status') && $request->payment_status === 'unpaid' && $invoice->payment_status === 'paid') {
+            return back()->with('error', 'Invoice yang sudah lunas tidak dapat dibatalkan pembayarannya.');
+        }
 
         $changes = [];
 

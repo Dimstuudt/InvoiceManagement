@@ -1345,6 +1345,8 @@ class InvoiceController extends Controller
             'discount_value'      => $invoice->discount_value,
             'is_dpp'              => $invoice->is_dpp,
             'interval_months'     => $invoice->interval_months,
+            'spk_id'              => $invoice->spk_id,
+            'spk_number'          => $invoice->spk_number,
             'parent_invoice_id'   => $invoice->id,
             'carried_from_id'     => $invoice->id,
         ]);
@@ -1690,6 +1692,8 @@ class InvoiceController extends Controller
             'is_dpp'              => $parent->is_dpp,
             'interval_months'     => $parent->interval_months,
             'parent_invoice_id'   => $parent->id,
+            'spk_id'              => $parent->spk_id,
+            'spk_number'          => $parent->spk_number,
         ]);
 
         foreach ($parent->items as $item) {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Spk;
 
 class Client extends Model
 {
@@ -36,5 +37,10 @@ class Client extends Model
     public function invoices()
     {
         return $this->hasMany(Invoice::class)->orderByDesc('issue_date');
+    }
+
+    public function spks()
+    {
+        return $this->hasMany(Spk::class)->orderByDesc('created_at');
     }
 }

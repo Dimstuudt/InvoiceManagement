@@ -276,11 +276,17 @@
 
             <div>
               <p class="text-xs text-gray-400 font-medium mb-1">SPK Number</p>
-              <input v-if="invoice.payment_status !== 'paid'"
-                v-model="localSpkNumber" @blur="saveMeta"
-                placeholder="—"
-                class="text-sm text-gray-900 w-full border-b border-transparent hover:border-gray-300 focus:border-indigo-400 focus:outline-none bg-transparent transition-colors py-0.5"/>
-              <p v-else class="text-sm font-medium text-gray-900">{{ localSpkNumber || '—' }}</p>
+              <template v-if="invoice.spk_id">
+                <p class="text-sm font-mono font-medium text-gray-900">{{ invoice.spk_number || '—' }}</p>
+                <p class="text-[10px] text-indigo-400 mt-0.5">· terkunci · terhubung ke kontrak SPK</p>
+              </template>
+              <template v-else>
+                <input v-if="invoice.payment_status !== 'paid'"
+                  v-model="localSpkNumber" @blur="saveMeta"
+                  placeholder="—"
+                  class="text-sm text-gray-900 w-full border-b border-transparent hover:border-gray-300 focus:border-indigo-400 focus:outline-none bg-transparent transition-colors py-0.5"/>
+                <p v-else class="text-sm font-medium text-gray-900">{{ localSpkNumber || '—' }}</p>
+              </template>
             </div>
             <div>
               <p class="text-xs text-gray-400 font-medium mb-1">Invoice Number</p>

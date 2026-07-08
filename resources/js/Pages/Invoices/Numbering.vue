@@ -358,10 +358,21 @@
                       {{ statusLabel(computedStatus(inv)) }}
                     </span>
                     <span v-if="inv.is_overdue" class="text-[10px] text-red-500 font-medium">Lewati jatuh tempo</span>
-                    <span v-if="inv.document_status === 'verified' && inv.send_status === 'unsent'" class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded w-fit">
-                      <svg class="w-2.5 h-2.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-                      Dalam Antrean
-                    </span>
+                    <template v-if="inv.send_status !== 'unsent' || (inv.document_status === 'verified' && inv.payment_status === 'unpaid')">
+                      <div class="flex items-center gap-0.5">
+                        <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                          class="w-1.5 h-1.5 rounded-full"
+                          :class="stageReached(inv.send_status, st)
+                            ? (inv.payment_status === 'paid' ? 'bg-emerald-300' : st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                            : 'bg-gray-200'"/>
+                        <span class="text-[9px] font-mono ml-1 leading-none"
+                          :class="inv.payment_status === 'paid' && inv.send_status !== 'unsent' ? 'text-emerald-500' : inv.send_status === 'unsent' ? 'text-gray-400' : inv.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
+                          {{ inv.send_status === 'unsent' ? 'belum kirim' : inv.send_status }}
+                        </span>
+                      </div>
+                      <span v-if="inv.payment_status === 'paid' && inv.send_status !== 'unsent'" class="text-[9px] text-emerald-500 leading-none">tidak dilanjutkan · lunas</span>
+                      <span v-else-if="inv.send_status === 'send5' && inv.payment_status === 'unpaid'" class="text-[9px] text-red-400 leading-none">sudah 5× kirim</span>
+                    </template>
                   </div>
                 </td>
 
@@ -614,6 +625,9 @@ function fmtRp(v) {
   if (!v && v !== 0) return '-'
   return 'Rp ' + Number(v).toLocaleString('id-ID', { maximumFractionDigits: 0 })
 }
+
+const SEND_ORDER   = { unsent: 0, send1: 1, send2: 2, send3: 3, send4: 4, send5: 5 }
+const stageReached = (current, target) => (SEND_ORDER[current] ?? 0) >= (SEND_ORDER[target] ?? 99)
 
 function computedStatus(inv) {
   if (!inv) return 'draft'

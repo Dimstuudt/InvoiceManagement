@@ -92,6 +92,7 @@ Route::middleware('auth')->group(function () {
         Route::post('invoices/{invoice}/carry', [InvoiceController::class, 'carry'])->name('invoices.carry');
         Route::post('invoices/{invoice}/prepay', [InvoiceController::class, 'prepay'])->name('invoices.prepay');
         Route::post('invoices/{invoice}/reactivate', [InvoiceController::class, 'reactivate'])->name('invoices.reactivate');
+        Route::post('invoices/{invoice}/rollback-reaktivasi', [InvoiceController::class, 'rollbackReaktivasi'])->name('invoices.rollbackReaktivasi');
 
         // Master Data
         Route::prefix('master')->name('master.')->group(function () {

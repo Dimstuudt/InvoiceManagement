@@ -6,8 +6,8 @@
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-lg font-semibold text-gray-900">Semua Invoice</h2>
-          <p class="text-sm text-gray-400 mt-0.5">
-            Referensi bulan <span class="font-medium text-gray-600">{{ MONTHS[filters.month - 1] }} {{ filters.year }}</span>
+          <p class="text-sm text-gray-500 mt-0.5">
+            Invoice bulan <span class="font-bold text-gray-800">{{ nextMonthLabel }}</span>
           </p>
         </div>
         <Link :href="route('invoices.create')"
@@ -19,18 +19,17 @@
         </Link>
       </div>
 
-      <!-- Filter bulan referensi -->
+      <!-- Filter bulan invoice -->
       <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-3 flex flex-wrap items-center gap-3">
-        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bulan referensi</span>
-        <select v-model="localMonth" @change="applyFilters"
+        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Tampilkan bulan</span>
+        <select v-model="displayMonth" @change="applyFilters"
           class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
           <option v-for="(name, i) in MONTHS" :key="i" :value="i + 1">{{ name }}</option>
         </select>
-        <select v-model="localYear" @change="applyFilters"
+        <select v-model="displayYear" @change="applyFilters"
           class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
           <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
         </select>
-        <span class="text-[10px] text-gray-400">→ prioritas issue <span class="font-semibold text-indigo-500">{{ nextMonthLabel }}</span></span>
         <div class="relative ml-auto">
           <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
             fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -52,14 +51,16 @@
         <div class="flex items-center gap-3 mb-3">
           <div class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block"/>
-            <span class="text-sm font-semibold text-gray-700">Akan dikirim {{ nextMonthLabel }}</span>
+            <span class="text-sm text-gray-600">
+              Invoice bulan <span class="font-bold text-indigo-700">{{ nextMonthLabel }}</span>
+            </span>
           </div>
           <span class="text-xs text-gray-400">{{ filteredPriority.length }} invoice</span>
         </div>
 
         <div v-if="filteredPriority.length === 0"
           class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-8 text-center">
-          <p class="text-sm text-indigo-300">{{ search ? `Tidak ditemukan "${search}"` : 'Tidak ada invoice yang akan dikirim di ' + nextMonthLabel + '.' }}</p>
+          <p class="text-sm text-indigo-300">{{ search ? `Tidak ditemukan "${search}"` : 'Tidak ada invoice untuk bulan ' + nextMonthLabel + '.' }}</p>
         </div>
 
         <div v-else class="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
@@ -158,7 +159,7 @@
                       class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-medium whitespace-nowrap">
                       Lihat
                     </Link>
-                    <!-- Paid / Unpaid -->
+                    <!-- Paid -->
                     <button v-if="invoice.payment_status !== 'paid' && invoice.document_status === 'verified'"
                       @click="changeStatus(invoice, 'paid')"
                       class="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-semibold whitespace-nowrap">
@@ -167,24 +168,6 @@
                       </svg>
                       Paid
                     </button>
-                    <template v-if="invoice.payment_status !== 'paid'">
-                      <button v-if="invoice.document_status === 'verified'"
-                        @click="openEmailModal(invoice)"
-                        class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
-                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                        </svg>
-                        Kirim Email
-                      </button>
-                      <span v-else
-                        class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                        title="Antre kirim dulu untuk kirim email">
-                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                        </svg>
-                        Kirim Email
-                      </span>
-                    </template>
                     <button @click="deleteInvoice(invoice)"
                       class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
                       Hapus
@@ -200,7 +183,7 @@
       <!-- DIVIDER -->
       <div class="flex items-center gap-3 pt-2">
         <div class="flex-1 h-px bg-gray-200"/>
-        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Invoice Lainnya</span>
+        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Invoice Bulan Lain</span>
         <div class="flex-1 h-px bg-gray-200"/>
       </div>
 
@@ -236,13 +219,32 @@
                 <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium" :class="statusClass(computedStatus(invoice))">
                   {{ statusLabel(computedStatus(invoice)) }}
                 </span>
+                <template v-if="invoice.send_status !== 'unsent' || (invoice.document_status === 'verified' && invoice.payment_status === 'unpaid')">
+                  <div class="flex items-center gap-0.5 mt-1.5">
+                    <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                      class="w-2 h-2 rounded-full"
+                      :class="stageReached(invoice.send_status, st)
+                        ? (invoice.payment_status === 'paid' ? 'bg-emerald-300' : st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                        : 'bg-gray-200'"/>
+                    <span class="text-[10px] font-mono ml-1"
+                      :class="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent' ? 'text-emerald-500' : invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500 font-semibold' : 'text-indigo-500 font-semibold'">
+                      {{ invoice.send_status }}
+                    </span>
+                  </div>
+                  <p v-if="nextSendInfo(invoice)" class="text-[10px] mt-1 leading-none"
+                    :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                    {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'secepatnya' : fmtDateShort(nextSendInfo(invoice).date) }}
+                  </p>
+                  <p v-else-if="invoice.send_status === 'send5' && invoice.payment_status === 'unpaid'" class="text-[10px] mt-1 text-red-400">sudah 5× kirim</p>
+                  <p v-else-if="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent'" class="text-[10px] mt-1 text-emerald-600">tidak dilanjutkan · lunas</p>
+                </template>
               </td>
               <td class="px-4 py-4">
                 <p class="font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{{ invoice.invoice_number }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ invoice.project_category?.name ?? '-' }}</p>
                 <span v-if="invoice.interval_months"
                   class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-xs font-medium rounded-md">
-                  ↻ {{ invoice.interval_months }} bln
+                  ↻ {{ invoice.invoice_type === 'yearly' ? (invoice.interval_months / 12) + ' thn' : invoice.interval_months + ' bln' }}
                 </span>
                 <span v-if="invoice.is_chain_head"
                   class="mt-1 ml-1 inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-md"
@@ -295,22 +297,6 @@
                     </svg>
                     Paid
                   </button>
-                  <button v-if="invoice.document_status === 'verified'"
-                    @click="openEmailModal(invoice)"
-                    class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors whitespace-nowrap">
-                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
-                    Kirim Email
-                  </button>
-                  <span v-else
-                    class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-100 text-gray-300 rounded-lg cursor-not-allowed whitespace-nowrap"
-                    title="Antre kirim dulu untuk kirim email">
-                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
-                    Kirim Email
-                  </span>
                   <button @click="deleteInvoice(invoice)"
                     class="text-xs px-3 py-1.5 border border-red-100 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
                     Hapus
@@ -324,20 +310,11 @@
 
     </div>
 
-  <SendEmailModal
-    :show="emailModal"
-    :invoice="emailModalInvoice"
-    :client-emails="emailModalEmails"
-    :email-templates="emailTemplates ?? []"
-    @close="emailModal = false"
-  />
-
   </AppLayout>
 </template>
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import SendEmailModal from '@/Components/SendEmailModal.vue';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -346,26 +323,21 @@ const props = defineProps({
   otherInvoices:    Array,
   nextMonthLabel:   String,
   filters:          Object,
-  emailTemplates:   Array,
 });
-
-const emailModal        = ref(false);
-const emailModalInvoice = ref(null);
-const emailModalEmails  = ref([]);
-
-function openEmailModal(invoice) {
-  emailModalInvoice.value = invoice;
-  emailModalEmails.value  = invoice.client?.emails?.map(e => e.email) ?? [];
-  emailModal.value = true;
-}
 
 const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+const years = Array.from({ length: 6 }, (_, i) => currentYear - 2 + i);
 
-const localMonth = ref(props.filters.month);
-const localYear  = ref(props.filters.year);
-const search     = ref('');
+const search = ref('');
+
+// displayMonth/displayYear = bulan TARGET yang user lihat (referensi + 1)
+// Backend menerima bulan referensi (1 bulan sebelumnya)
+const initDisplay = props.filters.month === 12
+  ? { month: 1, year: props.filters.year + 1 }
+  : { month: props.filters.month + 1, year: props.filters.year }
+const displayMonth = ref(initDisplay.month)
+const displayYear  = ref(initDisplay.year)
 
 const matchSearch = (inv) => !search.value ||
   inv.invoice_number.toLowerCase().includes(search.value.toLowerCase())
@@ -374,9 +346,12 @@ const filteredPriority = computed(() => props.priorityInvoices.filter(matchSearc
 const filteredOther    = computed(() => props.otherInvoices.filter(matchSearch))
 
 function applyFilters() {
+  // Konversi bulan tampilan (target) ke bulan referensi untuk backend
+  const refMonth = displayMonth.value === 1 ? 12 : displayMonth.value - 1
+  const refYear  = displayMonth.value === 1 ? displayYear.value - 1 : displayYear.value
   router.get(route('invoices.schedule'), {
-    month: localMonth.value,
-    year:  localYear.value,
+    month: refMonth,
+    year:  refYear,
   }, { preserveState: true, replace: true });
 }
 
@@ -450,7 +425,14 @@ function changeStatus(invoice, status) {
   router.patch(route('invoices.status', invoice.id), payload, { preserveScroll: true })
 }
 
+const allInvoices = computed(() => [...(props.priorityInvoices ?? []), ...(props.otherInvoices ?? [])])
+const hasChild = (invoice) => allInvoices.value.some(inv => inv.parent_invoice_id === invoice.id)
+
 function deleteInvoice(invoice) {
+  if (hasChild(invoice)) {
+    alert(`Tidak bisa menghapus ${invoice.invoice_number} — ada invoice lanjutan di atasnya.\nHapus dari HEAD rantai terlebih dahulu.`)
+    return
+  }
   if (!confirm(`Hapus invoice ${invoice.invoice_number}?`)) return;
   router.delete(route('invoices.destroy', invoice.id), { preserveScroll: true });
 }

@@ -352,10 +352,10 @@
                                 <div class="flex items-center gap-1">
                                   <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">doc</span>
                                   <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold select-none inline-flex items-center gap-0.5"
-                                    :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
+                                    :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' && !isPrepayMember(invoice) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
                                     @click.stop="toggleStatusMenu($event, invoice)">
                                     {{ docBadgeLabel(invoice.document_status) }}
-                                    <svg v-if="!['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid'" class="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                    <svg v-if="!['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' && !isPrepayMember(invoice)" class="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                                   </span>
                                 </div>
                                 <!-- payment_status -->
@@ -366,8 +366,8 @@
                                     {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
                                   </span>
                                 </div>
-                                <!-- send_status -->
-                                <div class="flex items-center gap-1">
+                                <!-- send_status: hanya untuk HEAD (bukan C-/P-/R-/F- chain member) -->
+                                <div v-if="!isChainMember(invoice)" class="flex items-center gap-1">
                                   <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">send</span>
                                   <span class="inline-flex items-center gap-0.5">
                                     <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
@@ -461,34 +461,36 @@
                                     {{ invoice.invoice_number }}
                                   </Link>
                                   <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0 select-none inline-flex items-center gap-0.5"
-                                    :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
+                                    :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' && !isPrepayMember(invoice) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
                                     @click.stop="toggleStatusMenu($event, invoice)">
                                     {{ docBadgeLabel(invoice.document_status) }}
-                                    <svg v-if="!['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid'" class="w-2 h-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                    <svg v-if="!['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' && !isPrepayMember(invoice)" class="w-2 h-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                                   </span>
                                   <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0"
                                     :class="invoice.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'">
                                     {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
                                   </span>
-                                  <span class="inline-flex items-center gap-0.5">
-                                    <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
-                                      class="w-1.5 h-1.5 rounded-full"
-                                      :class="stageReached(invoice.send_status, st)
-                                        ? (invoice.payment_status === 'paid' ? 'bg-emerald-300' : st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
-                                        : 'bg-gray-200'"/>
-                                  </span>
-                                  <span class="text-[9px] font-mono"
-                                    :class="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent' ? 'text-emerald-500' : invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500' : 'text-indigo-500'">
-                                    {{ invoice.send_status }}
-                                  </span>
-                                  <span v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid' && nextSendInfo(invoice)" class="text-[9px]"
-                                    :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
-                                    → {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'segera' : fmtDateShort(nextSendInfo(invoice).date) }}
-                                  </span>
-                                  <span v-else-if="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent'"
-                                    class="text-[9px] text-emerald-600">
-                                    · lunas
-                                  </span>
+                                  <template v-if="!isChainMember(invoice)">
+                                    <span class="inline-flex items-center gap-0.5">
+                                      <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
+                                        class="w-1.5 h-1.5 rounded-full"
+                                        :class="stageReached(invoice.send_status, st)
+                                          ? (invoice.payment_status === 'paid' ? 'bg-emerald-300' : st === 'send5' ? 'bg-red-400' : 'bg-indigo-400')
+                                          : 'bg-gray-200'"/>
+                                    </span>
+                                    <span class="text-[9px] font-mono"
+                                      :class="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent' ? 'text-emerald-500' : invoice.send_status === 'unsent' ? 'text-gray-400' : invoice.send_status === 'send5' ? 'text-red-500' : 'text-indigo-500'">
+                                      {{ invoice.send_status }}
+                                    </span>
+                                    <span v-if="invoice.document_status === 'verified' && invoice.payment_status === 'unpaid' && nextSendInfo(invoice)" class="text-[9px]"
+                                      :class="nextSendInfo(invoice).soon ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                                      → {{ nextSendInfo(invoice).stage }}: {{ nextSendInfo(invoice).soon ? 'segera' : fmtDateShort(nextSendInfo(invoice).date) }}
+                                    </span>
+                                    <span v-else-if="invoice.payment_status === 'paid' && invoice.send_status !== 'unsent'"
+                                      class="text-[9px] text-emerald-600">
+                                      · lunas
+                                    </span>
+                                  </template>
                                   <span v-if="isPastDue(invoice)" class="text-[9px] font-semibold text-red-500 shrink-0">lewat {{ daysPastDue(invoice) }}h</span>
                                 </div>
                                 <p class="text-[10px] text-gray-400 mt-0.5">{{ fmtDateShort(invoice.issue_date) }} → {{ fmtDateShort(invoice.due_date) }}</p>
@@ -532,7 +534,7 @@
                       <div class="flex items-center gap-1">
                         <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">doc</span>
                         <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold select-none"
-                          :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
+                          :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) && !isPrepayMember(invoice) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : '']"
                           @click.stop="toggleStatusMenu($event, invoice)">
                           {{ docBadgeLabel(invoice.document_status) }}
                         </span>
@@ -544,7 +546,7 @@
                           {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
                         </span>
                       </div>
-                      <div class="flex items-center gap-1">
+                      <div v-if="!isChainMember(invoice)" class="flex items-center gap-1">
                         <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">send</span>
                         <span class="inline-flex items-center gap-0.5">
                           <span v-for="st in ['send1','send2','send3','send4','send5']" :key="st"
@@ -605,8 +607,8 @@
           <p class="text-[10px] font-mono font-semibold text-gray-500 truncate">{{ menuInvoice.invoice_number }}</p>
         </div>
 
-        <!-- Status section: hanya untuk invoice yang belum paid dan tidak frozen/carried -->
-        <template v-if="!['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.payment_status !== 'paid'">
+        <!-- Status section: hanya untuk invoice yang belum paid, tidak frozen/carried, dan bukan anakan prepay -->
+        <template v-if="!['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.payment_status !== 'paid' && !isPrepayMember(menuInvoice)">
           <div class="px-3 pt-2 pb-0.5">
             <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Ubah Status</p>
           </div>
@@ -643,7 +645,8 @@
             </svg>
             Perbarui — lanjutkan
           </button>
-          <button v-if="isPastDue(menuInvoice) && menuInvoice.interval_months && !hasChild(menuInvoice) && !menuInvoice.is_reaktivasi"
+          <!-- Reaktivasi: hanya jika TIDAK sedang dalam carry/prepay chain -->
+          <button v-if="isPastDue(menuInvoice) && menuInvoice.interval_months && !hasChild(menuInvoice) && !menuInvoice.is_reaktivasi && !menuInvoice.carried_from_id && !menuInvoice.is_prepay"
             @click="reactivateInvoice(menuInvoice); activeMenu = null"
             class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors text-left">
             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -651,21 +654,32 @@
             </svg>
             Reaktivasi
           </button>
-          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.interval_months && !hasChild(menuInvoice)"
+          <!-- Carry: hanya jika TIDAK sedang dalam prepay/reaktivasi chain -->
+          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.interval_months && !hasChild(menuInvoice) && !menuInvoice.is_prepay && !menuInvoice.is_reaktivasi"
             @click="carryInvoice(menuInvoice); activeMenu = null"
             class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors text-left">
             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h15"/>
             </svg>
-            Carry — bawa tunggakan
+            {{ menuInvoice.carried_from_id ? 'Carry lagi — lanjut tunggakan' : 'Carry — bawa tunggakan' }}
           </button>
-          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.interval_months && !menuInvoice.prepay_chain_id"
+          <!-- Prepay: hanya jika TIDAK sedang dalam carry/reaktivasi chain -->
+          <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.interval_months && !menuInvoice.prepay_chain_id && !menuInvoice.carried_from_id && !menuInvoice.is_reaktivasi"
             @click="prepayInvoice(menuInvoice); activeMenu = null"
             class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 transition-colors text-left">
             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             Prepay
+          </button>
+          <!-- Rollback reaktivasi: hanya untuk HEAD chain reaktivasi (reaktivasi_chain_id = null) -->
+          <button v-if="menuInvoice.is_reaktivasi && !menuInvoice.reaktivasi_chain_id"
+            @click="rollbackReaktivasi(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+            </svg>
+            Rollback reaktivasi
           </button>
           <button v-if="menuInvoice.payment_status !== 'paid' && !['frozen','carried'].includes(menuInvoice.document_status) && menuInvoice.parent_invoice_id"
             @click="freezeInvoice(menuInvoice); activeMenu = null"
@@ -723,13 +737,24 @@
 
         <!-- Hapus section -->
         <div class="border-t border-gray-50 mt-1 pt-1">
-          <button @click="deleteInvoice(menuInvoice); activeMenu = null"
+          <button v-if="!hasChild(menuInvoice)"
+            @click="deleteInvoice(menuInvoice); activeMenu = null"
             class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left">
             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
             </svg>
             Hapus Invoice
           </button>
+          <div v-else class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-gray-300 cursor-not-allowed select-none"
+            title="Hapus HEAD rantai terlebih dahulu">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            <span>
+              Hapus Invoice
+              <span class="block text-[10px] text-gray-300 font-normal leading-tight">hapus HEAD rantai dulu</span>
+            </span>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -878,6 +903,7 @@ const manualStatuses = [
 function toggleStatusMenu(e, invoice) {
   if (['frozen', 'carried'].includes(invoice.document_status)) return
   if (invoice.payment_status === 'paid') return
+  if (isPrepayMember(invoice)) return
   if (activeStatusMenu.value === invoice.id) { activeStatusMenu.value = null; return }
   const rect    = e.currentTarget.getBoundingClientRect()
   const popH    = 152
@@ -1153,6 +1179,10 @@ function monthGap(newer, older) {
   return Math.max(1, Math.round(((d1.getFullYear() - d2.getFullYear()) * 12 + (d1.getMonth() - d2.getMonth()))))
 }
 
+// Invoice dengan prefix C-/P-/R-/F- adalah chain member — send diurus HEAD
+const isChainMember = (invoice) => /^[CRPF]-/.test(invoice.invoice_number)
+const isPrepayMember = (invoice) => !!invoice.is_prepay && !!invoice.prepay_chain_id
+
 // ── Actions ─────────────────────────────────────────────────
 function hasChild(invoice) {
   return props.invoices.some(inv => inv.parent_invoice_id === invoice.id)
@@ -1162,9 +1192,25 @@ function hasLifecycleAction(inv) {
   if (!inv) return false
   const unpaid = inv.payment_status !== 'paid'
   const active = !['frozen', 'carried'].includes(inv.document_status)
+  const inCarry      = !!inv.carried_from_id
+  const inPrepay     = !!inv.is_prepay
+  const inReaktivasi = !!inv.is_reaktivasi
+
+  // Rollback reaktivasi: HEAD chain reaktivasi selalu punya aksi
+  if (inReaktivasi && !inv.reaktivasi_chain_id) return true
+
+  // Frozen: bisa dilanjutkan
+  if (inv.document_status === 'frozen' && !hasChild(inv)) return true
+
+  // Carry chain: hanya carry lagi
+  if (inCarry) return unpaid && active && !hasChild(inv)
+
+  // Prepay chain: hanya freeze (carry/reaktivasi diblokir)
+  if (inPrepay) return unpaid && active && !!inv.parent_invoice_id
+
+  // Normal (bukan chain): semua aksi berlaku
   return (
-    (inv.document_status === 'frozen' && !hasChild(inv)) ||
-    (isPastDue(inv) && inv.interval_months && !hasChild(inv) && !inv.is_reaktivasi) ||
+    (isPastDue(inv) && inv.interval_months && !hasChild(inv)) ||
     (unpaid && active && inv.interval_months && !hasChild(inv)) ||
     (unpaid && active && inv.interval_months && !inv.prepay_chain_id) ||
     (unpaid && active && !!inv.parent_invoice_id)
@@ -1272,6 +1318,27 @@ function reactivateInvoice(invoice) {
     if (r.isConfirmed) router.post(route('invoices.reactivate', invoice.id), {}, {
       preserveScroll: true,
       onSuccess: () => toast('Invoice berhasil direaktivasi'),
+    })
+  })
+}
+
+function rollbackReaktivasi(invoice) {
+  Swal.fire({
+    title: 'Rollback reaktivasi?',
+    html: `<div style="text-align:left;font-size:0.85rem;color:#374151">
+      <p>Semua invoice dalam rantai reaktivasi <strong>${invoice.invoice_number}</strong> akan dihapus.</p>
+      <p style="margin-top:0.5rem">Invoice asli akan dikembalikan ke kondisi semula.</p>
+      <p style="margin-top:0.5rem;color:#dc2626;font-weight:600">Aksi ini tidak bisa dibatalkan.</p>
+    </div>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc2626',
+    confirmButtonText: 'Ya, rollback',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) router.post(route('invoices.rollbackReaktivasi', invoice.id), {}, {
+      preserveScroll: true,
+      onSuccess: () => toast('Reaktivasi berhasil di-rollback'),
     })
   })
 }

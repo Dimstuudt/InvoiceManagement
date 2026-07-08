@@ -802,6 +802,11 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
+        // Blokir hapus tengah rantai — hanya HEAD (tanpa child) yang boleh dihapus
+        if ($invoice->children()->exists()) {
+            return back()->with('error', 'Invoice ini tidak bisa dihapus karena ada invoice lanjutan di atasnya. Hapus dari yang paling atas (HEAD) terlebih dahulu.');
+        }
+
         // Jika HEAD carry dihapus, restore C- parent
         if ($invoice->carried_from_id) {
             $carriedParent = Invoice::find($invoice->carried_from_id);
@@ -836,8 +841,19 @@ class InvoiceController extends Controller
             }
         }
 
+        $prepayChainId = $invoice->prepay_chain_id;
+
         ActivityLogger::log('invoice.deleted', $invoice);
         $invoice->delete();
+
+        // Kalau P- member terakhir dihapus, reset is_prepay pada HEAD
+        if ($prepayChainId) {
+            $head = Invoice::find($prepayChainId);
+            if ($head && !Invoice::where('prepay_chain_id', $prepayChainId)->exists()) {
+                $head->update(['is_prepay' => false]);
+            }
+        }
+
         return back()->with('success', 'Invoice berhasil dihapus.');
     }
 
@@ -1074,6 +1090,10 @@ class InvoiceController extends Controller
             return back()->with('error', 'Invoice yang sudah lunas tidak perlu dimasukkan ke antrean kirim.');
         }
 
+        if ($invoice->is_prepay && $invoice->prepay_chain_id !== null) {
+            return back()->with('error', 'Invoice anakan prepay tidak bisa masuk antrean kirim. Ditangani oleh kepala rantai.');
+        }
+
         $isVerified    = $invoice->document_status === 'verified';
         $newDocStatus  = $isVerified ? 'draft' : 'verified';
         $invoice->update(['document_status' => $newDocStatus]);
@@ -1116,6 +1136,11 @@ class InvoiceController extends Controller
             return back()->with('error', 'Invoice yang sudah lunas tidak dapat dibatalkan pembayarannya.');
         }
 
+        // Blokir anakan prepay dari tandai lunas individual
+        if ($invoice->is_prepay && $invoice->prepay_chain_id !== null) {
+            return back()->with('error', 'Invoice anakan prepay tidak bisa ditandai lunas individual. Gunakan invoice kepala rantai.');
+        }
+
         $changes = [];
 
         if ($request->filled('payment_status')) {
@@ -1132,6 +1157,18 @@ class InvoiceController extends Controller
             ]);
 
             if ($request->payment_status === 'paid') {
+                // Keluarkan dari antrean kirim otomatis saat invoice dilunasi
+                if ($invoice->document_status === 'verified') {
+                    $invoice->update(['document_status' => 'draft']);
+                    $invoice->refresh();
+                    ActivityLogger::log('invoice.status_changed', $invoice, [
+                        'from' => 'verified',
+                        'to'   => 'draft',
+                        'type' => 'document',
+                        'reason' => 'auto_on_paid',
+                    ]);
+                }
+
                 $this->payCarriedAncestors($invoice);
                 $this->payReaktivasiChain($invoice);
                 $this->payPrepayChain($invoice);
@@ -1531,6 +1568,56 @@ class InvoiceController extends Controller
         ]);
 
         return back()->with('success', 'Reaktivasi berhasil. ' . count($generated) . ' invoice dibuat — bayar di ' . $head->invoice_number . '.');
+    }
+
+    public function rollbackReaktivasi(Invoice $invoice)
+    {
+        // Hanya HEAD chain yang bisa di-rollback
+        if (!$invoice->is_reaktivasi || $invoice->reaktivasi_chain_id !== null) {
+            return back()->with('error', 'Rollback hanya bisa dilakukan dari invoice HEAD reaktivasi.');
+        }
+
+        $members = Invoice::where('reaktivasi_chain_id', $invoice->id)->get();
+
+        // Blokir rollback kalau ada yang sudah lunas
+        $hasPaid = $invoice->payment_status === 'paid'
+            || $members->contains('payment_status', 'paid');
+        if ($hasPaid) {
+            return back()->with('error', 'Tidak bisa di-rollback — ada invoice dalam rantai yang sudah lunas.');
+        }
+
+        // Temukan invoice ORIGINAL: member yang parent_invoice_id-nya bukan bagian chain
+        $chainIds   = $members->pluck('id')->push($invoice->id)->toArray();
+        $original   = $members->first(fn($m) => !in_array($m->parent_invoice_id, $chainIds));
+        $middleDels = $members->filter(fn($m) => $m->id !== ($original?->id));
+
+        DB::transaction(function () use ($invoice, $middleDels, $original) {
+            // Hapus HEAD
+            $invoice->items()->delete();
+            $invoice->delete();
+
+            // Hapus middle R- (bukan original)
+            foreach ($middleDels as $m) {
+                $m->items()->delete();
+                $m->delete();
+            }
+
+            // Restore original: strip prefix R-, reset flags
+            if ($original) {
+                $restoredNumber = preg_replace('/^R-/', '', $original->invoice_number);
+                $original->update([
+                    'invoice_number'      => $restoredNumber,
+                    'is_reaktivasi'       => false,
+                    'reaktivasi_chain_id' => null,
+                ]);
+            }
+        });
+
+        ActivityLogger::log('invoice.reaktivasi_rollback', $original ?? $invoice, [
+            'restored_number' => $original ? preg_replace('/^R-/', '', $original->invoice_number) : null,
+        ]);
+
+        return back()->with('success', 'Reaktivasi di-rollback. Invoice dikembalikan ke kondisi semula.');
     }
 
     private function payCarriedAncestors(Invoice $invoice): void

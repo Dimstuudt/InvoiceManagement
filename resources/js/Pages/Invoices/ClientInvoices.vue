@@ -319,8 +319,12 @@
 
                       <!-- Full-size: kode normal (no C-/R- prefix) -->
                       <div v-if="!isSmallSubCode(invoice)"
+                        :data-invoice-id="invoice.id"
                         class="flex items-start border-t border-gray-50 transition-colors group"
-                        :class="invoice.carried_from_id ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'hover:bg-gray-50/60'">
+                        :class="[
+                          invoice.carried_from_id ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'hover:bg-gray-50/60',
+                          highlightedId === invoice.id ? 'ring-2 ring-inset ring-indigo-400 !bg-indigo-50/80' : ''
+                        ]">
                         <div class="flex flex-col items-center w-[57px] shrink-0 pt-3.5 self-stretch">
                           <div class="w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm shrink-0 z-10" :class="dotClass(invoice)">
                             <svg v-if="invoice.payment_status === 'paid'" class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -421,8 +425,12 @@
 
                       <!-- Compact inline: C-/R- prefix (indented, posisi kronologis) -->
                       <div v-else
-                        class="border-t border-gray-50 group"
-                        :class="invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : invoice.invoice_number.startsWith('P-') ? 'hover:bg-teal-50/30' : invoice.invoice_number.startsWith('F-') ? 'hover:bg-sky-50/30' : 'hover:bg-violet-50/30'">
+                        :data-invoice-id="invoice.id"
+                        class="border-t border-gray-50 transition-colors group"
+                        :class="[
+                          invoice.invoice_number.startsWith('C-') ? 'hover:bg-orange-50/40' : invoice.invoice_number.startsWith('P-') ? 'hover:bg-teal-50/30' : invoice.invoice_number.startsWith('F-') ? 'hover:bg-sky-50/30' : 'hover:bg-violet-50/30',
+                          highlightedId === invoice.id ? 'ring-2 ring-inset ring-indigo-400 !bg-indigo-50/80' : ''
+                        ]">
                         <div class="ml-7 flex items-start"
                           :class="idx < recurringGroups[activeTab].invoices.length - 1
                             ? (invoice.payment_status === 'paid' ? 'border-l-2 border-emerald-200' : 'border-l-2 border-gray-100')
@@ -520,8 +528,12 @@
                   Tidak ada invoice mandiri.
                 </div>
                 <div v-for="invoice in standaloneInvoices" :key="invoice.id"
+                  :data-invoice-id="invoice.id"
                   class="flex items-center gap-4 px-5 py-3.5 border-t border-gray-50 transition-colors group"
-                  :class="isPastDue(invoice) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50/50'">
+                  :class="[
+                    isPastDue(invoice) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50/50',
+                    highlightedId === invoice.id ? 'ring-2 ring-inset ring-indigo-400 !bg-indigo-50/80' : ''
+                  ]">
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
                       <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
@@ -859,13 +871,14 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, router } from '@inertiajs/vue3';
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue';
+import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from 'vue';
 import Swal from 'sweetalert2';
 
-const props = defineProps({ client: Object, invoices: Array });
+const props = defineProps({ client: Object, invoices: Array, highlight: { type: Number, default: null } });
 
 // ── Tabs ────────────────────────────────────────────────────
-const activeTab     = ref(0)
+const activeTab      = ref(0)
+const highlightedId  = ref(null)
 const tipsOpen      = ref(false)
 const activeInvoice = (group) => group.invoices[0] ?? null
 
@@ -942,7 +955,29 @@ function changeStatus(invoice, newStatus) {
 }
 
 function closeAll() { activeMenu.value = null; activeStatusMenu.value = null; }
-onMounted(() => document.addEventListener('click', closeAll));
+onMounted(() => {
+  document.addEventListener('click', closeAll)
+
+  if (props.highlight) {
+    const tabIdx = recurringGroups.value.findIndex(g =>
+      g.invoices.some(inv => inv.id === props.highlight)
+    )
+    if (tabIdx !== -1) {
+      activeTab.value = tabIdx
+    } else if (standaloneInvoices.value.some(inv => inv.id === props.highlight)) {
+      activeTab.value = recurringGroups.value.length
+    }
+
+    nextTick(() => {
+      highlightedId.value = props.highlight
+      setTimeout(() => {
+        document.querySelector(`[data-invoice-id="${props.highlight}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setTimeout(() => { highlightedId.value = null }, 2200)
+      }, 80)
+    })
+  }
+})
 onUnmounted(() => document.removeEventListener('click', closeAll));
 
 function openReceipt(invoice) { receiptUrl.value = route('invoices.receipt', invoice.id); }
@@ -1021,13 +1056,14 @@ function headChainTotal(invoice, groupInvoices) {
       .filter(inv => inv.prepay_chain_id === invoice.id)
       .reduce((s, inv) => s + invoiceTotal(inv), 0)
   }
-  // Carry HEAD: invoice.carried_from_id → traverse parent chain (C- ancestors)
+  // Carry HEAD: invoice.carried_from_id → traverse parent chain (C- ancestors only, stop at F-)
   if (invoice.carried_from_id) {
     let total = 0
     let parentId = invoice.parent_invoice_id
     while (parentId) {
       const parent = groupInvoices.find(inv => inv.id === parentId)
       if (!parent || !isSmallSubCode(parent)) break
+      if (/^F-/.test(parent.invoice_number)) break  // frozen bukan carry debt, hentikan traversal
       total += invoiceTotal(parent)
       parentId = parent.parent_invoice_id ?? null
     }

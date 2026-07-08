@@ -330,7 +330,8 @@
                 </td>
 
                 <!-- Invoice number -->
-                <td class="px-4 py-4 cursor-pointer" @click="router.visit(route('invoices.show', inv.id))">
+                <td class="px-4 py-4 cursor-pointer"
+                  @click="inv.client?.id ? router.visit(route('invoices.client', inv.client.id) + '?highlight=' + inv.id) : router.visit(route('invoices.show', inv.id))">
                   <span class="text-xs font-mono text-indigo-600 hover:text-indigo-800 hover:underline bg-indigo-50 px-2 py-1 rounded-lg whitespace-nowrap transition-colors">
                     {{ inv.invoice_number }}
                   </span>

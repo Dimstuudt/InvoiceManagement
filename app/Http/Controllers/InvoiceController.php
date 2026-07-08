@@ -208,7 +208,7 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function clientInvoices(Client $client)
+    public function clientInvoices(Client $client, Request $request)
     {
         $client->load('category', 'emails');
 
@@ -220,8 +220,9 @@ class InvoiceController extends Controller
             ->get();
 
         return Inertia::render('Invoices/ClientInvoices', [
-            'client'   => $client->toArray(),
-            'invoices' => $invoices,
+            'client'    => $client->toArray(),
+            'invoices'  => $invoices,
+            'highlight' => $request->integer('highlight') ?: null,
         ]);
     }
 

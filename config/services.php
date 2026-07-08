@@ -41,4 +41,8 @@ return [
         'sender_email' => env('BREVO_FROM_EMAIL'),
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

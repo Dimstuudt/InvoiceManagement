@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\SpkController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\InvoiceController;
@@ -66,6 +67,10 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::resource('clients', ClientController::class)->except(['show']);
+
+        Route::get('spk', [SpkController::class, 'index'])->name('spk.index');
+        Route::post('spk/parse', [SpkController::class, 'parse'])->name('spk.parse');
+        Route::post('spk/store', [SpkController::class, 'store'])->name('spk.store');
 
         Route::get('invoices/number-preview', [InvoiceController::class, 'numberPreview'])->name('invoices.number-preview');
         Route::get('invoices/numbering/export', [InvoiceController::class, 'numberingExport'])->name('invoices.numbering.export');

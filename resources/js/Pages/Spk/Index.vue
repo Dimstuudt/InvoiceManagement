@@ -2,9 +2,18 @@
   <AppLayout title="SPK">
     <div class="max-w-6xl mx-auto space-y-5">
 
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">Surat Perjanjian Kerja</h2>
-        <p class="text-sm text-gray-400 mt-0.5">{{ props.clients.length }} klien terdaftar</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900">Surat Perjanjian Kerja</h2>
+          <p class="text-sm text-gray-400 mt-0.5">{{ props.clients.length }} klien terdaftar</p>
+        </div>
+        <Link :href="route('spk.create')"
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Import SPK + Klien Baru
+        </Link>
       </div>
 
       <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -82,7 +91,7 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { router } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
 
 const props = defineProps({
   clients: Array,

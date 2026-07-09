@@ -51,6 +51,16 @@ class SpkController extends Controller
         ]);
     }
 
+    public function create()
+    {
+        return Inertia::render('Spk/Create', [
+            'projectCategories' => \App\Models\ProjectCategory::all(['id', 'name', 'code']),
+            'clientCategories'  => \App\Models\ClientCategory::all(['id', 'name']),
+            'documentIssuers'   => \App\Models\DocumentIssuer::all(['id', 'name']),
+            'bankAccounts'      => \App\Models\BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
+        ]);
+    }
+
     public function numberPreview(Request $request)
     {
         $request->validate([
@@ -90,21 +100,40 @@ class SpkController extends Controller
             return back()->with('error', 'PDF tidak mengandung teks yang bisa dibaca (mungkin hasil scan/gambar).');
         }
 
-        // Ambil referensi dari database untuk dicocokkan AI
-        $categories = \App\Models\ProjectCategory::all(['id', 'name', 'code']);
-        $issuers    = \App\Models\DocumentIssuer::all(['id', 'name']);
-        $banks      = \App\Models\BankAccount::all(['id', 'name', 'bank_name']);
+        $withClient = $request->boolean('with_client', false);
 
-        $categoriesRef = $categories->map(fn($c) => "  ID {$c->id}: {$c->name} (kode: {$c->code})")->join("\n");
-        $issuersRef    = $issuers->map(fn($d)    => "  ID {$d->id}: {$d->name}")->join("\n");
-        $banksRef      = $banks->map(fn($b)      => "  ID {$b->id}: {$b->bank_name} – {$b->name}")->join("\n");
+        // Ambil referensi dari database untuk dicocokkan AI
+        $categories     = \App\Models\ProjectCategory::all(['id', 'name', 'code']);
+        $issuers        = \App\Models\DocumentIssuer::all(['id', 'name']);
+        $banks          = \App\Models\BankAccount::all(['id', 'name', 'bank_name']);
+        $clientCats     = $withClient ? \App\Models\ClientCategory::all(['id', 'name']) : collect();
+
+        $categoriesRef    = $categories->map(fn($c)  => "  ID {$c->id}: {$c->name} (kode: {$c->code})")->join("\n");
+        $issuersRef       = $issuers->map(fn($d)     => "  ID {$d->id}: {$d->name}")->join("\n");
+        $banksRef         = $banks->map(fn($b)       => "  ID {$b->id}: {$b->bank_name} – {$b->name}")->join("\n");
+        $clientCatsRef    = $clientCats->map(fn($cc) => "  ID {$cc->id}: {$cc->name}")->join("\n");
+
+        $clientJsonFields = $withClient ? <<<JSON
+
+  "company_name": "nama perusahaan/instansi pihak pemberi kerja (klien) atau null",
+  "city": "kota domisili klien atau null",
+  "client_category_id": ID kategori klien yang paling cocok dengan jenis usaha/instansi atau null,
+  "client_status": "active_client" jika SPK sudah berlaku/ditandatangani, "prospect" jika masih penawaran,
+JSON : '';
+
+        $clientRules = $withClient ? <<<RULES
+
+- Untuk client_category_id, cocokkan jenis usaha/instansi klien dengan daftar berikut:
+{$clientCatsRef}
+- client_status: "active_client" jika ada nomor SPK/sudah ditandatangani, "prospect" jika belum pasti
+RULES : '';
 
         $prompt = <<<PROMPT
 Kamu adalah asisten yang mengekstrak data dari dokumen SPK (Surat Perjanjian Kerja) Indonesia dan mencocokkannya dengan data referensi sistem.
 
 Kembalikan HANYA JSON valid berikut, tanpa penjelasan, tanpa markdown:
 
-{
+{{$clientJsonFields}
   "spk_number": "nomor SPK lengkap atau null",
   "service_name": "nama layanan/jasa dari judul/objek pekerjaan atau null",
   "contract_value": nilai kontrak rupiah sebagai integer tanpa titik/koma atau null,
@@ -130,7 +159,7 @@ Aturan:
 - Untuk bank_account_id, pilih yang paling relevan dari:
 {$banksRef}
 - Untuk invoice_type: "yearly" jika layanan tahunan/hosting/lisensi, "monthly" jika maintenance/bulanan
-- Gunakan null untuk field yang tidak bisa dipastikan
+- Gunakan null untuk field yang tidak bisa dipastikan{$clientRules}
 
 Teks dokumen SPK:
 PROMPT;
@@ -193,6 +222,16 @@ PROMPT;
         }
         if (!\in_array($data['invoice_type'] ?? null, ['monthly', 'yearly'])) {
             $data['invoice_type'] = null;
+        }
+
+        if ($withClient) {
+            $validClientCatIds = $clientCats->pluck('id')->all();
+            if (!\in_array($data['client_category_id'] ?? null, $validClientCatIds)) {
+                $data['client_category_id'] = null;
+            }
+            if (!\in_array($data['client_status'] ?? null, ['active_client', 'prospect'])) {
+                $data['client_status'] = 'active_client';
+            }
         }
 
         return back()->with('spk', $data);
@@ -290,6 +329,111 @@ PROMPT;
 
         return redirect()->route('invoices.show', $invoiceId)
             ->with('success', 'SPK dan invoice berhasil dibuat.');
+    }
+
+    public function storeWithClient(Request $request)
+    {
+        $request->validate([
+            'company_name'       => 'required|string|max:255',
+            'city'               => 'nullable|string|max:100',
+            'pic_name'           => 'nullable|string|max:255',
+            'client_category_id' => 'required|exists:client_categories,id',
+            'client_status'      => 'required|in:active_client,prospect',
+            'service_name'       => 'required|string|max:255',
+            'contract_value'     => 'nullable|numeric|min:0',
+            'spk_number'         => 'nullable|string|max:100',
+            'start_date'         => 'nullable|date',
+            'end_date'           => 'nullable|date',
+            'duration_months'    => 'nullable|integer|min:1',
+            'notes'              => 'nullable|string',
+            'file'               => 'nullable|file|mimes:pdf|max:10240',
+            'issue_date'         => 'required|date',
+            'due_date'           => 'required|date|after_or_equal:issue_date',
+            'invoice_type'       => 'required|in:monthly,yearly',
+            'interval_months'    => 'nullable|integer|min:1|max:36',
+            'project_category_id'=> 'required|exists:project_categories,id',
+            'document_issuer_id' => 'required|exists:document_issuers,id',
+            'bank_account_id'    => 'nullable|exists:bank_accounts,id',
+        ]);
+
+        $invoiceId = null;
+
+        DB::transaction(function () use ($request, &$invoiceId) {
+            // Cari klien berdasarkan nama, buat jika belum ada
+            $client = Client::firstOrCreate(
+                ['company_name' => $request->company_name],
+                [
+                    'client_category_id' => $request->client_category_id,
+                    'city'               => $request->city      ?? '-',
+                    'address'            => '-',
+                    'director'           => '-',
+                    'pic'                => $request->pic_name  ?? '-',
+                    'client_status'      => $request->client_status,
+                    'is_active'          => true,
+                ]
+            );
+
+            $filePath = $request->hasFile('file')
+                ? $request->file('file')->store('spk', 'public')
+                : null;
+
+            $category  = \App\Models\ProjectCategory::findOrFail($request->project_category_id);
+            $issueDate = Carbon::parse($request->issue_date);
+            $spkDate   = $request->start_date ? Carbon::parse($request->start_date) : $issueDate;
+            $spkNumber = $request->spk_number ?: Spk::generateNumber($category->code, $spkDate);
+
+            $spk = Spk::create([
+                'client_id'          => $client->id,
+                'user_id'            => Auth::id(),
+                'project_category_id'=> $request->project_category_id,
+                'spk_number'         => $spkNumber,
+                'service_name'       => $request->service_name,
+                'contract_value'     => $request->contract_value,
+                'pic_name'           => $request->pic_name ?? $client->pic,
+                'start_date'         => $request->start_date,
+                'end_date'           => $request->end_date,
+                'duration_months'    => $request->duration_months,
+                'file_path'          => $filePath,
+                'notes'              => $request->notes,
+            ]);
+
+            $invoiceNumber = Invoice::generateNumber($category->code, $issueDate, $request->invoice_type);
+
+            $invoice = Invoice::create([
+                'user_id'             => Auth::id(),
+                'client_id'           => $client->id,
+                'spk_id'              => $spk->id,
+                'project_category_id' => $request->project_category_id,
+                'document_issuer_id'  => $request->document_issuer_id,
+                'bank_account_id'     => $request->bank_account_id,
+                'invoice_number'      => $invoiceNumber,
+                'spk_number'          => $spkNumber,
+                'attention'           => $request->pic_name ?? $client->pic,
+                'notes'               => $request->notes,
+                'issue_date'          => $issueDate->toDateString(),
+                'due_date'            => Carbon::parse($request->due_date)->toDateString(),
+                'interval_months'     => $request->interval_months,
+                'invoice_type'        => $request->invoice_type,
+                'payment_status'      => 'unpaid',
+                'document_status'     => 'draft',
+                'send_status'         => 'unsent',
+                'is_demo'             => false,
+            ]);
+
+            if ($request->contract_value) {
+                InvoiceItem::create([
+                    'invoice_id'  => $invoice->id,
+                    'description' => $request->service_name ?? 'Jasa sesuai SPK',
+                    'amount'      => $request->contract_value,
+                    'discount'    => 0,
+                ]);
+            }
+
+            $invoiceId = $invoice->id;
+        });
+
+        return redirect()->route('invoices.show', $invoiceId)
+            ->with('success', 'Klien, SPK, dan invoice berhasil dibuat.');
     }
 
     public function destroy(Spk $spk)

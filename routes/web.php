@@ -69,9 +69,11 @@ Route::middleware('auth')->group(function () {
         Route::resource('clients', ClientController::class)->except(['show']);
 
         Route::get('spk', [SpkController::class, 'index'])->name('spk.index');
+        Route::get('spk/create', [SpkController::class, 'create'])->name('spk.create');
         Route::get('spk/number-preview', [SpkController::class, 'numberPreview'])->name('spk.number-preview');
         Route::post('spk/parse', [SpkController::class, 'parse'])->name('spk.parse');
         Route::post('spk/store', [SpkController::class, 'store'])->name('spk.store');
+        Route::post('spk/store-with-client', [SpkController::class, 'storeWithClient'])->name('spk.store-with-client');
         Route::get('spk/client/{client}', [SpkController::class, 'clientSpks'])->name('spk.client');
         Route::delete('spk/{spk}', [SpkController::class, 'destroy'])->name('spk.destroy');
 

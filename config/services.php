@@ -54,4 +54,12 @@ return [
         'key' => env('GROQ_API_KEY'),
     ],
 
+    'ollama' => [
+        'host'  => env('OLLAMA_HOST', 'http://localhost:11434'),
+        'model' => env('OLLAMA_MODEL', 'qwen2.5:7b'),
+    ],
+
+    // Pilih provider: "groq" atau "ollama"
+    'ai_provider' => env('AI_PROVIDER', 'groq'),
+
 ];

@@ -54,11 +54,349 @@ class SpkController extends Controller
     public function create()
     {
         return Inertia::render('Spk/Create', [
+            'provider'          => 'groq',
             'projectCategories' => \App\Models\ProjectCategory::all(['id', 'name', 'code']),
             'clientCategories'  => \App\Models\ClientCategory::all(['id', 'name']),
             'documentIssuers'   => \App\Models\DocumentIssuer::all(['id', 'name']),
             'bankAccounts'      => \App\Models\BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
         ]);
+    }
+
+    public function createLocal()
+    {
+        return Inertia::render('Spk/CreateLocal', [
+            'projectCategories' => \App\Models\ProjectCategory::all(['id', 'name', 'code']),
+            'clientCategories'  => \App\Models\ClientCategory::all(['id', 'name']),
+            'documentIssuers'   => \App\Models\DocumentIssuer::all(['id', 'name']),
+            'bankAccounts'      => \App\Models\BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
+        ]);
+    }
+
+    public function createOllama()
+    {
+        return Inertia::render('Spk/Create', [
+            'provider'          => 'ollama',
+            'projectCategories' => \App\Models\ProjectCategory::all(['id', 'name', 'code']),
+            'clientCategories'  => \App\Models\ClientCategory::all(['id', 'name']),
+            'documentIssuers'   => \App\Models\DocumentIssuer::all(['id', 'name']),
+            'bankAccounts'      => \App\Models\BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
+        ]);
+    }
+
+    public function parseLocal(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:pdf|max:10240']);
+
+        try {
+            $parser  = new PdfParser();
+            $pdf     = $parser->parseFile($request->file('file')->getRealPath());
+            $text    = $pdf->getText();
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Gagal membaca PDF: ' . $e->getMessage());
+        }
+
+        if (blank($text)) {
+            return back()->with('error', 'PDF tidak mengandung teks yang bisa dibaca (mungkin hasil scan/gambar).');
+        }
+
+        $detected = [];
+        $missed   = [];
+        $data     = [];
+
+        // Helper: tandai detected/missed
+        $mark = function ($field, $value) use (&$detected, &$missed, &$data) {
+            if ($value !== null && $value !== '') {
+                $data[$field]  = $value;
+                $detected[]    = $field;
+            } else {
+                $data[$field]  = null;
+                $missed[]      = $field;
+            }
+        };
+
+        // Helper: parse tanggal Indonesia ke YYYY-MM-DD
+        $parseIdDate = function (string $raw): ?string {
+            $bulan = [
+                'januari'=>1,'februari'=>2,'maret'=>3,'april'=>4,'mei'=>5,'juni'=>6,
+                'juli'=>7,'agustus'=>8,'september'=>9,'oktober'=>10,'november'=>11,'desember'=>12,
+            ];
+            if (preg_match('/(\d{1,2})\s+(\w+)\s+(\d{4})/i', $raw, $m)) {
+                $mon = $bulan[strtolower($m[2])] ?? null;
+                if ($mon) return sprintf('%04d-%02d-%02d', $m[3], $mon, $m[1]);
+            }
+            // fallback: dd/mm/yyyy atau dd-mm-yyyy
+            if (preg_match('/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/', $raw, $m)) {
+                return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+            }
+            return null;
+        };
+
+        $textLower = strtolower($text);
+
+        // Helper: bersihkan string hasil regex
+        $clean = fn($s) => trim(preg_replace('/\s+/', ' ', $s));
+
+        // Helper: parse nilai Rp ke integer
+        $parseRp = function (string $raw): ?int {
+            // "30.000.000,-" atau "30,000,000" → 30000000
+            $s = preg_replace('/[.,]\s*$/', '', $raw);  // hapus trailing ,- atau .
+            // Jika ada koma sebagai desimal (misal "30,000,000"), ambil sebelum koma terakhir jika > 3 digit setelahnya
+            // Strategi: hapus semua titik dan koma jika hasilnya masih angka
+            $stripped = preg_replace('/[.,]/', '', $s);
+            if (is_numeric($stripped) && strlen($stripped) >= 4) return (int) $stripped;
+            // fallback: hapus non-digit
+            $digits = preg_replace('/\D/', '', $s);
+            return $digits ? (int) $digits : null;
+        };
+
+        // 1. Nomor SPK
+        preg_match('/Nomor\s*:\s*([^\n\r]+)/i', $text, $m);
+        $mark('spk_number', isset($m[1]) ? $clean($m[1]) : null);
+
+        // 2. Tanggal — coba berbagai format:
+        //    a. "(dd-mm-yyyy)" — format Koperasi CESA
+        //    b. "dd Bulan YYYY" — format formal
+        //    c. "terhitung sejak tanggal dd Bulan YYYY"
+        $startDate = null;
+        // Format (dd-mm-yyyy) dalam tanda kurung
+        if (preg_match('/\((\d{1,2}[-\/]\d{1,2}[-\/]\d{4})\)/', $text, $m)) {
+            $startDate = $parseIdDate($m[1]);
+        }
+        // Format teks: "tanggal X Bulan Y Tahun Z" atau "terhitung sejak tanggal X"
+        if (!$startDate) {
+            preg_match('/(?:sejak|mulai|terhitung|ditandatangani)\s+(?:pada\s+)?(?:hari\s+\w+\s+)?[Tt]anggal\s+(\d{1,2}\s+\w+[\s\n]+\d{4})/is', $text, $m);
+            if (isset($m[1])) $startDate = $parseIdDate(preg_replace('/\s+/', ' ', $m[1]));
+        }
+        // Format teks paling atas: "hari ini, Selasa Tanggal X Bulan Y Tahun Z"
+        if (!$startDate) {
+            preg_match('/Tanggal\s+\w+\s+Bulan\s+\w+\s+Tahun\s+\w+\s+\((\d{1,2}-\d{1,2}-\d{4})\)/i', $text, $m);
+            if (isset($m[1])) $startDate = $parseIdDate($m[1]);
+        }
+        $mark('start_date', $startDate);
+
+        // 3. Tanggal selesai
+        $endDate = null;
+        preg_match('/(?:berakhir|sampai dengan|s\.d\.)\s+(?:pada\s+)?tanggal\s+(\d{1,2}\s+\w+[\s\n]+\d{4})/is', $text, $m);
+        if (isset($m[1])) $endDate = $parseIdDate(preg_replace('/\s+/', ' ', $m[1]));
+        // Cari "hingga November 2026" atau "(hingga Bulan YYYY)" — format Koperasi CESA
+        if (!$endDate) {
+            preg_match('/hingga\s+(\w+\s+\d{4})/i', $text, $m);
+            if (isset($m[1])) $endDate = $parseIdDate('1 ' . $m[1]);
+        }
+        $mark('end_date', $endDate);
+
+        // 4. Durasi dari tanggal
+        if ($data['start_date'] && $data['end_date']) {
+            $dur = Carbon::parse($data['start_date'])->diffInMonths(Carbon::parse($data['end_date']));
+            $mark('duration_months', $dur > 0 ? $dur : null);
+        } else {
+            $mark('duration_months', null);
+        }
+
+        // 5. Identifikasi para pihak
+        // Coba format "Antara [X] Dengan [Y] tentang" (header dokumen)
+        $party1Name = $party2Name = '';
+        if (preg_match('/Antara\s+(.+?)\s+Dengan\s+(.+?)\s+tentang/is', $text, $m)) {
+            $party1Name = $clean($m[1]);
+            $party2Name = $clean($m[2]);
+        }
+        // Fallback: extract dari blok bernomor
+        if (!$party1Name) {
+            preg_match('/1\.\s+.+?((?:PT|CV|Koperasi|Yayasan|UD|PD)\.?\s+[A-Z][A-Z\s]+?)(?:,|\s+yang|\s+berkedudukan)/is', $text, $m);
+            $party1Name = isset($m[1]) ? $clean($m[1]) : '';
+        }
+        if (!$party2Name) {
+            preg_match('/2\.\s+.+?((?:PT|CV|Koperasi|Yayasan|UD|PD)\.?\s+[A-Z][A-Z\s]+?)(?:,|\s+yang|\s+berkedudukan)/is', $text, $m);
+            $party2Name = isset($m[1]) ? $clean($m[1]) : '';
+        }
+
+        // Tentukan mana klien vs issuer: cocokkan ke document_issuers DB
+        $issuers = \App\Models\DocumentIssuer::all(['id', 'name']);
+        $matchedIssuer = null;
+        $clientPartyName = $party1Name; // default: party 1 = klien
+        foreach ($issuers as $issuer) {
+            $issuerWords = array_filter(explode(' ', strtolower($issuer->name)), fn($w) => strlen($w) > 3);
+            foreach ($issuerWords as $word) {
+                if (str_contains(strtolower($party1Name), $word)) {
+                    // Party 1 = issuer kita → klien = party 2
+                    $matchedIssuer   = $issuer->id;
+                    $clientPartyName = $party2Name;
+                    break 2;
+                }
+                if (str_contains(strtolower($party2Name), $word)) {
+                    // Party 2 = issuer kita → klien = party 1
+                    $matchedIssuer   = $issuer->id;
+                    $clientPartyName = $party1Name;
+                    break 2;
+                }
+            }
+        }
+        $mark('document_issuer_id', $matchedIssuer);
+
+        // 6. Nama perusahaan klien
+        $mark('company_name', $clientPartyName ?: null);
+
+        // 7. Kota klien
+        $clientBlock = (strtolower($clientPartyName) === strtolower($party1Name)) ? '1' : '2';
+
+        // Helper extract Kab/Kota dari raw address string
+        $extractCity = function (string $addr) use ($clean): ?string {
+            if (preg_match('/(?:Kab\.?|Kabupaten)\s+([A-Za-z ]+?)(?:,|$)/i', $addr, $cm)) {
+                return 'Kab. ' . $clean($cm[1]);
+            }
+            if (preg_match('/Kota\s+([A-Za-z ]+?)(?:,|$)/i', $addr, $cm)) {
+                return 'Kota ' . $clean($cm[1]);
+            }
+            // Cari segmen sebelum nama provinsi
+            if (preg_match('/([A-Za-z ]+?)\s*,\s*(?:Jawa|Sumatera|Kalimantan|Sulawesi|Bali|DKI|DI)\b/i', $addr, $cm)) {
+                return $clean($cm[1]);
+            }
+            return null;
+        };
+
+        $cityVal = null;
+        // Strategi 1: cari nama perusahaan klien → "berkedudukan di ..."
+        if ($clientPartyName) {
+            $escaped = preg_quote($clientPartyName, '/');
+            preg_match('/' . $escaped . '[^.]{0,300}berkedudukan\s+di\s+([^.;]+?)(?:\.|yang\s+selanjutnya|selanjutnya)/is', $text, $m);
+            if (isset($m[1])) $cityVal = $extractCity($clean($m[1]));
+        }
+        // Strategi 2: cari "PIHAK [PERTAMA/KEDUA]" → "berkedudukan di ..."
+        if (!$cityVal) {
+            $correspondBlock2 = ($clientBlock === '1') ? 'PERTAMA' : 'KEDUA';
+            preg_match('/PIHAK\s+' . $correspondBlock2 . '[^.]{0,500}berkedudukan\s+di\s+([^.;]+?)(?:\.|yang\s+selanjutnya|selanjutnya)/is', $text, $m);
+            if (isset($m[1])) $cityVal = $extractCity($clean($m[1]));
+        }
+        // Strategi 3: fallback blok bernomor (format lama)
+        if (!$cityVal) {
+            preg_match('/' . $clientBlock . '\.\s+.+?berkedudukan\s+di\s+([^.;]+?)(?:\.|selanjutnya)/is', $text, $m);
+            if (isset($m[1])) $cityVal = $extractCity($clean($m[1]));
+        }
+        $mark('city', $cityVal);
+
+        // 8. Nama PIC klien
+        $picName = null;
+        $correspondBlock = ($clientBlock === '1') ? 'PERTAMA' : 'KEDUA';
+        if (preg_match('/KORESPONDENSI.+?' . $correspondBlock . '\s*\n\s*-\s*Nama\s*:\s*([^\n]+)/is', $text, $m)) {
+            $picName = $clean($m[1]);
+        }
+        // Fallback: nama pertama di blok bernomor (sebelum tanda baca/gelar)
+        if (!$picName) {
+            preg_match('/' . $clientBlock . '\.\s+([A-Z][A-Z\s]+?)(?:,\s*S\.|,\s*dalam|\s+dalam)/i', $text, $m);
+            $picName = isset($m[1]) ? $clean($m[1]) : null;
+        }
+        $mark('pic_name', $picName);
+
+        // 9. Nama layanan
+        // Coba dari "tentang\n[LAYANAN]" di header dokumen
+        $serviceName = null;
+        if (preg_match('/tentang\s+([A-Z][A-Z\s]+?)(?:\n\n|\nPada|\nAntar)/is', $text, $m)) {
+            $serviceName = $clean($m[1]);
+        }
+        // Fallback: "pekerjaan berupa X"
+        if (!$serviceName) {
+            preg_match('/(?:pekerjaan berupa|kegiatan)\s+(.+?)(?:\s+bagi\s+PIHAK|\s+mencakup|\s+meliputi|\s+dengan\s+rincian)/is', $text, $m);
+            $serviceName = isset($m[1]) ? $clean($m[1]) : null;
+        }
+        // Fallback: judul setelah "SURAT PERJANJIAN" baris pertama yang all-caps
+        if (!$serviceName) {
+            preg_match('/SURAT PERJANJIAN[^\n]*\n(?:[^\n]*\n){0,3}([A-Z][A-Z\s]{10,})/i', $text, $m);
+            $serviceName = isset($m[1]) ? $clean($m[1]) : null;
+        }
+        $mark('service_name', $serviceName);
+
+        // 10. Nilai kontrak — ambil nilai terbesar dari pasal pembayaran
+        // Cari semua kemunculan Rp di pasal pembayaran
+        $contractValue = null;
+        preg_match('/(?:CARA|RINCIAN|HARGA|PEMBAYARAN).+?Rp\.?\s*([\d.,]+)/is', $text, $m);
+        if (isset($m[1])) {
+            $contractValue = $parseRp($m[1]);
+        }
+        // Fallback: Rp pertama yang nilainya > 1 juta
+        if (!$contractValue) {
+            preg_match_all('/Rp\.?\s*([\d.,]+)/i', $text, $allM);
+            foreach (($allM[1] ?? []) as $raw) {
+                $val = $parseRp($raw);
+                if ($val && $val > 1000000) { $contractValue = $val; break; }
+            }
+        }
+        $mark('contract_value', $contractValue);
+
+        // 11. Catatan — ambil dari pasal garansi/ketentuan jika ada
+        preg_match('/(?:KETENTUAN KHUSUS|GARANSI DAN JAMINAN)\s*\n+((?:.+\n?){1,5})/i', $text, $m);
+        $mark('notes', isset($m[1]) ? $clean($m[1]) : null);
+
+        // 12. Bank matching — cari nama bank di teks, cocokkan ke DB
+        $banks = \App\Models\BankAccount::all(['id', 'name', 'bank_name']);
+        $matchedBank = null;
+        foreach ($banks as $bank) {
+            foreach ([$bank->bank_name, $bank->name] as $keyword) {
+                if ($keyword && stripos($text, $keyword) !== false) {
+                    $matchedBank = $bank->id;
+                    break 2;
+                }
+            }
+        }
+        $mark('bank_account_id', $matchedBank);
+
+        // 13. Project category matching
+        $categories = \App\Models\ProjectCategory::all(['id', 'name', 'code']);
+        $categoryKeywords = [
+            'hosting'      => ['hosting', 'server', 'cloud', 'vps', 'domain', 'sewa server'],
+            'lisensi'      => ['lisensi', 'license', 'lifetime', 'smartcoop', 'aplikasi koperasi'],
+            'maintenance'  => ['pemeliharaan', 'maintenance', 'support', 'perawatan', 'purna jual'],
+            'pengembangan' => ['pengembangan', 'development', 'implementasi sistem', 'website', 'software'],
+        ];
+        $matchedCat = null;
+        foreach ($categories as $cat) {
+            if (stripos($text, $cat->name) !== false || stripos($text, $cat->code) !== false) {
+                $matchedCat = $cat->id; break;
+            }
+            $catLower = strtolower($cat->name . ' ' . $cat->code);
+            foreach ($categoryKeywords as $group => $keywords) {
+                if (str_contains($catLower, $group)) {
+                    foreach ($keywords as $kw) {
+                        if (str_contains($textLower, $kw)) { $matchedCat = $cat->id; break 3; }
+                    }
+                }
+            }
+        }
+        $mark('project_category_id', $matchedCat);
+
+        // 14. Invoice type — dari keyword + durasi
+        $invoiceType = null;
+        if (preg_match('/setiap\s+(?:pada\s+)?(?:setiap\s+)?[Tt]ahun|per\s+[Tt]ahun|tahunan/i', $text)) {
+            $invoiceType = 'yearly';
+        } elseif (preg_match('/per\s+[Bb]ulan|setiap\s+[Bb]ulan|bulanan/i', $text)) {
+            $invoiceType = 'monthly';
+        } elseif ($data['duration_months']) {
+            $invoiceType = $data['duration_months'] >= 12 ? 'yearly' : 'monthly';
+        }
+        $mark('invoice_type', $invoiceType);
+
+        $data['interval_months'] = match($invoiceType) {
+            'yearly'  => min(($data['duration_months'] ?? 12), 36),
+            'monthly' => (($data['duration_months'] ?? 0) > 0 && $data['duration_months'] <= 12) ? $data['duration_months'] : null,
+            default   => null,
+        };
+
+        $data['_detected'] = $detected;
+        $data['_missed']   = $missed;
+
+        // Kumpulkan teks yang ter-detect untuk highlighting di PDF viewer
+        $highlightFields = ['spk_number', 'company_name', 'service_name', 'pic_name', 'city'];
+        $highlights = [];
+        foreach ($highlightFields as $f) {
+            if (!empty($data[$f]) && is_string($data[$f]) && strlen(trim($data[$f])) > 4) {
+                $highlights[] = trim($data[$f]);
+            }
+        }
+        // Tambah nama pihak lainnya agar coverage lebih luas
+        if ($party1Name && strlen($party1Name) > 4) $highlights[] = $party1Name;
+        if ($party2Name && strlen($party2Name) > 4) $highlights[] = $party2Name;
+        $data['_highlights'] = array_unique($highlights);
+
+        return back()->with('spk_local', $data);
     }
 
     public function numberPreview(Request $request)
@@ -82,9 +420,25 @@ class SpkController extends Controller
             'file' => 'required|file|mimes:pdf|max:10240',
         ]);
 
-        $apiKey = config('services.groq.key');
-        if (!$apiKey) {
-            return back()->with('error', 'GROQ_API_KEY belum dikonfigurasi.');
+        // Request bisa override env (groq/ollama)
+        $provider = $request->input('provider', config('services.ai_provider', 'groq'));
+
+        if ($provider === 'ollama') {
+            $apiUrl    = rtrim(config('services.ollama.host'), '/') . '/v1/chat/completions';
+            $aiModel   = config('services.ollama.model', 'qwen2.5:7b');
+            $headers   = ['Content-Type' => 'application/json'];
+            $timeout   = 180; // Ollama di CPU bisa 2-3 menit
+            $errLabel  = 'Ollama';
+        } else {
+            $apiKey = config('services.groq.key');
+            if (!$apiKey) {
+                return back()->with('error', 'GROQ_API_KEY belum dikonfigurasi.');
+            }
+            $apiUrl   = 'https://api.groq.com/openai/v1/chat/completions';
+            $aiModel  = 'llama-3.3-70b-versatile';
+            $headers  = ['Authorization' => 'Bearer ' . $apiKey, 'Content-Type' => 'application/json'];
+            $timeout  = 60;
+            $errLabel = 'Groq';
         }
 
         // Ekstrak teks dari PDF
@@ -165,27 +519,26 @@ Teks dokumen SPK:
 PROMPT;
 
         try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-Type'  => 'application/json',
-            ])->timeout(60)->post('https://api.groq.com/openai/v1/chat/completions', [
-                'model'           => 'llama-3.3-70b-versatile',
-                'temperature'     => 0,
-                'response_format' => ['type' => 'json_object'],
-                'messages'        => [
-                    [
-                        'role'    => 'user',
-                        'content' => $prompt . "\n\n" . mb_substr($pdfText, 0, 12000),
+            $response = Http::withHeaders($headers)
+                ->timeout($timeout)
+                ->post($apiUrl, [
+                    'model'           => $aiModel,
+                    'temperature'     => 0,
+                    'response_format' => ['type' => 'json_object'],
+                    'messages'        => [
+                        [
+                            'role'    => 'user',
+                            'content' => $prompt . "\n\n" . mb_substr($pdfText, 0, 12000),
+                        ],
                     ],
-                ],
-            ]);
+                ]);
         } catch (\Throwable $e) {
-            return back()->with('error', 'Koneksi ke Groq gagal: ' . $e->getMessage());
+            return back()->with('error', "Koneksi ke {$errLabel} gagal: " . $e->getMessage());
         }
 
         if ($response->failed()) {
             $msg = $response->json('error.message', 'Unknown error');
-            return back()->with('error', "Groq API error: {$msg}");
+            return back()->with('error', "{$errLabel} error: {$msg}");
         }
 
         $raw  = $response->json('choices.0.message.content', '');

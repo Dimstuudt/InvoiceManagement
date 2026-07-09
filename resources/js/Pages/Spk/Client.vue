@@ -121,6 +121,31 @@
             <!-- Left: Upload + Preview -->
             <div class="w-2/5 border-r border-gray-100 flex flex-col">
               <div class="p-4 border-b border-gray-50">
+
+                <!-- Pilih Metode -->
+                <div class="flex gap-1.5 mb-3">
+                  <button type="button" @click="parseMethod = 'local'"
+                    class="flex-1 py-1 text-[11px] font-semibold rounded-lg border-2 transition-colors"
+                    :class="parseMethod === 'local' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'">
+                    Lokal
+                  </button>
+                  <button type="button" @click="parseMethod = 'groq'"
+                    class="flex-1 py-1 text-[11px] font-semibold rounded-lg border-2 transition-colors"
+                    :class="parseMethod === 'groq' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'">
+                    Groq
+                  </button>
+                  <button type="button" @click="parseMethod = 'ollama'"
+                    class="flex-1 py-1 text-[11px] font-semibold rounded-lg border-2 transition-colors"
+                    :class="parseMethod === 'ollama' ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'">
+                    Ollama
+                  </button>
+                </div>
+                <p class="text-[10px] text-gray-400 mb-3">
+                  <template v-if="parseMethod === 'local'">Regex — cepat, data tidak keluar server</template>
+                  <template v-else-if="parseMethod === 'groq'">AI cloud — lebih akurat, data terkirim ke Groq</template>
+                  <template v-else>AI lokal — privat, data tidak keluar server</template>
+                </p>
+
                 <div
                   class="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-200"
                   :class="dragging
@@ -147,14 +172,18 @@
                     <p class="text-[10px] text-gray-400 mt-0.5">drag & drop atau klik · maks 10MB</p>
                   </template>
 
-                  <!-- Loading: sedang dianalisis AI -->
+                  <!-- Loading: sedang dianalisis -->
                   <template v-else-if="parsing">
                     <svg class="w-7 h-7 text-amber-400 mx-auto mb-2 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                     </svg>
-                    <p class="text-xs font-semibold text-amber-600">AI sedang membaca SPK...</p>
-                    <p class="text-[10px] text-amber-400 mt-0.5">mencocokkan data dengan sistem</p>
+                    <p class="text-xs font-semibold text-amber-600">
+                      {{ parseMethod === 'local' ? 'Membaca SPK...' : parseMethod === 'ollama' ? 'Ollama sedang membaca...' : 'AI sedang membaca SPK...' }}
+                    </p>
+                    <p class="text-[10px] text-amber-400 mt-0.5">
+                      {{ parseMethod === 'ollama' ? 'model lokal — bisa lebih lama' : 'mencocokkan data dengan sistem' }}
+                    </p>
                   </template>
 
                   <!-- Done: berhasil -->
@@ -358,13 +387,14 @@ const props = defineProps({
   bankAccounts:      Array,
 })
 
-const page     = usePage()
-const modalOpen = ref(false)
-const dragging  = ref(false)
-const parsing   = ref(false)
-const saving    = ref(false)
-const parsed    = ref(false)
-const pdfUrl    = ref(null)
+const page        = usePage()
+const modalOpen   = ref(false)
+const dragging    = ref(false)
+const parsing     = ref(false)
+const saving      = ref(false)
+const parsed      = ref(false)
+const pdfUrl      = ref(null)
+const parseMethod = ref('local')
 
 // Form — deklarasi sebelum computed/watch
 const defaultForm = () => ({
@@ -492,9 +522,10 @@ function formatDate(dateStr) {
 }
 
 function openModal() {
-  modalOpen.value = true
-  form.value      = defaultForm()
-  parsed.value    = false
+  modalOpen.value   = true
+  form.value        = defaultForm()
+  parsed.value      = false
+  parseMethod.value = 'local'
   if (pdfUrl.value) { URL.revokeObjectURL(pdfUrl.value); pdfUrl.value = null }
 }
 
@@ -516,7 +547,11 @@ function submitParse() {
   parsed.value  = false
   const fd = new FormData()
   fd.append('file', form.value.file)
-  router.post(route('spk.parse'), fd, {
+
+  const routeName = parseMethod.value === 'local' ? 'spk.parse-local' : 'spk.parse'
+  if (parseMethod.value !== 'local') fd.append('provider', parseMethod.value)
+
+  router.post(route(routeName), fd, {
     forceFormData: true,
     preserveScroll: true,
     preserveState: true,

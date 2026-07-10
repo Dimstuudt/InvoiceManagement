@@ -123,7 +123,7 @@ function formatNumber(n) {
 
 function formatDatetime(str) {
   if (!str) return '—'
-  const d = new Date(str)
+  const d = new Date(String(str).replace(' ', 'T'))
   const yy  = String(d.getFullYear()).slice(2)
   const mm  = String(d.getMonth() + 1).padStart(2, '0')
   const dd  = String(d.getDate()).padStart(2, '0')

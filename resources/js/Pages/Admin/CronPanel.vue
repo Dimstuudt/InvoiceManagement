@@ -435,7 +435,7 @@ const statusTextColor = computed(() => props.isAlive ? 'text-emerald-700' : 'tex
 
 const minutesAgo = computed(() => {
   if (!props.lastRun) return '-'
-  const diff = Math.floor((Date.now() - new Date(props.lastRun.created_at).getTime()) / 60000)
+  const diff = Math.floor((Date.now() - toDate(props.lastRun.created_at).getTime()) / 60000)
   if (diff < 1) return '< 1 menit'
   if (diff < 60) return `${diff} menit`
   const h = Math.floor(diff / 60)
@@ -513,9 +513,11 @@ function toggleExpand(id) {
   expanded.value = expanded.value === id ? null : id
 }
 
+const toDate = (dt) => dt ? new Date(String(dt).replace(' ', 'T')) : new Date(NaN)
+
 function formatDate(d) {
   if (!d) return '-'
-  return new Date(d).toLocaleString('id-ID', {
+  return toDate(d).toLocaleString('id-ID', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })

@@ -347,7 +347,7 @@ function cancelDisable() {
 
 // ── Helpers ───────────────────────────────────────────────
 const fmtDate = (d) => d
-  ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+  ? new Date(String(d).replace(' ', 'T')).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
   : '—'
 </script>
 

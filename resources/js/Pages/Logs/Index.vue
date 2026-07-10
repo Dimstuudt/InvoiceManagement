@@ -430,7 +430,7 @@ function toggleDetail(id) {
 const groupedLogs = computed(() => {
   const groups = {}
   ;(props.logs.data ?? []).forEach(log => {
-    const key = new Date(log.created_at).toLocaleDateString('id-ID', {
+    const key = toDate(log.created_at).toLocaleDateString('id-ID', {
       weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
     })
     ;(groups[key] ??= []).push(log)
@@ -550,8 +550,11 @@ function parseDevice(ua = '') {
   return ua
 }
 
+// Laravel mengirim timestamp tanpa timezone info — parse sebagai local time
+const toDate = (dt) => dt ? new Date(String(dt).replace(' ', 'T')) : new Date(NaN)
+
 const formatTime = (dt) =>
-  new Date(dt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+  toDate(dt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
 
 // ── Static config ─────────────────────────────────────────────────────────
 const statCards = [

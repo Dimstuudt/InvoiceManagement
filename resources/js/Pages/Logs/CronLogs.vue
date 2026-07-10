@@ -155,6 +155,15 @@
                     </svg>
                     {{ session.sentCount }} email terkirim
                   </span>
+                  <!-- Stage breakdown pills -->
+                  <template v-if="session.sentCount > 0">
+                    <template v-for="stage in ['send1','send2','send3','send4','send5']" :key="stage">
+                      <span v-if="session.stageCounts[stage]"
+                        :class="['text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums', stageColor(stage)]">
+                        {{ session.stageCounts[stage] }}× {{ stageLabel(stage) }}
+                      </span>
+                    </template>
+                  </template>
                   <span v-if="session.overdueCount > 0"
                     class="inline-flex items-center gap-1 text-[11px] font-semibold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full ring-1 ring-orange-200/50">
                     <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -196,6 +205,12 @@
                     </Link>
                     <span v-else class="text-[11px] font-mono font-semibold text-slate-500 shrink-0">
                       {{ log.subject_label }}
+                    </span>
+
+                    <!-- Stage badge (auto_sent only) -->
+                    <span v-if="log.action === 'invoice.auto_sent' && log.detail?.stage"
+                      :class="['text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 tabular-nums', stageColor(log.detail.stage)]">
+                      {{ stageLabel(log.detail.stage) }}
                     </span>
 
                     <!-- Detail -->
@@ -362,16 +377,21 @@ const groupedSessions = computed(() => {
   let cur = null
 
   entries.forEach(log => {
-    const t = new Date(log.created_at).getTime()
+    const t = toDate(log.created_at).getTime()
     if (!cur || t - cur.lastTime > SESSION_GAP_MS) {
-      cur = { startTime: log.created_at, lastTime: t, entries: [], sentCount: 0, overdueCount: 0 }
+      cur = { startTime: log.created_at, lastTime: t, entries: [], sentCount: 0, overdueCount: 0, stageCounts: {} }
       sessions.push(cur)
     } else {
       cur.lastTime = t
     }
     cur.entries.push(log)
-    if (log.action === 'invoice.auto_sent') cur.sentCount++
-    else cur.overdueCount++
+    if (log.action === 'invoice.auto_sent') {
+      cur.sentCount++
+      const s = log.detail?.stage
+      if (s) cur.stageCounts[s] = (cur.stageCounts[s] ?? 0) + 1
+    } else {
+      cur.overdueCount++
+    }
   })
 
   // Reverse back to desc; entries inside each session also reversed (newest first)
@@ -380,7 +400,7 @@ const groupedSessions = computed(() => {
   // Group sessions by calendar date
   const byDate = new Map()
   sessions.forEach(s => {
-    const key = new Date(s.entries[0].created_at).toLocaleDateString('id-ID', {
+    const key = toDate(s.entries[0].created_at).toLocaleDateString('id-ID', {
       weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
     })
     if (!byDate.has(key)) byDate.set(key, [])
@@ -403,8 +423,22 @@ function toggleSession(id) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────
+// Laravel mengirim timestamp tanpa timezone info — parse sebagai local time
+const toDate = (dt) => dt ? new Date(String(dt).replace(' ', 'T')) : new Date(NaN)
+
 const formatTime = (dt) =>
-  new Date(dt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+  toDate(dt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+
+const STAGE_META = {
+  send1: { label: 'Send 1', color: 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200/60' },
+  send2: { label: 'Send 2', color: 'bg-blue-50 text-blue-600 ring-1 ring-blue-200/60' },
+  send3: { label: 'Send 3', color: 'bg-amber-50 text-amber-600 ring-1 ring-amber-200/60' },
+  send4: { label: 'Send 4', color: 'bg-orange-50 text-orange-600 ring-1 ring-orange-200/60' },
+  send5: { label: 'Send 5', color: 'bg-red-50 text-red-600 ring-1 ring-red-200/60' },
+  paid:  { label: 'Paid',   color: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60' },
+}
+const stageLabel = (s) => STAGE_META[s]?.label ?? s
+const stageColor = (s) => STAGE_META[s]?.color ?? 'bg-slate-50 text-slate-500 ring-1 ring-slate-200/60'
 
 function deleteAll() {
   Swal.fire({

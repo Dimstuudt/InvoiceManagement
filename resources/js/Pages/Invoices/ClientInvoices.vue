@@ -1111,7 +1111,7 @@ const fmtDateShort = d => d
   : '-';
 
 const fmtDateTime = d => d
-  ? new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  ? new Date(String(d).replace(' ', 'T')).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '-';
 
 const fmtCurrency = v => v != null

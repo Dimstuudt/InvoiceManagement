@@ -77,7 +77,9 @@ defineProps({
 });
 
 function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (!dateStr) return '—'
+  const d = new Date(String(dateStr).replace(' ', 'T'))
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function deleteUser(user) {

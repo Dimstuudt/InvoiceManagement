@@ -878,6 +878,7 @@ class InvoiceController extends Controller
         $pdfBase64 = app(\App\Services\PdfService::class)->generate($html);
         $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
         $toList    = array_map(fn($e) => ['email' => $e], $validated['emails']);
+        $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $validated['body'], 'filename' => $filename])->render();
 
         $response = \Illuminate\Support\Facades\Http::withHeaders([
             'api-key'      => config('services.brevo.key'),
@@ -889,7 +890,7 @@ class InvoiceController extends Controller
             ],
             'to'          => $toList,
             'subject'     => $validated['subject'],
-            'textContent' => $validated['body'],
+            'htmlContent' => $htmlEmail,
             'attachment'  => [[
                 'content' => $pdfBase64,
                 'name'    => $filename,
@@ -1786,7 +1787,8 @@ class InvoiceController extends Controller
             $pdfBase64  = app(\App\Services\PdfService::class)->generate($html);
             $filename   = 'RECEIPT-' . str_replace('/', '-', $invoice->invoice_number) . '.pdf';
 
-            $toList = array_map(fn($e) => ['email' => $e], $emails);
+            $toList    = array_map(fn($e) => ['email' => $e], $emails);
+            $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
             \Illuminate\Support\Facades\Http::withHeaders([
                 'api-key'      => config('services.brevo.key'),
@@ -1798,7 +1800,7 @@ class InvoiceController extends Controller
                 ],
                 'to'          => $toList,
                 'subject'     => $subject,
-                'textContent' => $body,
+                'htmlContent' => $htmlEmail,
                 'attachment'  => [[
                     'content' => $pdfBase64,
                     'name'    => $filename,

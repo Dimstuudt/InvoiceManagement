@@ -90,6 +90,7 @@ class InvoiceAutoSend extends Command
                 $pdfBase64 = $pdfService->generate($html);
                 $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
                 $toList    = array_map(fn($e) => ['email' => $e], $emails);
+                $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
                 $response = Http::withHeaders([
                     'api-key'      => config('services.brevo.key'),
@@ -101,7 +102,7 @@ class InvoiceAutoSend extends Command
                     ],
                     'to'          => $toList,
                     'subject'     => $subject,
-                    'textContent' => $body,
+                    'htmlContent' => $htmlEmail,
                     'attachment'  => [[
                         'content' => $pdfBase64,
                         'name'    => $filename,
@@ -193,6 +194,7 @@ class InvoiceAutoSend extends Command
                 $pdfBase64 = $pdfService->generate($html);
                 $filename  = 'RCP-' . str_replace('/', '-', $invoice->invoice_number) . '.pdf';
                 $toList    = array_map(fn($e) => ['email' => $e], $emails);
+                $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
                 $response = Http::withHeaders([
                     'api-key'      => config('services.brevo.key'),
@@ -204,7 +206,7 @@ class InvoiceAutoSend extends Command
                     ],
                     'to'          => $toList,
                     'subject'     => $subject,
-                    'textContent' => $body,
+                    'htmlContent' => $htmlEmail,
                     'attachment'  => [[
                         'content' => $pdfBase64,
                         'name'    => $filename,

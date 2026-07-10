@@ -236,7 +236,7 @@
                     <span class="flex-1 text-[11px] text-slate-400 truncate min-w-0">
                       <template v-if="log.action === 'invoice.auto_sent' || log.action === 'invoice.receipt_sent'">
                         <span class="text-slate-300 mr-1">→</span>
-                        {{ Array.isArray(log.detail?.to) ? log.detail.to.join(', ') : (log.detail?.to ?? '?') }}
+                        {{ Array.isArray(log.detail?.to) ? log.detail.to.map(maskEmail).join(', ') : maskEmail(log.detail?.to ?? '?') }}
                       </template>
                       <template v-else>
                         <span class="text-slate-300 mr-1">→</span>
@@ -357,6 +357,17 @@ const quickDates = [
 ]
 
 const toISO = (d) => d.toISOString().substring(0, 10)
+
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') return email
+  const [local, domain] = email.split('@')
+  if (!domain) return email
+  const maskedLocal = local.slice(0, 2) + '***'
+  const dot = domain.lastIndexOf('.')
+  const domainName = dot > 0 ? domain.slice(0, dot) : domain
+  const tld        = dot > 0 ? domain.slice(dot)    : ''
+  return `${maskedLocal}@${domainName.slice(0, 2)}***${tld}`
+}
 
 function setQuickDate(q) {
   if (activeQuick.value === q.key) {

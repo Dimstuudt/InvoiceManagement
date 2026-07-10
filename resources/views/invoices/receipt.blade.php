@@ -42,63 +42,73 @@
 </head>
 <body>
 @php
-  $tgl          = fn($d) => $d ? $d->translatedFormat('d F Y') : '-';
-  $hdr          = $imgB64($invoice->documentIssuer?->header_image_url);
-  $sig          = $imgB64($invoice->signature?->signature_image_url);
-  $carriedFrom        = $invoice->carriedFrom ?? null;
-  $carriedTotal       = $invoice->carried_total;
-  $grandTotal         = $invoice->grand_total;
-  $isReaktivasiHead   = $invoice->is_reaktivasi && !$invoice->reaktivasi_chain_id;
-  $reaktivasiMembers  = $isReaktivasiHead ? $invoice->reaktivasiChain->sortBy('issue_date') : collect();
-  $reaktivasiTotal    = $invoice->reaktivasi_total;
-  $reaktivasiGrand    = $invoice->reaktivasi_grand_total;
-  $isPrepayHead       = $invoice->is_prepay && !$invoice->prepay_chain_id;
-  $prepayMembers      = $isPrepayHead ? $invoice->prepayChain->sortBy('issue_date') : collect();
-  $prepayTotal        = $invoice->prepay_total;
-  $prepayGrand        = $invoice->prepay_grand_total;
-  // Tunggakan period labels & combined subtotal
-  $carryPeriodLabel = null;
+  $tgl = fn($d) => $d ? $d->translatedFormat('d F Y') : '-';
+  $hdr = $imgB64($invoice->documentIssuer?->header_image_url);
+  $sig = $imgB64($invoice->signature?->signature_image_url);
+
+  $carriedFrom       = $invoice->carriedFrom ?? null;
+  $isReaktivasiHead  = $invoice->is_reaktivasi && !$invoice->reaktivasi_chain_id;
+  $reaktivasiMembers = $isReaktivasiHead ? $invoice->reaktivasiChain->sortBy('issue_date') : collect();
+  $isPrepayHead      = $invoice->is_prepay && !$invoice->prepay_chain_id;
+  $prepayMembers     = $isPrepayHead ? $invoice->prepayChain->sortBy('issue_date') : collect();
+
+  // Chain = bagian selain HEAD (total lump sum + rentang periode-nya saja)
+  $chainCount       = 0;
+  $chainPeriodStart = null;
+  $chainPeriodEnd   = null;
+  $chainTotal       = 0;
+  $chainRowLabel    = null;
+
   if ($carriedFrom) {
-    $chainStart = $carriedFrom;
-    while ($chainStart->carriedFrom) { $chainStart = $chainStart->carriedFrom; }
-    $s = $chainStart->issue_date->translatedFormat('F Y');
-    $e = $carriedFrom->issue_date->translatedFormat('F Y');
-    $carryPeriodLabel = $s === $e ? $s : "{$s} s/d {$e}";
+    $chainPeriodEnd = $carriedFrom->issue_date; // periode terdekat (parent langsung)
+    $cursor = $carriedFrom;
+    while ($cursor) {
+      $chainCount++;
+      $chainPeriodStart = $cursor->issue_date; // terus mundur sampai tertua
+      $cursor = $cursor->carriedFrom;
+    }
+    $chainTotal    = $invoice->carried_total;
+    $chainRowLabel = 'Perpanjangan';
+  } elseif ($isReaktivasiHead && $reaktivasiMembers->count() > 0) {
+    $chainCount       = $reaktivasiMembers->count();
+    $chainPeriodStart = $reaktivasiMembers->first()->issue_date;
+    $chainPeriodEnd   = $reaktivasiMembers->last()->issue_date;
+    $chainTotal       = $invoice->reaktivasi_total;
+    $chainRowLabel    = 'Reaktivasi Layanan';
+  } elseif ($isPrepayHead && $prepayMembers->count() > 0) {
+    $chainCount       = $prepayMembers->count();
+    $chainPeriodStart = $prepayMembers->first()->issue_date;
+    $chainPeriodEnd   = $prepayMembers->last()->issue_date;
+    $chainTotal       = $invoice->prepay_total;
+    $chainRowLabel    = 'Pembayaran di Muka';
   }
-  $reaktivasiPeriodLabel = null;
-  if ($isReaktivasiHead && $reaktivasiMembers->count() > 0) {
-    $s = $reaktivasiMembers->first()->issue_date->translatedFormat('F Y');
-    $e = $reaktivasiMembers->last()->issue_date->translatedFormat('F Y');
-    $reaktivasiPeriodLabel = $s === $e ? $s : "{$s} s/d {$e}";
+
+  $hasChain = $chainCount > 0;
+  $chainLabel = null;
+  if ($hasChain && $chainPeriodStart && $chainPeriodEnd) {
+    $s = $chainPeriodStart->translatedFormat('M Y');
+    $e = $chainPeriodEnd->translatedFormat('M Y');
+    $chainLabel = $s === $e ? $chainPeriodStart->translatedFormat('F Y') : "$s – $e";
   }
-  $prepayPeriodLabel = null;
-  if ($isPrepayHead && $prepayMembers->count() > 0) {
-    $s = $prepayMembers->first()->issue_date->translatedFormat('F Y');
-    $e = $prepayMembers->last()->issue_date->translatedFormat('F Y');
-    $prepayPeriodLabel = $s === $e ? $s : "{$s} s/d {$e}";
-  }
-  $displayTotal = $isPrepayHead ? $prepayGrand : ($isReaktivasiHead ? $reaktivasiGrand : $grandTotal);
+
+  $displayTotal = $isPrepayHead ? $invoice->prepay_grand_total
+                : ($isReaktivasiHead ? $invoice->reaktivasi_grand_total
+                : $invoice->grand_total);
+
   $isPaid = $invoice->payment_status === 'paid';
   $computedStatusKey = match(true) {
-    $invoice->document_status === 'frozen'   => 'frozen',
-    $invoice->document_status === 'carried'  => 'carried',
-    $invoice->payment_status  === 'paid'     => 'paid',
-    $invoice->document_status === 'draft'    => 'draft',
-    $invoice->send_status     !== 'unsent'   => 'sent',
-    default                                   => 'antrean',
+    $invoice->document_status === 'frozen'  => 'frozen',
+    $invoice->document_status === 'carried' => 'carried',
+    $invoice->payment_status  === 'paid'    => 'paid',
+    $invoice->document_status === 'draft'   => 'draft',
+    $invoice->send_status     !== 'unsent'  => 'sent',
+    default                                 => 'antrean',
   };
-  $isOverdue  = !$isPaid
+  $isOverdue = !$isPaid
     && !in_array($invoice->document_status, ['frozen', 'carried'])
     && $invoice->due_date
     && $invoice->due_date->isPast();
-  $stampLabel = [
-    'draft'    => 'DRAFT',
-    'antrean'  => 'ANTREAN',
-    'sent'     => 'SENT',
-    'paid'     => 'LUNAS',
-    'carried'  => 'CARRIED',
-    'frozen'   => 'FROZEN',
-  ];
+  $stampLabel = ['draft'=>'DRAFT','antrean'=>'ANTREAN','sent'=>'SENT','paid'=>'LUNAS','carried'=>'CARRIED','frozen'=>'FROZEN'];
   $stampClass = $isOverdue ? 'stamp-overdue' : 'stamp-' . $computedStatusKey;
   $stampText  = $isOverdue ? 'JATUH TEMPO' : ($stampLabel[$computedStatusKey] ?? strtoupper($computedStatusKey));
 
@@ -194,43 +204,34 @@
         </tr>
       </thead>
       <tbody>
+        {{-- Items HEAD (periode ini) --}}
         @foreach($invoice->items as $item)
         <tr style="border-bottom:1px solid #e5e7eb">
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#1f2937">{{ $item->description }}</td>
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">Rp {{ number_format($item->amount, 2, ',', '.') }}</td>
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#1f2937">
+            {{ $item->description }}
+            @if($item->discount)
+            <div style="font-size:0.75rem;color:#dc2626;margin-top:0.15rem">Diskon − Rp {{ number_format($item->discount, 2, ',', '.') }}</div>
+            @endif
+          </td>
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap;vertical-align:top">
+            @if($item->discount)
+            <span style="display:block;font-size:0.75rem;color:#9ca3af;text-decoration:line-through">Rp {{ number_format($item->amount, 2, ',', '.') }}</span>
+            @endif
+            Rp {{ number_format($item->item_total, 2, ',', '.') }}
+          </td>
         </tr>
         @endforeach
-        {{-- Baris perpanjangan layanan (carry, reaktivasi, prepay) --}}
-        @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
+
+        {{-- Chain: satu baris total dengan rentang periode --}}
+        @if($hasChain)
         <tr><td colspan="2" style="padding:0 0.75rem"><div style="border-top:1px dashed #cbd5e1"></div></td></tr>
-        @endif
-        @if($carriedFrom)
-        <tr style="background:#fffbf5">
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#78350f;font-style:italic">
-            Perpanjangan Layanan — {{ $carryPeriodLabel }}
+        <tr style="background:#f8fafc">
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#374151;line-height:1.4">
+            {{ $chainRowLabel }}
+            <div style="font-size:0.75rem;color:#6b7280;margin-top:0.15rem">{{ $chainLabel }}</div>
           </td>
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#78350f;white-space:nowrap">
-            Rp {{ number_format($carriedTotal, 2, ',', '.') }}
-          </td>
-        </tr>
-        @endif
-        @if($isReaktivasiHead && $reaktivasiMembers->count() > 0)
-        <tr style="background:#f0fdf4">
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#065f46;font-style:italic">
-            Perpanjangan Layanan — {{ $reaktivasiPeriodLabel }}
-          </td>
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#065f46;white-space:nowrap">
-            Rp {{ number_format($reaktivasiTotal, 2, ',', '.') }}
-          </td>
-        </tr>
-        @endif
-        @if($isPrepayHead && $prepayMembers->count() > 0)
-        <tr style="background:#f0fdfa">
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;color:#0f766e;font-style:italic">
-            Pembayaran di Muka — {{ $prepayPeriodLabel }}
-          </td>
-          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#0f766e;white-space:nowrap">
-            Rp {{ number_format($prepayTotal, 2, ',', '.') }}
+          <td style="padding:0.7rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
+            Rp {{ number_format($chainTotal, 2, ',', '.') }}
           </td>
         </tr>
         @endif
@@ -240,47 +241,33 @@
           <td colspan="2" style="padding:0.5rem 1rem 0.75rem 1rem">
             <table style="width:320px;border-collapse:collapse;margin-left:auto">
 
-              {{-- Sub Total (items periode ini saja, perpanjangan tidak masuk basis pajak) --}}
-              <tr style="border-top:1px solid #e5e7eb">
-                <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
-                  @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
-                    Sub Total <span style="font-size:0.7rem;font-style:italic">(periode ini)</span>
-                  @else
-                    Sub Total
-                  @endif
-                </td>
-                <td style="padding:0.45rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
-                  Rp {{ number_format($invoice->subtotal, 2, ',', '.') }}
-                </td>
-              </tr>
-
-              {{-- Diskon --}}
+              {{-- Diskon (HEAD period saja) --}}
               @if($invoice->discount_value)
-              <tr>
-                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+              <tr style="border-top:1px solid #e5e7eb">
+                <td style="padding:0.4rem 0.75rem 0.4rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
                   Diskon{{ $invoice->discount_type === 'percent' ? ' (' . $invoice->discount_value . '%)' : '' }}
                 </td>
-                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#dc2626;white-space:nowrap">
+                <td style="padding:0.4rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#dc2626;white-space:nowrap">
                   - Rp {{ number_format($invoice->discount_amount, 2, ',', '.') }}
                 </td>
               </tr>
               @endif
 
-              {{-- DPP --}}
+              {{-- DPP (HEAD period saja) --}}
               @if($invoice->is_dpp)
-              <tr>
-                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">DPP (11/12)</td>
-                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
+              <tr style="{{ $invoice->discount_value ? '' : 'border-top:1px solid #e5e7eb' }}">
+                <td style="padding:0.4rem 0.75rem 0.4rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">DPP (11/12)</td>
+                <td style="padding:0.4rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
                   Rp {{ number_format($invoice->dpp_base, 2, ',', '.') }}
                 </td>
               </tr>
               @endif
 
-              {{-- PPN --}}
+              {{-- PPN (HEAD period saja) --}}
               @if($invoice->tax_percentage)
-              <tr>
-                <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">PPN {{ $invoice->tax_percentage }}%</td>
-                <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
+              <tr style="{{ ($invoice->discount_value || $invoice->is_dpp) ? '' : 'border-top:1px solid #e5e7eb' }}">
+                <td style="padding:0.4rem 0.75rem 0.4rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">PPN {{ $invoice->tax_percentage }}%</td>
+                <td style="padding:0.4rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#374151;white-space:nowrap">
                   Rp {{ number_format($invoice->tax_amount, 2, ',', '.') }}
                 </td>
               </tr>
@@ -293,15 +280,6 @@
                   Rp {{ number_format($displayTotal, 2, ',', '.') }}
                 </td>
               </tr>
-
-              {{-- Note pajak perpanjangan --}}
-              @if($invoice->tax_percentage && ($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0)))
-              <tr>
-                <td colspan="2" style="padding:0.5rem 0 0 0;font-size:0.7rem;color:#9ca3af;font-style:italic;line-height:1.5">
-                  * Biaya perpanjangan layanan merupakan nilai netto yang telah diperhitungkan {{ $invoice->is_dpp ? 'DPP/PPN' : 'PPN' }}-nya pada periode masing-masing dan tidak dikenakan pajak kembali pada invoice ini.
-                </td>
-              </tr>
-              @endif
 
             </table>
           </td>

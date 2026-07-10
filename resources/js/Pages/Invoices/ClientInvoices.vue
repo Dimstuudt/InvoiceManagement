@@ -1064,6 +1064,7 @@ function headChainTotal(invoice, groupInvoices) {
       const parent = groupInvoices.find(inv => inv.id === parentId)
       if (!parent || !isSmallSubCode(parent)) break
       if (/^F-/.test(parent.invoice_number)) break  // frozen bukan carry debt, hentikan traversal
+      if (parent.payment_status === 'paid') break    // sudah lunas, hentikan traversal
       total += invoiceTotal(parent)
       parentId = parent.parent_invoice_id ?? null
     }
@@ -1076,6 +1077,7 @@ function headChainTotal(invoice, groupInvoices) {
     while (parentId) {
       const parent = groupInvoices.find(inv => inv.id === parentId)
       if (!parent || !isSmallSubCode(parent)) break
+      if (parent.payment_status === 'paid') break    // sudah lunas, hentikan traversal
       total += invoiceTotal(parent)
       parentId = parent.parent_invoice_id ?? null
     }

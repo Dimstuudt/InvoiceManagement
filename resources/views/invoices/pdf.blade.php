@@ -130,8 +130,18 @@
       <tbody>
         @foreach($invoice->items as $item)
         <tr style="border-bottom:1px solid #e5e7eb">
-          <td style="padding:0.75rem 1rem;font-size:0.875rem;color:#1f2937">{{ $item->description }}</td>
-          <td style="padding:0.75rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937">Rp {{ number_format($item->amount, 2, ',', '.') }}</td>
+          <td style="padding:0.75rem 1rem;font-size:0.875rem;color:#1f2937">
+            {{ $item->description }}
+            @if($item->discount)
+            <div style="font-size:0.75rem;color:#dc2626;margin-top:0.15rem">Diskon − Rp {{ number_format($item->discount, 2, ',', '.') }}</div>
+            @endif
+          </td>
+          <td style="padding:0.75rem 1rem;font-size:0.875rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;vertical-align:top">
+            @if($item->discount)
+            <span style="display:block;font-size:0.75rem;color:#9ca3af;text-decoration:line-through">Rp {{ number_format($item->amount, 2, ',', '.') }}</span>
+            @endif
+            Rp {{ number_format($item->item_total, 2, ',', '.') }}
+          </td>
         </tr>
         @endforeach
         {{-- Baris perpanjangan layanan (carry, reaktivasi, prepay) --}}
@@ -174,23 +184,9 @@
           <td colspan="2" style="padding:0.5rem 1rem 0.75rem 1rem">
             <table style="width:320px;border-collapse:collapse;margin-left:auto">
 
-              {{-- Sub Total (items periode ini saja, perpanjangan tidak masuk basis pajak) --}}
-              <tr style="border-top:1px solid #e5e7eb">
-                <td style="padding:0.45rem 0.75rem 0.45rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
-                  @if($carriedFrom || ($isReaktivasiHead && $reaktivasiMembers->count() > 0) || ($isPrepayHead && $prepayMembers->count() > 0))
-                    Sub Total <span style="font-size:0.7rem;font-style:italic">(periode ini)</span>
-                  @else
-                    Sub Total
-                  @endif
-                </td>
-                <td style="padding:0.45rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">
-                  Rp {{ number_format($invoice->subtotal, 2, ',', '.') }}
-                </td>
-              </tr>
-
               {{-- Diskon --}}
               @if($invoice->discount_value)
-              <tr>
+              <tr style="border-top:1px solid #e5e7eb">
                 <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">
                   Diskon{{ $invoice->discount_type === 'percent' ? ' (' . $invoice->discount_value . '%)' : '' }}
                 </td>
@@ -202,7 +198,7 @@
 
               {{-- DPP --}}
               @if($invoice->is_dpp)
-              <tr>
+              <tr style="{{ !$invoice->discount_value ? 'border-top:1px solid #e5e7eb' : '' }}">
                 <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">DPP (11/12)</td>
                 <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">
                   Rp {{ number_format($invoice->dpp_base, 2, ',', '.') }}
@@ -212,7 +208,7 @@
 
               {{-- PPN --}}
               @if($invoice->tax_percentage)
-              <tr>
+              <tr style="{{ (!$invoice->discount_value && !$invoice->is_dpp) ? 'border-top:1px solid #e5e7eb' : '' }}">
                 <td style="padding:0.3rem 0.75rem 0.3rem 0;font-size:0.8125rem;color:#6b7280;white-space:nowrap">PPN {{ $invoice->tax_percentage }}%</td>
                 <td style="padding:0.3rem 0;font-size:0.8125rem;text-align:right;font-family:'Courier New',monospace;color:#1f2937;white-space:nowrap">
                   Rp {{ number_format($invoice->tax_amount, 2, ',', '.') }}

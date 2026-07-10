@@ -85,6 +85,7 @@ class Invoice extends Model
             ? $this->carriedFrom
             : static::with(['items', 'carriedFrom.items'])->find($this->carried_from_id);
         if (!$from) return 0.0;
+        if ($from->payment_status === 'paid') return 0.0;
         return $from->total + $from->carried_total;
     }
 

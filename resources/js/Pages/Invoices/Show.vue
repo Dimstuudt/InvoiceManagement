@@ -436,11 +436,6 @@
           </div>
           <div class="px-8 py-5 space-y-3">
 
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-600">Sub Total (Items)</span>
-              <span class="text-sm font-mono font-semibold text-gray-900">{{ formatCurrency(subtotal) }}</span>
-            </div>
-
             <div class="flex items-center gap-3 py-0.5">
               <input type="checkbox" id="discountCheck" v-model="localDiscount.enabled"
                 :disabled="invoice.payment_status === 'paid'"
@@ -490,16 +485,17 @@
               <span v-else class="ml-auto text-sm text-gray-400">—</span>
             </div>
 
-            <div class="border-t border-gray-200 pt-4 flex items-center justify-between">
-              <span class="text-base font-bold text-gray-900">{{ invoice.carried_from ? 'Total Invoice' : 'Grand Total' }}</span>
+            <!-- Tanpa carry: langsung Grand Total -->
+            <div v-if="!invoice.carried_from" class="border-t border-gray-200 pt-4 flex items-center justify-between">
+              <span class="text-base font-bold text-gray-900">Grand Total</span>
               <span class="text-2xl font-black font-mono text-blue-700">{{ formatCurrency(grandTotal) }}</span>
             </div>
 
-            <!-- Tunggakan dari carried invoice -->
+            <!-- Dengan carry: Perpanjangan → Total Bayar (tanpa sub total antara) -->
             <template v-if="invoice.carried_from">
-              <div class="flex items-center justify-between pt-2">
+              <div class="border-t border-gray-200 pt-4 flex items-center justify-between">
                 <div>
-                  <span class="text-sm text-gray-600">Tunggakan</span>
+                  <span class="text-sm text-gray-600">Perpanjangan</span>
                   <span class="ml-2 text-xs font-mono text-orange-600 font-medium">{{ invoice.carried_from.invoice_number }}</span>
                 </div>
                 <span class="text-sm font-mono font-semibold text-orange-600">+ {{ formatCurrency(invoice.carried_total) }}</span>

@@ -9,7 +9,9 @@
       "Bash(node -e \"const p = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\('main:', p.main\\); console.log\\('module:', p.module\\); console.log\\('types:', p.types\\)\")",
       "Bash(npm run *)",
       "Skill(artifact-design)",
-      "Skill(artifact-design:*)"
+      "Skill(artifact-design:*)",
+      "Bash(php -r ' *)",
+      "Bash(grep -v \"//\")"
     ]
   }
 }

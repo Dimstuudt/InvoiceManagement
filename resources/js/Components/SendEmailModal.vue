@@ -48,25 +48,32 @@
               <p v-if="errors.emails" class="mt-1.5 text-xs text-red-500">{{ errors.emails }}</p>
             </div>
 
-            <!-- Pilih Template (kalau belum assign) -->
-            <div v-if="!invoice?.email_template_id && emailTemplates.length > 0">
-              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Template Email</label>
+            <!-- Pilih Grup Template (kalau belum assign) -->
+            <div v-if="!invoice?.email_template_group_id && emailTemplates.length > 0">
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Grup Template Email</label>
               <div class="space-y-1.5">
-                <label v-for="tpl in emailTemplates" :key="tpl.id"
+                <label v-for="grp in emailTemplates" :key="grp.id"
                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors"
-                  :class="selectedTemplateId === tpl.id ? 'border-indigo-300 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'">
-                  <input type="radio" :value="tpl.id" v-model="selectedTemplateId"
+                  :class="selectedTemplateId === grp.id ? 'border-indigo-300 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'">
+                  <input type="radio" :value="grp.id" v-model="selectedTemplateId"
                     class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"/>
                   <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-gray-700">{{ tpl.name }}</p>
+                    <p class="text-sm font-medium text-gray-700">{{ grp.name }}</p>
                   </div>
-                  <span v-if="tpl.is_default"
+                  <span v-if="grp.is_default"
                     class="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-md font-medium shrink-0">
                     Default
                   </span>
                 </label>
               </div>
-              <p v-if="!selectedTemplateId" class="text-xs text-gray-400 mt-1.5">Pilih template untuk mengisi subject & isi email.</p>
+              <p v-if="!selectedTemplateId" class="text-xs text-gray-400 mt-1.5">Pilih grup untuk mengisi subject & isi email tahap ini.</p>
+            </div>
+
+            <!-- Info stage yang dipakai -->
+            <div v-if="selectedTemplateId || invoice?.email_template_group_id"
+              class="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl">
+              <span class="text-xs font-mono font-bold text-indigo-500">{{ nextStageLabel }}</span>
+              <span class="text-xs text-indigo-400">— template untuk tahap pengiriman ini</span>
             </div>
 
             <!-- Subject -->
@@ -139,14 +146,14 @@ const props = defineProps({
   show:           { type: Boolean, default: false },
   invoice:        { type: Object,  default: null },
   clientEmails:   { type: Array,   default: () => [] },
-  emailTemplates: { type: Array,   default: () => [] },
+  emailTemplates: { type: Array,   default: () => [] }, // kini berisi EmailTemplateGroup
 });
 
 const emit = defineEmits(['close']);
 
-const sending           = ref(false);
-const errors            = ref({});
-const selectedEmails    = ref([]);
+const sending            = ref(false);
+const errors             = ref({});
+const selectedEmails     = ref([]);
 const selectedTemplateId = ref(null);
 
 const form = ref({ subject: '', body: '' });
@@ -155,9 +162,19 @@ const pdfFilename = computed(() =>
   ((props.invoice?.invoice_number ?? 'invoice').replace(/\//g, '-')) + '.pdf'
 );
 
-// Variabel yang tersedia untuk substitusi
+// Urutan stage untuk menentukan tahap berikutnya
+const STAGE_ORDER = ['unsent', 'send1', 'send2', 'send3', 'send4', 'send5'];
+
+const nextStage = computed(() => {
+  const cur = props.invoice?.send_status ?? 'unsent';
+  const idx = STAGE_ORDER.indexOf(cur);
+  return STAGE_ORDER[idx + 1] ?? 'send5';
+});
+
+const nextStageLabel = computed(() => nextStage.value.replace('send', 'Send '));
+
 function renderTemplate(text) {
-  if (!text || !props.invoice) return text;
+  if (!text || !props.invoice) return text ?? '';
   const inv = props.invoice;
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const fmtRp   = (v) => v != null ? 'Rp ' + new Intl.NumberFormat('id-ID').format(v) : '';
@@ -176,43 +193,46 @@ function renderTemplate(text) {
     '{{bank_name}}':           inv.bank_account?.bank_name ?? '',
     '{{bank_account_number}}': inv.bank_account?.account_number ?? '',
     '{{bank_holder}}':         inv.bank_account?.name ?? '',
+    '{{send_stage}}':          nextStage.value,
   };
 
   return Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(k, v), text);
 }
 
-function applyTemplate(tpl) {
-  if (!tpl) return;
-  form.value.subject = renderTemplate(tpl.subject);
-  form.value.body    = renderTemplate(tpl.body);
+function applyGroup(group) {
+  if (!group) return;
+  const stage = nextStage.value;
+  const subjectKey = `subject_${stage}`;
+  const bodyKey    = `body_${stage}`;
+  form.value.subject = renderTemplate(group[subjectKey] ?? '');
+  form.value.body    = renderTemplate(group[bodyKey]    ?? '');
 }
 
 // Saat modal dibuka, init state
 watch(() => props.show, (val) => {
   if (!val) return;
-  errors.value       = {};
+  errors.value         = {};
   selectedEmails.value = [...props.clientEmails];
 
-  // Cari template yang di-assign ke invoice atau template default
-  const assigned = props.invoice?.email_template_id
-    ? props.emailTemplates.find(t => t.id === props.invoice.email_template_id)
+  const assigned   = props.invoice?.email_template_group_id
+    ? props.emailTemplates.find(g => g.id === props.invoice.email_template_group_id)
     : null;
-  const defaultTpl = props.emailTemplates.find(t => t.is_default);
-  const tpl = assigned ?? defaultTpl ?? null;
+  const defaultGrp = props.emailTemplates.find(g => g.is_default);
+  const group      = assigned ?? defaultGrp ?? null;
 
-  if (tpl) {
-    selectedTemplateId.value = tpl.id;
-    applyTemplate(tpl);
+  if (group) {
+    selectedTemplateId.value = group.id;
+    applyGroup(group);
   } else {
     selectedTemplateId.value = null;
     form.value = { subject: '', body: '' };
   }
 });
 
-// Saat template dipilih (dari radio), isi subject & body
+// Saat grup dipilih dari radio, isi ulang subject & body
 watch(selectedTemplateId, (id) => {
-  const tpl = props.emailTemplates.find(t => t.id === id);
-  if (tpl) applyTemplate(tpl);
+  const group = props.emailTemplates.find(g => g.id === id);
+  if (group) applyGroup(group);
 });
 
 function submit() {

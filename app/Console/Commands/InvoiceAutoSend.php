@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CronRun;
 use App\Models\Invoice;
-use App\Models\EmailTemplate;
+use App\Models\EmailTemplateGroup;
 use App\Services\PdfService;
 use App\Support\ActivityLogger;
 use Illuminate\Console\Command;
@@ -39,7 +39,7 @@ class InvoiceAutoSend extends Command
         $candidates = Invoice::with([
                 'client.emails', 'projectCategory', 'documentIssuer',
                 'bankAccount', 'signature', 'items', 'user',
-                'emailTemplate', 'carriedFrom.items',
+                'emailTemplateGroup', 'carriedFrom.items',
             ])
             ->where('document_status', 'verified')
             ->where('payment_status', 'unpaid')
@@ -69,18 +69,13 @@ class InvoiceAutoSend extends Command
                 continue;
             }
 
-            $tpl = $invoice->emailTemplate
-                ?? EmailTemplate::where('is_default', true)->first()
-                ?? EmailTemplate::orderBy('id')->first();
+            $group = $invoice->emailTemplateGroup
+                ?? EmailTemplateGroup::where('is_default', true)->first()
+                ?? EmailTemplateGroup::orderBy('id')->first();
 
-            $subject = $tpl ? $this->renderTemplate($tpl->subject ?? '', $invoice, $nextStage) : '';
-            $body    = $tpl ? $this->renderTemplate($tpl->body    ?? '', $invoice, $nextStage) : '';
-
-            // Pesan khusus untuk send5 (peringatan nonaktif)
-            if ($nextStage === 'send5') {
-                if (!$subject) $subject = "[PENTING] Invoice {$invoice->invoice_number} — Layanan akan dinonaktifkan";
-                $body = $this->buildSend5Body($invoice, $body);
-            }
+            $stageTpl = $group ? $group->getStage($nextStage) : ['subject' => '', 'body' => ''];
+            $subject  = $this->renderTemplate($stageTpl['subject'], $invoice, $nextStage);
+            $body     = $this->renderTemplate($stageTpl['body'],    $invoice, $nextStage);
 
             $subject = $subject ?: "Invoice {$invoice->invoice_number}";
             $body    = $body    ?: "Terlampir invoice {$invoice->invoice_number}.";
@@ -203,15 +198,6 @@ class InvoiceAutoSend extends Command
     {
         $order = ['unsent' => 0, 'send1' => 1, 'send2' => 2, 'send3' => 3, 'send4' => 4, 'send5' => 5];
         return ($order[$currentStatus] ?? 0) < ($order[$targetStage] ?? 99);
-    }
-
-    private function buildSend5Body(Invoice $invoice, string $baseBody): string
-    {
-        $warning = "PERHATIAN: Tagihan ini belum dibayarkan hingga batas waktu yang ditentukan. "
-            . "Layanan akan segera dinonaktifkan jika pembayaran tidak dilakukan. "
-            . "Segera hubungi tim kami jika Anda memiliki pertanyaan atau ingin menjadwalkan pembayaran.\n\n";
-
-        return $baseBody ? $warning . $baseBody : $warning . "Terlampir invoice {$invoice->invoice_number}.";
     }
 
     private function renderTemplate(?string $text, Invoice $invoice, string $stage = 'send1'): string

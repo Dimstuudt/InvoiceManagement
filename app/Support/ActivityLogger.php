@@ -32,7 +32,7 @@ class ActivityLogger
             'ProjectCategory' => $subject->name . ' (' . $subject->code . ')',
             'DocumentIssuer'  => $subject->name,
             'Signature'       => $subject->name,
-            'EmailTemplate'   => $subject->name,
+            'EmailTemplateGroup' => $subject->name,
             default           => (string) $subject->getKey(),
         };
     }

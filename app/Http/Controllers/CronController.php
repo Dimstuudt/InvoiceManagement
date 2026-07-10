@@ -6,7 +6,7 @@ use App\Models\CronRun;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Client;
-use App\Models\EmailTemplate;
+use App\Models\EmailTemplateGroup;
 use App\Models\ProjectCategory;
 use App\Models\DocumentIssuer;
 use App\Models\BankAccount;
@@ -83,8 +83,8 @@ class CronController extends Controller
         $bank     = BankAccount::first();
         $sig      = Signature::first();
         $user     = User::first();
-        $template = EmailTemplate::where('is_default', true)->first()
-            ?? EmailTemplate::orderBy('id')->first();
+        $template = EmailTemplateGroup::where('is_default', true)->first()
+            ?? EmailTemplateGroup::orderBy('id')->first();
 
         if (! $client || ! $project || ! $issuer || ! $bank || ! $sig || ! $user) {
             return response()->json(['error' => 'Master data belum lengkap (Client/ProjectCategory/DocumentIssuer/BankAccount/Signature).'], 422);
@@ -97,7 +97,7 @@ class CronController extends Controller
             'document_issuer_id'  => $issuer->id,
             'bank_account_id'     => $bank->id,
             'signature_id'        => $sig->id,
-            'email_template_id'   => $template?->id,
+            'email_template_group_id' => $template?->id,
             'tax_percentage'      => 0,
             'interval_months'     => 1,
             'with_signature'      => true,

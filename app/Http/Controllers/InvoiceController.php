@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BankAccount;
 use App\Models\Client;
 use App\Models\DocumentIssuer;
-use App\Models\EmailTemplate;
+use App\Models\EmailTemplateGroup;
 use App\Models\Invoice;
 use App\Models\ProjectCategory;
 use App\Models\Signature;
@@ -117,7 +117,7 @@ class InvoiceController extends Controller
 
         $next = Carbon::create($year, $month, 1)->addMonth();
         $with = [
-            'client.emails', 'projectCategory', 'user', 'bankAccount', 'documentIssuer', 'emailTemplate',
+            'client.emails', 'projectCategory', 'user', 'bankAccount', 'documentIssuer', 'emailTemplateGroup',
             'items',
             'carriedFrom.items', 'carriedFrom.carriedFrom.items',
             'reaktivasiChain.items',
@@ -204,7 +204,7 @@ class InvoiceController extends Controller
             'otherInvoices'    => $otherInvoices,
             'nextMonthLabel'   => $next->translatedFormat('F Y'),
             'filters'          => ['month' => $month, 'year' => $year],
-            'emailTemplates'   => EmailTemplate::orderBy('name')->get(['id', 'name', 'subject', 'body', 'is_default']),
+            'emailTemplates'   => EmailTemplateGroup::orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }
 
@@ -212,7 +212,7 @@ class InvoiceController extends Controller
     {
         $client->load('category', 'emails');
 
-        $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user', 'emailTemplate'])
+        $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user', 'emailTemplateGroup'])
             ->withSum('items', 'amount')
             ->withSum('items', 'discount')
             ->where('client_id', $client->id)
@@ -244,7 +244,7 @@ class InvoiceController extends Controller
             'documentIssuers'   => DocumentIssuer::all(['id', 'name']),
             'bankAccounts'      => BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
             'signatures'        => Signature::all(['id', 'name', 'position']),
-            'emailTemplates'    => EmailTemplate::orderBy('name')->get(['id', 'name', 'is_default']),
+            'emailTemplates'    => EmailTemplateGroup::orderBy('name')->get(['id', 'name', 'is_default']),
             'fromInvoice'       => $fromInvoice,
         ]);
     }
@@ -570,7 +570,7 @@ class InvoiceController extends Controller
             'document_issuer_id'  => 'required|exists:document_issuers,id',
             'bank_account_id'     => 'required|exists:bank_accounts,id',
             'signature_id'        => 'nullable|exists:signatures,id',
-            'email_template_id'   => 'nullable|exists:email_templates,id',
+            'email_template_group_id'   => 'nullable|exists:email_template_groups,id',
             'with_signature'      => 'boolean',
             'spk_number'          => 'nullable|string|max:100',
             'issue_date'          => 'required|date',
@@ -614,7 +614,7 @@ class InvoiceController extends Controller
     {
         $invoice->load([
             'client.emails', 'projectCategory', 'documentIssuer',
-            'bankAccount', 'signature', 'items', 'user', 'emailTemplate',
+            'bankAccount', 'signature', 'items', 'user', 'emailTemplateGroup',
             'parent', 'children', 'carriedFrom.items',
         ]);
 
@@ -630,7 +630,7 @@ class InvoiceController extends Controller
                 'total_payable'   => $invoice->grand_total,
                 'client_emails'   => $invoice->client?->emails->pluck('email')->toArray() ?? [],
             ]),
-            'emailTemplates' => EmailTemplate::orderBy('name')->get(['id', 'name', 'subject', 'body', 'is_default']),
+            'emailTemplates' => EmailTemplateGroup::orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }
 
@@ -1247,7 +1247,7 @@ class InvoiceController extends Controller
                 'document_issuer_id'  => $invoice->document_issuer_id,
                 'bank_account_id'     => $invoice->bank_account_id,
                 'signature_id'        => $invoice->signature_id,
-                'email_template_id'   => $invoice->email_template_id,
+                'email_template_group_id'   => $invoice->email_template_group_id,
                 'with_signature'      => $invoice->with_signature,
                 'attention'           => $invoice->attention,
                 'notes'               => $invoice->notes,
@@ -1329,7 +1329,7 @@ class InvoiceController extends Controller
             'document_issuer_id'  => $invoice->document_issuer_id,
             'bank_account_id'     => $invoice->bank_account_id,
             'signature_id'        => $invoice->signature_id,
-            'email_template_id'   => $invoice->email_template_id,
+            'email_template_group_id'   => $invoice->email_template_group_id,
             'with_signature'      => $invoice->with_signature,
             'attention'           => $invoice->attention,
             'notes'               => $invoice->notes,
@@ -1417,7 +1417,7 @@ class InvoiceController extends Controller
             'document_issuer_id'  => $invoice->document_issuer_id,
             'bank_account_id'     => $invoice->bank_account_id,
             'signature_id'        => $invoice->signature_id,
-            'email_template_id'   => $invoice->email_template_id,
+            'email_template_group_id'   => $invoice->email_template_group_id,
             'with_signature'      => $invoice->with_signature,
             'attention'           => $invoice->attention,
             'notes'               => $invoice->notes,
@@ -1507,7 +1507,7 @@ class InvoiceController extends Controller
                     'document_issuer_id'  => $invoice->document_issuer_id,
                     'bank_account_id'     => $invoice->bank_account_id,
                     'signature_id'        => $invoice->signature_id,
-                    'email_template_id'   => $invoice->email_template_id,
+                    'email_template_group_id'   => $invoice->email_template_group_id,
                     'with_signature'      => $invoice->with_signature,
                     'attention'           => $invoice->attention,
                     'notes'               => $invoice->notes,
@@ -1675,7 +1675,7 @@ class InvoiceController extends Controller
             'document_issuer_id'  => $parent->document_issuer_id,
             'bank_account_id'     => $parent->bank_account_id,
             'signature_id'        => $parent->signature_id,
-            'email_template_id'   => $parent->email_template_id,
+            'email_template_group_id'   => $parent->email_template_group_id,
             'with_signature'      => $parent->with_signature,
             'attention'           => $parent->attention,
             'notes'               => $parent->notes,

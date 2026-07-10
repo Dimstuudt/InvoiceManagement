@@ -172,16 +172,16 @@
               </div>
             </div>
 
-            <!-- Email Template -->
+            <!-- Grup Template Email -->
             <div v-if="emailTemplates?.length" class="border-t border-gray-100 pt-5">
-              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Template Email</p>
-              <select v-model="form.email_template_id" class="field">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Grup Template Email</p>
+              <select v-model="form.email_template_group_id" class="field">
                 <option value="">— Tanpa Template —</option>
-                <option v-for="t in emailTemplates" :key="t.id" :value="t.id">
-                  {{ t.name }}{{ t.is_default ? ' (Default)' : '' }}
+                <option v-for="g in emailTemplates" :key="g.id" :value="g.id">
+                  {{ g.name }}{{ g.is_default ? ' (Default)' : '' }}
                 </option>
               </select>
-              <p class="text-xs text-gray-400 mt-1.5">Template akan otomatis digunakan saat kirim email invoice ini.</p>
+              <p class="text-xs text-gray-400 mt-1.5">Setiap tahap kirim (send1–send5 + paid) akan pakai template masing-masing dari grup ini.</p>
             </div>
 
             <!-- Tipe Invoice -->
@@ -309,7 +309,7 @@ const form = useForm({
   document_issuer_id:  prefill.document_issuer_id  ?? '',
   bank_account_id:     prefill.bank_account_id     ?? '',
   signature_id:        prefill.signature_id         ?? '',
-  email_template_id:   prefill.email_template_id    ?? (props.emailTemplates?.find(t => t.is_default)?.id ?? ''),
+  email_template_group_id: prefill.email_template_group_id ?? (props.emailTemplates?.find(t => t.is_default)?.id ?? ''),
   interval_months:     prefill.interval_months      ?? null,
   invoice_type:        prefill.invoice_type         ?? 'monthly',
   with_signature:      prefill.with_signature       ?? false,

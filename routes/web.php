@@ -9,7 +9,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Master\BankAccountController;
 use App\Http\Controllers\Master\ClientCategoryController;
 use App\Http\Controllers\Master\DocumentIssuerController;
-use App\Http\Controllers\Master\EmailTemplateController;
+use App\Http\Controllers\Master\EmailTemplateGroupController;
 use App\Http\Controllers\Master\ProjectCategoryController;
 use App\Http\Controllers\Master\SignatureController;
 use App\Http\Controllers\TwoFactorController;
@@ -117,7 +117,7 @@ Route::middleware('auth')->group(function () {
             Route::resource('document-issuers', DocumentIssuerController::class)->except(['show']);
             Route::resource('bank-accounts', BankAccountController::class)->except(['show']);
             Route::resource('signatures', SignatureController::class)->except(['show']);
-            Route::resource('email-templates', EmailTemplateController::class)->except(['show']);
+            Route::resource('email-template-groups', EmailTemplateGroupController::class)->except(['show']);
         });
     });
 });

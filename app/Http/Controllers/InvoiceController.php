@@ -1208,7 +1208,7 @@ class InvoiceController extends Controller
         return back()->with('success', 'Status diperbarui.');
     }
 
-    public function prepay(Invoice $invoice)
+    public function prepay(Request $request, Invoice $invoice)
     {
         if ($invoice->payment_status === 'paid' || in_array($invoice->document_status, ['frozen', 'carried'])) {
             return back()->with('error', 'Hanya invoice aktif yang bisa di-prepay.');
@@ -1220,63 +1220,24 @@ class InvoiceController extends Controller
             return back()->with('error', 'Prepay hanya bisa dilakukan dari invoice HEAD.');
         }
 
-        $invoice->load('items', 'projectCategory');
+        $times = max(1, min(24, (int) $request->input('times', 1)));
 
-        $interval    = $invoice->interval_months;
-        $seqPart     = explode('/', $invoice->invoice_number)[0];
-        $code        = $invoice->projectCategory->code;
-        $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $invoice->load('items', 'projectCategory', 'client');
 
-        $lastInChain     = Invoice::where('prepay_chain_id', $invoice->id)->orderByDesc('issue_date')->first();
-        $baseDate        = Carbon::parse($lastInChain ? $lastInChain->issue_date : $invoice->issue_date);
-        $previousInvoice = $lastInChain ?? $invoice;
-        $cursor          = $baseDate->copy()->addMonths($interval);
+        $created = [];
 
-        $roman   = $romanMonths[(int) $cursor->format('n') - 1];
-        $year    = $cursor->format('Y');
-        $dueDate = $cursor->copy()->addDays(14);
-        $number  = "P-{$seqPart}/{$code}/INV/MVC/{$roman}/{$year}";
-
-        DB::transaction(function () use ($invoice, $cursor, $dueDate, $number, $interval, $previousInvoice) {
+        DB::transaction(function () use ($invoice, $times, &$created) {
             if (!$invoice->is_prepay) {
                 $invoice->update(['is_prepay' => true]);
             }
 
-            $child = Invoice::create([
-                'user_id'             => $invoice->user_id,
-                'client_id'           => $invoice->client_id,
-                'project_category_id' => $invoice->project_category_id,
-                'document_issuer_id'  => $invoice->document_issuer_id,
-                'bank_account_id'     => $invoice->bank_account_id,
-                'signature_id'        => $invoice->signature_id,
-                'email_template_group_id'   => $invoice->email_template_group_id,
-                'with_signature'      => $invoice->with_signature,
-                'attention'           => $invoice->attention,
-                'notes'               => $invoice->notes,
-                'invoice_number'      => $number,
-                'invoice_type'        => $invoice->invoice_type,
-                'issue_date'          => $cursor->toDateString(),
-                'due_date'            => $dueDate->toDateString(),
-                'payment_status'      => 'unpaid',
-                'document_status'     => 'draft',
-                'send_status'         => 'unsent',
-                'tax_percentage'      => $invoice->tax_percentage,
-                'discount_type'       => $invoice->discount_type,
-                'discount_value'      => $invoice->discount_value,
-                'is_dpp'              => $invoice->is_dpp,
-                'interval_months'     => $interval,
-                'is_prepay'           => true,
-                'prepay_chain_id'     => $invoice->id,
-                'parent_invoice_id'   => $previousInvoice->id,
-            ]);
+            $lastInChain = Invoice::where('prepay_chain_id', $invoice->id)
+                ->orderByDesc('issue_date')->first();
 
-            foreach ($invoice->items as $item) {
-                $child->items()->create([
-                    'description' => $item->description,
-                    'amount'      => $item->amount,
-                    'discount'    => $item->discount ?? 0,
-                    'sort_order'  => $item->sort_order,
-                ]);
+            for ($i = 0; $i < $times; $i++) {
+                $child       = $this->doSinglePrepay($invoice, $lastInChain);
+                $created[]   = $child->invoice_number;
+                $lastInChain = $child;
             }
         });
 
@@ -1285,16 +1246,77 @@ class InvoiceController extends Controller
         ActivityLogger::log('invoice.prepay', $invoice, [
             'head_number'        => $invoice->invoice_number,
             'client'             => $invoice->client->company_name ?? '-',
-            'added'              => $number,
+            'added'              => $created,
+            'times'              => $times,
             'total_chain'        => $totalChain,
-            'interval'           => $interval . ' bulan',
+            'interval'           => $invoice->interval_months . ' bulan',
             'jumlah_per_invoice' => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
         ]);
 
-        return back()->with('success', "Prepay +{$interval} bulan → {$number}.");
+        $msg = $times === 1
+            ? "Prepay +{$invoice->interval_months} bulan → {$created[0]}."
+            : "Prepay {$times}× sekaligus → s.d. " . end($created) . ".";
+
+        return back()->with('success', $msg);
     }
 
-    public function carry(Invoice $invoice)
+    private function doSinglePrepay(Invoice $head, ?Invoice $lastInChain): Invoice
+    {
+        $interval    = $head->interval_months;
+        $seqPart     = explode('/', $head->invoice_number)[0];
+        $code        = $head->projectCategory->code;
+        $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+
+        $baseDate        = Carbon::parse($lastInChain ? $lastInChain->issue_date : $head->issue_date);
+        $previousInvoice = $lastInChain ?? $head;
+        $cursor          = $baseDate->copy()->addMonths($interval);
+
+        $roman   = $romanMonths[(int) $cursor->format('n') - 1];
+        $year    = $cursor->format('Y');
+        $dueDate = $cursor->copy()->addDays(14);
+        $number  = "P-{$seqPart}/{$code}/INV/MVC/{$roman}/{$year}";
+
+        $child = Invoice::create([
+            'user_id'                 => $head->user_id,
+            'client_id'               => $head->client_id,
+            'project_category_id'     => $head->project_category_id,
+            'document_issuer_id'      => $head->document_issuer_id,
+            'bank_account_id'         => $head->bank_account_id,
+            'signature_id'            => $head->signature_id,
+            'email_template_group_id' => $head->email_template_group_id,
+            'with_signature'          => $head->with_signature,
+            'attention'               => $head->attention,
+            'notes'                   => $head->notes,
+            'invoice_number'          => $number,
+            'invoice_type'            => $head->invoice_type,
+            'issue_date'              => $cursor->toDateString(),
+            'due_date'                => $dueDate->toDateString(),
+            'payment_status'          => 'unpaid',
+            'document_status'         => 'draft',
+            'send_status'             => 'unsent',
+            'tax_percentage'          => $head->tax_percentage,
+            'discount_type'           => $head->discount_type,
+            'discount_value'          => $head->discount_value,
+            'is_dpp'                  => $head->is_dpp,
+            'interval_months'         => $interval,
+            'is_prepay'               => true,
+            'prepay_chain_id'         => $head->id,
+            'parent_invoice_id'       => $previousInvoice->id,
+        ]);
+
+        foreach ($head->items as $item) {
+            $child->items()->create([
+                'description' => $item->description,
+                'amount'      => $item->amount,
+                'discount'    => $item->discount ?? 0,
+                'sort_order'  => $item->sort_order,
+            ]);
+        }
+
+        return $child;
+    }
+
+    public function carry(Request $request, Invoice $invoice)
     {
         if (preg_match('/^[CRPF]-/', $invoice->invoice_number)) {
             return back()->with('error', 'Carry hanya bisa dilakukan dari invoice utama (head), bukan dari chain member.');
@@ -1309,51 +1331,87 @@ class InvoiceController extends Controller
             return back()->with('error', 'Invoice sudah memiliki perpanjangan.');
         }
 
-        $invoice->load('items', 'projectCategory');
+        $times = max(1, min(24, (int) $request->input('times', 1)));
 
-        $issueDate    = Carbon::parse($invoice->issue_date)->addMonths($invoice->interval_months);
+        $invoice->load('items', 'projectCategory', 'client');
+
+        $originalNumber = $invoice->invoice_number;
+        $head           = null;
+
+        DB::transaction(function () use ($invoice, $times, &$head) {
+            $current = $invoice;
+            for ($i = 0; $i < $times; $i++) {
+                $current->load('items', 'projectCategory');
+                $head = $this->doSingleCarry($current);
+                $current = $head;
+            }
+        });
+
+        $periodLabel = $times === 1
+            ? Carbon::parse($head->issue_date)->translatedFormat('M Y')
+            : Carbon::parse($head->issue_date)->translatedFormat('M Y') . " (+{$times}x)";
+
+        ActivityLogger::log('invoice.carried', $invoice, [
+            'original_number' => $originalNumber,
+            'times'           => $times,
+            'head_number'     => $head->invoice_number,
+            'client'          => $invoice->client->company_name ?? '-',
+            'jumlah'          => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
+            'periode_baru'    => $periodLabel,
+        ]);
+
+        $msg = $times === 1
+            ? "Invoice di-carry. Tunggakan masuk ke {$head->invoice_number}."
+            : "Invoice di-carry {$times}× sekaligus. HEAD baru: {$head->invoice_number}.";
+
+        return back()->with('success', $msg);
+    }
+
+    private function doSingleCarry(Invoice $current): Invoice
+    {
+        $issueDate    = Carbon::parse($current->issue_date)->addMonths($current->interval_months);
         $dueDate      = $issueDate->copy()->addDays(14);
-        $oldNumber    = $invoice->invoice_number;
-        $oldSeq       = explode('/', $oldNumber)[0];
-        $inheritedSeq = ltrim($oldSeq, 'C-');
+        $oldNumber    = $current->invoice_number;
+        $seqPart      = explode('/', $oldNumber)[0];
+        $inheritedSeq = ltrim($seqPart, 'C-');
         $romanMonths  = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
         $roman        = $romanMonths[(int) $issueDate->format('n') - 1];
         $year         = $issueDate->format('Y');
-        $categoryCode = $invoice->projectCategory->code;
+        $categoryCode = $current->projectCategory->code;
         $newNumber    = "{$inheritedSeq}/{$categoryCode}/INV/MVC/{$roman}/{$year}";
 
-        $invoice->update(['invoice_number' => "C-" . $oldNumber]);
+        $current->update(['invoice_number' => "C-{$oldNumber}"]);
 
         $child = Invoice::create([
-            'user_id'             => $invoice->user_id,
-            'client_id'           => $invoice->client_id,
-            'project_category_id' => $invoice->project_category_id,
-            'document_issuer_id'  => $invoice->document_issuer_id,
-            'bank_account_id'     => $invoice->bank_account_id,
-            'signature_id'        => $invoice->signature_id,
-            'email_template_group_id'   => $invoice->email_template_group_id,
-            'with_signature'      => $invoice->with_signature,
-            'attention'           => $invoice->attention,
-            'notes'               => $invoice->notes,
-            'invoice_number'      => $newNumber,
-            'invoice_type'        => $invoice->invoice_type,
-            'issue_date'          => $issueDate,
-            'due_date'            => $dueDate,
-            'payment_status'      => 'unpaid',
-            'document_status'     => 'draft',
-            'send_status'         => 'unsent',
-            'tax_percentage'      => $invoice->tax_percentage,
-            'discount_type'       => $invoice->discount_type,
-            'discount_value'      => $invoice->discount_value,
-            'is_dpp'              => $invoice->is_dpp,
-            'interval_months'     => $invoice->interval_months,
-            'spk_id'              => $invoice->spk_id,
-            'spk_number'          => $invoice->spk_number,
-            'parent_invoice_id'   => $invoice->id,
-            'carried_from_id'     => $invoice->id,
+            'user_id'                 => $current->user_id,
+            'client_id'               => $current->client_id,
+            'project_category_id'     => $current->project_category_id,
+            'document_issuer_id'      => $current->document_issuer_id,
+            'bank_account_id'         => $current->bank_account_id,
+            'signature_id'            => $current->signature_id,
+            'email_template_group_id' => $current->email_template_group_id,
+            'with_signature'          => $current->with_signature,
+            'attention'               => $current->attention,
+            'notes'                   => $current->notes,
+            'invoice_number'          => $newNumber,
+            'invoice_type'            => $current->invoice_type,
+            'issue_date'              => $issueDate,
+            'due_date'                => $dueDate,
+            'payment_status'          => 'unpaid',
+            'document_status'         => 'draft',
+            'send_status'             => 'unsent',
+            'tax_percentage'          => $current->tax_percentage,
+            'discount_type'           => $current->discount_type,
+            'discount_value'          => $current->discount_value,
+            'is_dpp'                  => $current->is_dpp,
+            'interval_months'         => $current->interval_months,
+            'spk_id'                  => $current->spk_id,
+            'spk_number'              => $current->spk_number,
+            'parent_invoice_id'       => $current->id,
+            'carried_from_id'         => $current->id,
         ]);
 
-        foreach ($invoice->items as $item) {
+        foreach ($current->items as $item) {
             $child->items()->create([
                 'description' => $item->description,
                 'amount'      => $item->amount,
@@ -1362,18 +1420,9 @@ class InvoiceController extends Controller
             ]);
         }
 
-        $invoice->update(['document_status' => 'carried']);
+        $current->update(['document_status' => 'carried']);
 
-        ActivityLogger::log('invoice.carried', $invoice, [
-            'original_number' => $oldNumber,
-            'renamed_to'      => "C-{$oldNumber}",
-            'child_number'    => $child->invoice_number,
-            'client'          => $invoice->client->company_name ?? '-',
-            'jumlah'          => 'Rp ' . number_format($invoice->total, 0, ',', '.'),
-            'periode_asal'    => Carbon::parse($invoice->issue_date)->format('M Y'),
-            'periode_baru'    => Carbon::parse($child->issue_date)->format('M Y'),
-        ]);
-        return back()->with('success', 'Invoice di-carry. Tunggakan akan masuk ke invoice berikutnya.');
+        return $child;
     }
 
     public function freeze(Invoice $invoice)

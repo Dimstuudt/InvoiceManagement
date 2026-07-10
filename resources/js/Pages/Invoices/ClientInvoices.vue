@@ -1316,22 +1316,30 @@ function freezeInvoice(invoice) {
 }
 
 function carryInvoice(invoice) {
+  const interval = invoice.interval_months ?? 1
   Swal.fire({
-    title: 'Carry invoice ini?',
-    html: `<div style="text-align:left;font-size:0.85rem;color:#374151">
+    title: 'Carry — Majukan Berapa Periode?',
+    html: `<div style="text-align:left;font-size:0.85rem;color:#374151;line-height:1.6">
       <p>Invoice <strong>${invoice.invoice_number}</strong> akan di-carry.</p>
-      <p style="margin-top:0.5rem">Invoice lama jadi <strong>Carried</strong>, invoice baru dibuat dengan tunggakan bulan lama otomatis masuk di PDF.</p>
+      <p style="margin-top:0.5rem;color:#6b7280">Interval: <strong>${interval} bulan/periode</strong> · Isi 1 = maju 1 periode, isi 3 = langsung buat 3 carry sekaligus.</p>
+      <p style="margin-top:0.5rem;color:#6b7280">Semua periode yang dilewati jadi <em>Carried</em>, HEAD baru akan muncul di ujung rantai.</p>
     </div>`,
-    icon: 'question',
+    input: 'number',
+    inputLabel: 'Jumlah periode yang ingin dimajukan',
+    inputValue: 1,
+    inputAttributes: { min: 1, max: 24, step: 1 },
+    inputValidator: (v) => (!v || v < 1 || v > 24) ? 'Masukkan angka 1–24' : null,
     showCancelButton: true,
     confirmButtonColor: '#f97316',
-    confirmButtonText: 'Ya, Carry',
+    confirmButtonText: 'Carry Sekarang',
     cancelButtonText: 'Batal',
+    focusConfirm: false,
   }).then(r => {
     if (r.isConfirmed) {
-      router.post(route('invoices.carry', invoice.id), {}, {
+      const times = parseInt(r.value) || 1
+      router.post(route('invoices.carry', invoice.id), { times }, {
         preserveScroll: true,
-        onSuccess: () => toast('Invoice berhasil di-carry'),
+        onSuccess: () => toast(times === 1 ? 'Invoice berhasil di-carry' : `Invoice berhasil di-carry ${times}× sekaligus`),
       })
     }
   })
@@ -1422,19 +1430,30 @@ function toggleMark(invoice) {
 }
 
 function prepayInvoice(invoice) {
+  const interval = invoice.interval_months ?? 1
   Swal.fire({
-    title: 'Buat Prepay?',
-    text: `Prepay akan dibuat untuk ${invoice.invoice_number}.`,
-    icon: 'question',
+    title: 'Prepay — Bayar Berapa Periode ke Depan?',
+    html: `<div style="text-align:left;font-size:0.85rem;color:#374151;line-height:1.6">
+      <p>Invoice <strong>${invoice.invoice_number}</strong> akan di-prepay.</p>
+      <p style="margin-top:0.5rem;color:#6b7280">Interval: <strong>${interval} bulan/periode</strong> · Isi 3 = langsung buat 3 invoice prepay (P-) sekaligus.</p>
+      <p style="margin-top:0.5rem;color:#6b7280">Lunas otomatis saat HEAD dibayar.</p>
+    </div>`,
+    input: 'number',
+    inputLabel: 'Jumlah periode yang ingin di-prepay',
+    inputValue: 1,
+    inputAttributes: { min: 1, max: 24, step: 1 },
+    inputValidator: (v) => (!v || v < 1 || v > 24) ? 'Masukkan angka 1–24' : null,
     showCancelButton: true,
     confirmButtonColor: '#0d9488',
-    confirmButtonText: 'Ya, Prepay',
+    confirmButtonText: 'Prepay Sekarang',
     cancelButtonText: 'Batal',
+    focusConfirm: false,
   }).then(r => {
     if (r.isConfirmed) {
-      router.post(route('invoices.prepay', invoice.id), {}, {
+      const times = parseInt(r.value) || 1
+      router.post(route('invoices.prepay', invoice.id), { times }, {
         preserveScroll: true,
-        onSuccess: () => toast('Prepay berhasil dibuat'),
+        onSuccess: () => toast(times === 1 ? 'Prepay berhasil dibuat' : `${times} prepay berhasil dibuat sekaligus`),
       })
     }
   })

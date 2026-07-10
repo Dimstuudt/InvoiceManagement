@@ -764,7 +764,30 @@ function freezeInvoice() {
 }
 
 function carryInvoice() {
-  router.post(route('invoices.carry', props.invoice.id), {}, { preserveScroll: true })
+  const interval = props.invoice.interval_months ?? 1
+  Swal.fire({
+    title: 'Carry — Majukan Berapa Periode?',
+    html: `<div style="text-align:left;font-size:0.85rem;color:#374151;line-height:1.6">
+      <p>Invoice <strong>${props.invoice.invoice_number}</strong> akan di-carry.</p>
+      <p style="margin-top:0.5rem;color:#6b7280">Interval: <strong>${interval} bulan/periode</strong> · Isi 1 = maju 1 periode, isi 3 = langsung buat 3 carry sekaligus.</p>
+      <p style="margin-top:0.5rem;color:#6b7280">Semua periode yang dilewati jadi <em>Carried</em>, HEAD baru akan muncul di ujung rantai.</p>
+    </div>`,
+    input: 'number',
+    inputLabel: 'Jumlah periode yang ingin dimajukan',
+    inputValue: 1,
+    inputAttributes: { min: 1, max: 24, step: 1 },
+    inputValidator: (v) => (!v || v < 1 || v > 24) ? 'Masukkan angka 1–24' : null,
+    showCancelButton: true,
+    confirmButtonColor: '#f97316',
+    confirmButtonText: 'Carry Sekarang',
+    cancelButtonText: 'Batal',
+    focusConfirm: false,
+  }).then(r => {
+    if (r.isConfirmed) {
+      const times = parseInt(r.value) || 1
+      router.post(route('invoices.carry', props.invoice.id), { times }, { preserveScroll: true })
+    }
+  })
 }
 
 function submitResume() {

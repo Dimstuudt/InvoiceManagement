@@ -370,6 +370,14 @@
                                     {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
                                   </span>
                                 </div>
+                                <!-- receipt badge: hanya untuk invoice paid yang bukan chain member -->
+                                <div v-if="invoice.payment_status === 'paid' && !isChainMember(invoice)" class="flex items-center gap-1">
+                                  <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">rcp</span>
+                                  <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                                    :class="invoice.receipt_sent_at ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-500 ring-1 ring-amber-200'">
+                                    {{ invoice.receipt_sent_at ? 'Terkirim' : 'Pending' }}
+                                  </span>
+                                </div>
                                 <!-- send_status: hanya untuk HEAD (bukan C-/P-/R-/F- chain member) -->
                                 <div v-if="!isChainMember(invoice)" class="flex items-center gap-1">
                                   <span class="text-[9px] font-semibold text-gray-300 uppercase tracking-wide">send</span>
@@ -477,6 +485,11 @@
                                   <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0"
                                     :class="invoice.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'">
                                     {{ invoice.payment_status === 'paid' ? 'Paid' : 'Unpaid' }}
+                                  </span>
+                                  <span v-if="invoice.payment_status === 'paid' && !isChainMember(invoice)"
+                                    class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0"
+                                    :class="invoice.receipt_sent_at ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-500 ring-1 ring-amber-200'">
+                                    rcp {{ invoice.receipt_sent_at ? '✓' : '…' }}
                                   </span>
                                   <template v-if="!isChainMember(invoice)">
                                     <span class="inline-flex items-center gap-0.5">
@@ -1050,25 +1063,24 @@ function chainPaidTotal(group) { return group.invoices.filter(i => i.payment_sta
 
 // Chain amount breakdown untuk HEAD carry/prepay/reaktivasi
 function headChainTotal(invoice, groupInvoices) {
-  // Prepay HEAD: sum semua P- member yang prepay_chain_id = invoice.id
-  if (invoice.is_prepay && !invoice.prepay_chain_id) {
-    return groupInvoices
-      .filter(inv => inv.prepay_chain_id === invoice.id)
-      .reduce((s, inv) => s + invoiceTotal(inv), 0)
-  }
-  // Carry HEAD: invoice.carried_from_id → traverse parent chain (C- ancestors only, stop at F-)
+  // Carry HEAD diutamakan: utang bulan lalu lebih penting ditampilkan dari prepay
   if (invoice.carried_from_id) {
     let total = 0
     let parentId = invoice.parent_invoice_id
     while (parentId) {
       const parent = groupInvoices.find(inv => inv.id === parentId)
-      if (!parent || !isSmallSubCode(parent)) break
-      if (/^F-/.test(parent.invoice_number)) break  // frozen bukan carry debt, hentikan traversal
-      if (parent.payment_status === 'paid') break    // sudah lunas, hentikan traversal
+      if (!parent) break
+      if (!/^C-/.test(parent.invoice_number)) break  // hanya hitung C- (bukan P-/R-/F-)
       total += invoiceTotal(parent)
       parentId = parent.parent_invoice_id ?? null
     }
     return total
+  }
+  // Prepay HEAD: sum semua P- member yang prepay_chain_id = invoice.id
+  if (invoice.is_prepay && !invoice.prepay_chain_id) {
+    return groupInvoices
+      .filter(inv => inv.prepay_chain_id === invoice.id)
+      .reduce((s, inv) => s + invoiceTotal(inv), 0)
   }
   // Reaktivasi HEAD: sum R- parents in chain
   if (invoice.is_reaktivasi && !isSmallSubCode(invoice)) {
@@ -1077,7 +1089,7 @@ function headChainTotal(invoice, groupInvoices) {
     while (parentId) {
       const parent = groupInvoices.find(inv => inv.id === parentId)
       if (!parent || !isSmallSubCode(parent)) break
-      if (parent.payment_status === 'paid') break    // sudah lunas, hentikan traversal
+      if (parent.payment_status === 'paid') break
       total += invoiceTotal(parent)
       parentId = parent.parent_invoice_id ?? null
     }
@@ -1086,9 +1098,9 @@ function headChainTotal(invoice, groupInvoices) {
   return 0
 }
 function headChainLabel(invoice) {
-  if (invoice.is_prepay && !invoice.prepay_chain_id) return { text: 'prepay', cls: 'text-teal-500' }
-  if (invoice.carried_from_id)                        return { text: 'carry',  cls: 'text-orange-500' }
-  if (invoice.is_reaktivasi && !isSmallSubCode(invoice)) return { text: 'reaktivasi', cls: 'text-violet-500' }
+  if (invoice.carried_from_id)                           return { text: 'carry',       cls: 'text-orange-500' }
+  if (invoice.is_prepay && !invoice.prepay_chain_id)     return { text: 'prepay',      cls: 'text-teal-500' }
+  if (invoice.is_reaktivasi && !isSmallSubCode(invoice)) return { text: 'reaktivasi',  cls: 'text-violet-500' }
   return null
 }
 

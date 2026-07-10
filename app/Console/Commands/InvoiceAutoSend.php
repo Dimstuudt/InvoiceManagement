@@ -43,6 +43,7 @@ class InvoiceAutoSend extends Command
             ])
             ->where('document_status', 'verified')
             ->where('payment_status', 'unpaid')
+            ->where('is_demo', false)
             ->whereDate('issue_date', '<=', $today)
             ->get();
 
@@ -141,6 +142,107 @@ class InvoiceAutoSend extends Command
                 $this->error("Gagal kirim {$invoice->invoice_number} [{$nextStage}]: " . $e->getMessage());
             }
         }
+
+        // ── Loop 2: Kirim receipt ke invoice yang baru lunas ──────────────────
+        $paidCandidates = Invoice::with([
+                'client.emails', 'projectCategory', 'documentIssuer',
+                'bankAccount', 'signature', 'items', 'user',
+                'emailTemplateGroup', 'carriedFrom.items',
+                'reaktivasiChain', 'prepayChain',
+            ])
+            ->where('payment_status', 'paid')
+            ->whereNull('receipt_sent_at')
+            ->where('is_demo', false)
+            ->whereRaw("invoice_number NOT REGEXP '^[CRPF]-'")
+            ->get();
+
+        foreach ($paidCandidates as $invoice) {
+            $emails = $invoice->client->emails->pluck('email')->toArray();
+
+            if (empty($emails)) {
+                $invoice->update(['receipt_sent_at' => now()]);
+                $details[] = [
+                    'invoice_id'     => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'client'         => $invoice->client->company_name ?? '-',
+                    'stage'          => 'paid',
+                    'status'         => 'skipped',
+                    'error'          => 'Client tidak punya email terdaftar',
+                ];
+                $failed++;
+                continue;
+            }
+
+            $group = $invoice->emailTemplateGroup
+                ?? EmailTemplateGroup::where('is_default', true)->first()
+                ?? EmailTemplateGroup::orderBy('id')->first();
+
+            $stageTpl = $group ? $group->getStage('paid') : ['subject' => '', 'body' => ''];
+            $subject  = $this->renderTemplate($stageTpl['subject'], $invoice, 'paid');
+            $body     = $this->renderTemplate($stageTpl['body'],    $invoice, 'paid');
+
+            $subject = $subject ?: "Konfirmasi Pembayaran – {$invoice->invoice_number}";
+            $body    = $body    ?: "Pembayaran invoice {$invoice->invoice_number} telah kami terima. Terlampir bukti penerimaan pembayaran.";
+
+            try {
+                $html = view('invoices.receipt', [
+                    'invoice' => $invoice,
+                    'imgB64'  => fn($url) => $this->urlToBase64($url),
+                ])->render();
+
+                $pdfBase64 = $pdfService->generate($html);
+                $filename  = 'RCP-' . str_replace('/', '-', $invoice->invoice_number) . '.pdf';
+                $toList    = array_map(fn($e) => ['email' => $e], $emails);
+
+                $response = Http::withHeaders([
+                    'api-key'      => config('services.brevo.key'),
+                    'Content-Type' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', [
+                    'sender'      => [
+                        'name'  => config('services.brevo.sender_name'),
+                        'email' => config('services.brevo.sender_email'),
+                    ],
+                    'to'          => $toList,
+                    'subject'     => $subject,
+                    'textContent' => $body,
+                    'attachment'  => [[
+                        'content' => $pdfBase64,
+                        'name'    => $filename,
+                    ]],
+                ]);
+
+                if (! $response->successful()) {
+                    throw new \RuntimeException($response->json('message', 'Brevo error'));
+                }
+
+                $invoice->update(['receipt_sent_at' => now()]);
+                ActivityLogger::log('invoice.receipt_sent', $invoice, ['to' => $emails]);
+
+                $details[] = [
+                    'invoice_id'     => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'client'         => $invoice->client->company_name ?? '-',
+                    'emails'         => $emails,
+                    'stage'          => 'paid',
+                    'status'         => 'sent',
+                    'error'          => null,
+                ];
+                $sent++;
+
+            } catch (\Throwable $e) {
+                $details[] = [
+                    'invoice_id'     => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'client'         => $invoice->client->company_name ?? '-',
+                    'stage'          => 'paid',
+                    'status'         => 'failed',
+                    'error'          => $e->getMessage(),
+                ];
+                $failed++;
+                $this->error("Gagal kirim receipt {$invoice->invoice_number}: " . $e->getMessage());
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         $found    = count($details);
         $duration = (int) round((microtime(true) - $start) * 1000);

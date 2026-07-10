@@ -16,6 +16,7 @@ class ActivityLogController extends Controller
 
         $query = ActivityLog::with('user')
             ->where('action', 'not like', 'invoice.auto_%')
+            ->where('action', '!=', 'invoice.receipt_sent')
             ->orderByDesc('created_at');
 
         // Search — subject, user name, IP, action
@@ -105,7 +106,7 @@ class ActivityLogController extends Controller
 
     public function cronLogs(Request $request)
     {
-        $query = ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue'])
+        $query = ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue', 'invoice.receipt_sent'])
             ->orderByDesc('created_at');
 
         if ($request->filled('date_from')) {
@@ -130,9 +131,10 @@ class ActivityLogController extends Controller
         ]);
 
         $stats = [
-            'total'     => ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue'])->count(),
-            'auto_sent' => ActivityLog::where('action', 'invoice.auto_sent')->count(),
-            'overdue'   => ActivityLog::where('action', 'invoice.auto_overdue')->count(),
+            'total'          => ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue', 'invoice.receipt_sent'])->count(),
+            'auto_sent'      => ActivityLog::where('action', 'invoice.auto_sent')->count(),
+            'receipt_sent'   => ActivityLog::where('action', 'invoice.receipt_sent')->count(),
+            'overdue'        => ActivityLog::where('action', 'invoice.auto_overdue')->count(),
         ];
 
         return Inertia::render('Logs/CronLogs', [
@@ -144,7 +146,7 @@ class ActivityLogController extends Controller
 
     public function deleteCronLogs()
     {
-        ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue'])->delete();
+        ActivityLog::whereIn('action', ['invoice.auto_sent', 'invoice.auto_overdue', 'invoice.receipt_sent'])->delete();
 
         return redirect()->route('logs.cron');
     }

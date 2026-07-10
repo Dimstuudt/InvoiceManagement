@@ -35,7 +35,7 @@
       </div>
 
       <!-- ── Stats ──────────────────────────────────────────────── -->
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-4 gap-3">
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
             <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
@@ -55,7 +55,18 @@
           </div>
           <div>
             <p class="text-2xl font-extrabold leading-none tabular-nums text-purple-700">{{ stats.auto_sent.toLocaleString('id-ID') }}</p>
-            <p class="text-[11px] text-slate-400 mt-1 font-medium">Auto Terkirim</p>
+            <p class="text-[11px] text-slate-400 mt-1 font-medium">Invoice Terkirim</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-emerald-100 shadow-sm p-4 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-extrabold leading-none tabular-nums text-emerald-700">{{ (stats.receipt_sent ?? 0).toLocaleString('id-ID') }}</p>
+            <p class="text-[11px] text-slate-400 mt-1 font-medium">Receipt Terkirim</p>
           </div>
         </div>
         <div class="bg-white rounded-2xl border border-orange-100 shadow-sm p-4 flex items-center gap-3">
@@ -153,7 +164,7 @@
                     <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
                     </svg>
-                    {{ session.sentCount }} email terkirim
+                    {{ session.sentCount }} invoice terkirim
                   </span>
                   <!-- Stage breakdown pills -->
                   <template v-if="session.sentCount > 0">
@@ -164,6 +175,13 @@
                       </span>
                     </template>
                   </template>
+                  <span v-if="session.receiptCount > 0"
+                    class="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full ring-1 ring-emerald-200/50">
+                    <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {{ session.receiptCount }} receipt terkirim
+                  </span>
                   <span v-if="session.overdueCount > 0"
                     class="inline-flex items-center gap-1 text-[11px] font-semibold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full ring-1 ring-orange-200/50">
                     <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -171,7 +189,7 @@
                     </svg>
                     {{ session.overdueCount }} jadi unpaid
                   </span>
-                  <span v-if="session.sentCount === 0 && session.overdueCount === 0"
+                  <span v-if="session.sentCount === 0 && session.receiptCount === 0 && session.overdueCount === 0"
                     class="text-[11px] text-slate-300">Tidak ada aksi</span>
                 </div>
 
@@ -194,7 +212,8 @@
 
                     <!-- Action dot -->
                     <div :class="['w-1.5 h-1.5 rounded-full shrink-0',
-                      log.action === 'invoice.auto_sent' ? 'bg-purple-300' : 'bg-orange-300']"/>
+                      log.action === 'invoice.auto_sent' ? 'bg-purple-300' :
+                      log.action === 'invoice.receipt_sent' ? 'bg-emerald-400' : 'bg-orange-300']"/>
 
                     <!-- Invoice number -->
                     <Link v-if="log.subject_id"
@@ -207,15 +226,15 @@
                       {{ log.subject_label }}
                     </span>
 
-                    <!-- Stage badge (auto_sent only) -->
-                    <span v-if="log.action === 'invoice.auto_sent' && log.detail?.stage"
+                    <!-- Stage badge -->
+                    <span v-if="log.detail?.stage"
                       :class="['text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 tabular-nums', stageColor(log.detail.stage)]">
                       {{ stageLabel(log.detail.stage) }}
                     </span>
 
                     <!-- Detail -->
                     <span class="flex-1 text-[11px] text-slate-400 truncate min-w-0">
-                      <template v-if="log.action === 'invoice.auto_sent'">
+                      <template v-if="log.action === 'invoice.auto_sent' || log.action === 'invoice.receipt_sent'">
                         <span class="text-slate-300 mr-1">→</span>
                         {{ Array.isArray(log.detail?.to) ? log.detail.to.join(', ') : (log.detail?.to ?? '?') }}
                       </template>
@@ -379,7 +398,7 @@ const groupedSessions = computed(() => {
   entries.forEach(log => {
     const t = toDate(log.created_at).getTime()
     if (!cur || t - cur.lastTime > SESSION_GAP_MS) {
-      cur = { startTime: log.created_at, lastTime: t, entries: [], sentCount: 0, overdueCount: 0, stageCounts: {} }
+      cur = { startTime: log.created_at, lastTime: t, entries: [], sentCount: 0, receiptCount: 0, overdueCount: 0, stageCounts: {} }
       sessions.push(cur)
     } else {
       cur.lastTime = t
@@ -389,6 +408,8 @@ const groupedSessions = computed(() => {
       cur.sentCount++
       const s = log.detail?.stage
       if (s) cur.stageCounts[s] = (cur.stageCounts[s] ?? 0) + 1
+    } else if (log.action === 'invoice.receipt_sent') {
+      cur.receiptCount++
     } else {
       cur.overdueCount++
     }

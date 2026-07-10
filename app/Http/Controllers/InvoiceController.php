@@ -1170,8 +1170,6 @@ class InvoiceController extends Controller
                     ]);
                 }
 
-                $this->sendPaidEmail($invoice);
-
                 $this->payCarriedAncestors($invoice);
                 $this->payReaktivasiChain($invoice);
                 $this->payPrepayChain($invoice);

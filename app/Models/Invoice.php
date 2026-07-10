@@ -15,6 +15,7 @@ class Invoice extends Model
         'interval_months', 'parent_invoice_id', 'carried_from_id',
         'is_reaktivasi', 'reaktivasi_chain_id', 'invoice_type',
         'is_prepay', 'prepay_chain_id',
+        'receipt_sent_at',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class Invoice extends Model
         'is_prepay'          => 'boolean',
         'interval_months'    => 'integer',
         'discount_value'     => 'float',
+        'receipt_sent_at'    => 'datetime',
     ];
 
     public function user()            { return $this->belongsTo(User::class); }
@@ -85,7 +87,6 @@ class Invoice extends Model
             ? $this->carriedFrom
             : static::with(['items', 'carriedFrom.items'])->find($this->carried_from_id);
         if (!$from) return 0.0;
-        if ($from->payment_status === 'paid') return 0.0;
         return $from->total + $from->carried_total;
     }
 

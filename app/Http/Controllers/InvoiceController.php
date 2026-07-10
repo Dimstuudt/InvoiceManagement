@@ -1170,6 +1170,8 @@ class InvoiceController extends Controller
                     ]);
                 }
 
+                $this->sendPaidEmail($invoice);
+
                 $this->payCarriedAncestors($invoice);
                 $this->payReaktivasiChain($invoice);
                 $this->payPrepayChain($invoice);
@@ -1706,6 +1708,93 @@ class InvoiceController extends Controller
         }
 
         ActivityLogger::log('invoice.recurring_created', $child, ['parent' => $parent->invoice_number]);
+    }
+
+    private function sendPaidEmail(Invoice $invoice): void
+    {
+        try {
+            $invoice->load([
+                'client.emails', 'projectCategory', 'documentIssuer',
+                'bankAccount', 'signature', 'items', 'user',
+                'carriedFrom.items', 'reaktivasiChain.items', 'prepayChain.items',
+                'emailTemplateGroup',
+            ]);
+
+            $group = $invoice->emailTemplateGroup
+                ?? \App\Models\EmailTemplateGroup::where('is_default', true)->first()
+                ?? \App\Models\EmailTemplateGroup::orderBy('id')->first();
+
+            if (! $group) return;
+
+            $tpl = $group->getStage('paid');
+            if (empty($tpl['subject']) && empty($tpl['body'])) return;
+
+            $emails = $invoice->client?->emails->pluck('email')->toArray() ?? [];
+            if (empty($emails)) return;
+
+            $subject = $this->renderTemplateVars($tpl['subject'], $invoice);
+            $body    = $this->renderTemplateVars($tpl['body'],    $invoice);
+
+            $html       = view('invoices.receipt', ['invoice' => $invoice, 'imgB64' => fn($u) => $this->urlToBase64($u)])->render();
+            $pdfBase64  = app(\App\Services\PdfService::class)->generate($html);
+            $filename   = 'RECEIPT-' . str_replace('/', '-', $invoice->invoice_number) . '.pdf';
+
+            $toList = array_map(fn($e) => ['email' => $e], $emails);
+
+            \Illuminate\Support\Facades\Http::withHeaders([
+                'api-key'      => config('services.brevo.key'),
+                'Content-Type' => 'application/json',
+            ])->post('https://api.brevo.com/v3/smtp/email', [
+                'sender'      => [
+                    'name'  => config('services.brevo.sender_name'),
+                    'email' => config('services.brevo.sender_email'),
+                ],
+                'to'          => $toList,
+                'subject'     => $subject,
+                'textContent' => $body,
+                'attachment'  => [[
+                    'content' => $pdfBase64,
+                    'name'    => $filename,
+                ]],
+            ]);
+
+            ActivityLogger::log('invoice.email_sent', $invoice, ['to' => $emails, 'stage' => 'paid']);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('sendPaidEmail failed', [
+                'invoice' => $invoice->invoice_number,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function renderTemplateVars(?string $text, Invoice $invoice, string $stage = 'paid'): string
+    {
+        if (! $text) return '';
+
+        $fmtDate = fn($d) => $d instanceof \Carbon\Carbon
+            ? $d->locale('id')->translatedFormat('j F Y')
+            : ($d ? \Carbon\Carbon::parse($d)->locale('id')->translatedFormat('j F Y') : '');
+
+        $fmtRp = fn($v) => $v !== null ? 'Rp ' . number_format((float) $v, 0, ',', '.') : '';
+
+        $vars = [
+            '{{invoice_number}}'      => $invoice->invoice_number ?? '',
+            '{{issue_date}}'          => $fmtDate($invoice->issue_date),
+            '{{due_date}}'            => $fmtDate($invoice->due_date),
+            '{{amount}}'              => $fmtRp($invoice->total ?? 0),
+            '{{project_name}}'        => $invoice->projectCategory?->name ?? '',
+            '{{client_name}}'         => $invoice->client?->company_name ?? '',
+            '{{director}}'            => $invoice->client?->director ?? '',
+            '{{pic}}'                 => $invoice->client?->pic ?? '',
+            '{{client_city}}'         => $invoice->client?->city ?? '',
+            '{{issuer_name}}'         => $invoice->documentIssuer?->name ?? '',
+            '{{bank_name}}'           => $invoice->bankAccount?->bank_name ?? '',
+            '{{bank_account_number}}' => $invoice->bankAccount?->account_number ?? '',
+            '{{bank_holder}}'         => $invoice->bankAccount?->name ?? '',
+            '{{send_stage}}'          => $stage,
+        ];
+
+        return str_replace(array_keys($vars), array_values($vars), $text);
     }
 
     private function urlToBase64(?string $url): ?string

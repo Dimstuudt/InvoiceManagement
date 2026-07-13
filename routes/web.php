@@ -17,6 +17,7 @@ use App\Http\Controllers\TwoFactorController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ArtisanController;
 use App\Http\Controllers\CronController;
+use App\Http\Controllers\SecurityGateController;
 use App\Http\Controllers\Settings\NotificationEmailController;
 use Illuminate\Support\Facades\Route;
 
@@ -112,6 +113,10 @@ Route::middleware('auth')->group(function () {
         Route::post('invoices/{invoice}/prepay', [InvoiceController::class, 'prepay'])->name('invoices.prepay');
         Route::post('invoices/{invoice}/reactivate', [InvoiceController::class, 'reactivate'])->name('invoices.reactivate');
         Route::post('invoices/{invoice}/rollback-reaktivasi', [InvoiceController::class, 'rollbackReaktivasi'])->name('invoices.rollbackReaktivasi');
+
+        // Security Gate
+        Route::post('/security/activate-bypass', [SecurityGateController::class, 'activateBypass'])->name('security.activate-bypass');
+        Route::post('/security/deactivate-bypass', [SecurityGateController::class, 'deactivateBypass'])->name('security.deactivate-bypass');
 
         // Settings
         Route::prefix('settings')->name('settings.')->group(function () {

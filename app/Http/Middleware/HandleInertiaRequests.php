@@ -44,8 +44,10 @@ class HandleInertiaRequests extends Middleware
                     'email'      => $request->user()->email,
                     'role'       => $request->user()->role,
                     'avatar_url' => $request->user()->avatar_url,
+                    'has_2fa'    => !empty($request->user()->google2fa_secret),
                 ] : null,
             ],
+            'bypassExpiresAt' => session('security_bypass_expires_at'),
             'flash' => [
                 'success'   => session('success'),
                 'error'     => session('error'),

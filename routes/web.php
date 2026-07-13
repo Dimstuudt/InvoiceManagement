@@ -72,8 +72,9 @@ Route::middleware('auth')->group(function () {
             Route::post('/admin/cron/demo', [CronController::class, 'createDemo'])->name('admin.cron.demo');
         });
 
-        Route::resource('clients', ClientController::class)->except(['show']);
+        Route::resource('clients', ClientController::class);
         Route::patch('clients/{client}/emails/{email}/toggle', [ClientController::class, 'toggleEmail'])->name('clients.email.toggle');
+        Route::patch('clients/{client}/update-status', [ClientController::class, 'updateStatus'])->name('clients.update-status');
 
         Route::get('spk', [SpkController::class, 'index'])->name('spk.index');
         Route::get('spk/create', [SpkController::class, 'create'])->name('spk.create');
@@ -117,6 +118,7 @@ Route::middleware('auth')->group(function () {
         // Security Gate
         Route::post('/security/activate-bypass', [SecurityGateController::class, 'activateBypass'])->name('security.activate-bypass');
         Route::post('/security/deactivate-bypass', [SecurityGateController::class, 'deactivateBypass'])->name('security.deactivate-bypass');
+        Route::post('/security/verify-gate', [SecurityGateController::class, 'verifyGate'])->name('security.verify-gate');
 
         // Settings
         Route::prefix('settings')->name('settings.')->group(function () {

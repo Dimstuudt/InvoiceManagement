@@ -287,135 +287,173 @@
     </div>
   </div>
 
+  <!-- Gate Modal (mounted globally so it works from any page) -->
+  <GateModal />
+
   <!-- ── Bypass Activation Modal ── -->
-  <div v-if="showBypassModal" class="fixed inset-0 z-[200] overflow-y-auto">
-    <div class="fixed inset-0 bg-gray-900/70 backdrop-blur-sm" @click="showBypassModal = false"></div>
-    <div class="flex min-h-full items-center justify-center p-4">
-      <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+  <Transition name="bypass-overlay">
+    <div v-if="showBypassModal" class="fixed inset-0 z-[200] overflow-y-auto">
+      <div class="fixed inset-0 bg-gray-900/70 backdrop-blur-sm"
+           @click="!isActivatingBypass && !bypassSuccess && (showBypassModal = false)"></div>
+      <div class="flex min-h-full items-center justify-center p-4">
+        <Transition name="bypass-card" appear>
+          <div v-if="showBypassModal"
+            class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            style="min-height: 340px">
 
-        <!-- Header -->
-        <div class="px-6 pt-6 pb-4 border-b border-gray-100">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                <svg class="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
-                </svg>
-              </div>
-              <div>
-                <h3 class="text-base font-bold text-gray-900">Aktifkan Bypass Verifikasi</h3>
-                <p class="text-xs text-gray-500 mt-0.5">Lewati gate selama durasi yang dipilih</p>
-              </div>
-            </div>
-            <button @click="showBypassModal = false" class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="px-6 py-5 space-y-5">
-
-          <!-- Duration selector -->
-          <div>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Durasi Bypass</p>
-            <div class="flex gap-2">
-              <button v-for="opt in [{v:15,l:'15 mnt'},{v:30,l:'30 mnt'},{v:60,l:'1 jam'},{v:240,l:'4 jam'}]"
-                :key="opt.v"
-                @click="bypassMinutes = opt.v"
-                type="button"
-                class="flex-1 py-2 rounded-xl text-xs font-bold border transition-all"
-                :class="bypassMinutes === opt.v
-                  ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-500'">
-                {{ opt.l }}
-              </button>
-            </div>
-          </div>
-
-          <!-- No 2FA warning -->
-          <div v-if="!$page.props.auth.user.has_2fa"
-            class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <svg class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
-            <div>
-              <p class="text-sm font-semibold text-amber-800">Google Authenticator belum disetup</p>
-              <p class="text-xs text-amber-600 mt-0.5">Bypass membutuhkan verifikasi 2FA. Setup Google Authenticator terlebih dahulu di halaman profil.</p>
-            </div>
-          </div>
-
-          <!-- Credential inputs (only if 2FA active) -->
-          <template v-else>
-            <!-- Password -->
-            <div>
-              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Password Akun
-              </label>
-              <div class="relative">
-                <div class="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
-                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
+            <!-- ── SUCCESS STATE ── -->
+            <Transition name="bypass-success">
+              <div v-if="bypassSuccess"
+                class="absolute inset-0 flex flex-col items-center justify-center px-6 py-10 text-center bg-white">
+                <div class="bypass-success-circle w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+                  <svg class="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2.5">
+                    <path class="bypass-check-path" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
                 </div>
-                <input
-                  v-model="bypassPassword"
-                  type="password"
-                  placeholder="Masukkan password akun..."
-                  autocomplete="current-password"
-                  class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-colors placeholder-gray-300"/>
+                <h3 class="text-base font-bold text-gray-900 mb-1">Bypass Aktif!</h3>
+                <p class="text-sm text-gray-400 mb-5">Gate dilewati selama {{ bypassMinutes }} menit.</p>
+                <div class="flex justify-center gap-1.5">
+                  <span v-for="i in 3" :key="i"
+                    class="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
+                    :style="{ animationDelay: (i - 1) * 160 + 'ms', animationDuration: '0.8s' }"></span>
+                </div>
               </div>
-            </div>
+            </Transition>
 
-            <!-- 2FA Code -->
-            <div>
-              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Kode Google Authenticator
-              </label>
-              <input
-                v-model="bypassOtp"
-                type="text"
-                maxlength="6"
-                inputmode="numeric"
-                placeholder="000000"
-                @keyup.enter="bypassOtp.length === 6 && bypassPassword.length > 0 ? submitActivateBypass() : null"
-                class="w-full text-3xl tracking-[0.5em] text-center font-mono py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-colors placeholder-gray-200"/>
-              <p class="text-xs text-gray-400 mt-1.5 text-center">Kode berubah setiap 30 detik</p>
-            </div>
+            <!-- ── FORM ── -->
+            <template v-if="!bypassSuccess">
 
-            <!-- Dual verification info -->
-            <div class="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-              <svg class="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <p class="text-xs text-blue-600">Bypass membutuhkan <strong>password + kode 2FA</strong> sekaligus untuk keamanan ekstra.</p>
-            </div>
-          </template>
+              <!-- Header -->
+              <div class="px-6 pt-6 pb-4 border-b border-gray-100">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                      <svg class="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 class="text-base font-bold text-gray-900">Aktifkan Bypass Verifikasi</h3>
+                      <p class="text-xs text-gray-500 mt-0.5">Lewati gate selama durasi yang dipilih</p>
+                    </div>
+                  </div>
+                  <button v-if="!isActivatingBypass" @click="showBypassModal = false"
+                    class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
 
-        </div>
+              <div class="px-6 py-5 space-y-5">
 
-        <!-- Footer -->
-        <div class="px-6 pb-6 flex gap-3">
-          <button @click="showBypassModal = false"
-            class="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all">
-            Batal
-          </button>
-          <button v-if="$page.props.auth.user.has_2fa"
-            @click="submitActivateBypass"
-            :disabled="bypassPassword.length === 0 || bypassOtp.length < 6 || isActivatingBypass"
-            class="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-            <svg v-if="isActivatingBypass" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-            </svg>
-            {{ isActivatingBypass ? 'Memverifikasi...' : 'Aktifkan Bypass' }}
-          </button>
-        </div>
+                <!-- Duration selector -->
+                <div>
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Durasi Bypass</p>
+                  <div class="flex gap-2">
+                    <button v-for="opt in [{v:15,l:'15 mnt'},{v:30,l:'30 mnt'},{v:60,l:'1 jam'},{v:240,l:'4 jam'}]"
+                      :key="opt.v"
+                      @click="bypassMinutes = opt.v"
+                      type="button"
+                      class="flex-1 py-2 rounded-xl text-xs font-bold border transition-all"
+                      :class="bypassMinutes === opt.v
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-500'">
+                      {{ opt.l }}
+                    </button>
+                  </div>
+                </div>
 
+                <!-- No 2FA warning -->
+                <div v-if="!$page.props.auth.user.has_2fa"
+                  class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <svg class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                  <div>
+                    <p class="text-sm font-semibold text-amber-800">Google Authenticator belum disetup</p>
+                    <p class="text-xs text-amber-600 mt-0.5">Bypass membutuhkan verifikasi 2FA. Setup Google Authenticator terlebih dahulu di halaman profil.</p>
+                  </div>
+                </div>
+
+                <!-- Credential inputs (only if 2FA active) -->
+                <template v-else>
+                  <!-- Password -->
+                  <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Password Akun
+                    </label>
+                    <div class="relative">
+                      <div class="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
+                        </svg>
+                      </div>
+                      <input
+                        v-model="bypassPassword"
+                        type="password"
+                        :disabled="isActivatingBypass"
+                        placeholder="Masukkan password akun..."
+                        autocomplete="current-password"
+                        class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-colors placeholder-gray-300 disabled:opacity-50"/>
+                    </div>
+                  </div>
+
+                  <!-- 2FA Code -->
+                  <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Kode Google Authenticator
+                    </label>
+                    <input
+                      v-model="bypassOtp"
+                      type="text"
+                      maxlength="6"
+                      inputmode="numeric"
+                      :disabled="isActivatingBypass"
+                      placeholder="000000"
+                      @keyup.enter="bypassOtp.length === 6 && bypassPassword.length > 0 ? submitActivateBypass() : null"
+                      class="w-full text-3xl tracking-[0.5em] text-center font-mono py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-colors placeholder-gray-200 disabled:opacity-50"/>
+                    <p class="text-xs text-gray-400 mt-1.5 text-center">Kode berubah setiap 30 detik</p>
+                  </div>
+
+                  <!-- Dual verification info -->
+                  <div class="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                    <svg class="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-xs text-blue-600">Bypass membutuhkan <strong>password + kode 2FA</strong> sekaligus untuk keamanan ekstra.</p>
+                  </div>
+                </template>
+
+              </div>
+
+              <!-- Footer -->
+              <div class="px-6 pb-6 flex gap-3">
+                <button @click="showBypassModal = false"
+                  :disabled="isActivatingBypass"
+                  class="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-50">
+                  Batal
+                </button>
+                <button v-if="$page.props.auth.user.has_2fa"
+                  @click="submitActivateBypass"
+                  :disabled="bypassPassword.length === 0 || bypassOtp.length < 6 || isActivatingBypass"
+                  class="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  <svg v-if="isActivatingBypass" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  {{ isActivatingBypass ? 'Memverifikasi...' : 'Aktifkan Bypass' }}
+                </button>
+              </div>
+
+            </template>
+          </div>
+        </Transition>
       </div>
     </div>
-  </div>
+  </Transition>
 
 </template>
 
@@ -424,6 +462,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import GateModal from '@/Components/GateModal.vue';
 
 const mainEl = ref(null);
 
@@ -440,6 +479,7 @@ const bypassMinutes      = ref(30)
 const bypassPassword     = ref('')
 const bypassOtp          = ref('')
 const isActivatingBypass = ref(false)
+const bypassSuccess      = ref(false)
 
 const updateBypassTimer = () => {
   const exp = bypassExpiresAt.value
@@ -477,26 +517,21 @@ async function submitActivateBypass() {
       otp:      bypassOtp.value,
       minutes:  bypassMinutes.value,
     })
-    showBypassModal.value = false
-    await Swal.fire({
-      icon: 'success',
-      title: 'Bypass Aktif!',
-      text: `Verifikasi dilewati selama ${bypassMinutes.value} menit.`,
-      timer: 2500,
-      timerProgressBar: true,
-      showConfirmButton: false,
-      confirmButtonColor: '#f97316',
-    })
-    router.reload()
+    isActivatingBypass.value = false
+    bypassSuccess.value = true
+    setTimeout(() => {
+      showBypassModal.value = false
+      bypassSuccess.value   = false
+      router.reload()
+    }, 1500)
   } catch (e) {
+    isActivatingBypass.value = false
     Swal.fire({
       icon: 'error',
       title: 'Verifikasi Gagal',
       text: e.response?.data?.message || 'Periksa kembali password dan kode 2FA.',
       confirmButtonColor: '#EF4444',
     })
-  } finally {
-    isActivatingBypass.value = false
   }
 }
 
@@ -559,8 +594,48 @@ function navClass(routeUrl, exclude = []) {
 </script>
 
 <style scoped>
+/* Sidebar backdrop */
 .fade-overlay-enter-active,
 .fade-overlay-leave-active { transition: opacity 0.25s ease; }
 .fade-overlay-enter-from,
 .fade-overlay-leave-to     { opacity: 0; }
+
+/* Bypass modal — backdrop fade */
+.bypass-overlay-enter-active,
+.bypass-overlay-leave-active { transition: opacity 0.2s ease; }
+.bypass-overlay-enter-from,
+.bypass-overlay-leave-to     { opacity: 0; }
+
+/* Bypass modal — card spring */
+.bypass-card-enter-active { transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.bypass-card-leave-active { transition: all 0.15s ease-in; }
+.bypass-card-enter-from   { transform: scale(0.9) translateY(12px); opacity: 0; }
+.bypass-card-leave-to     { transform: scale(0.95); opacity: 0; }
+
+/* Bypass success overlay */
+.bypass-success-enter-active { transition: all 0.3s ease-out; }
+.bypass-success-leave-active { transition: all 0.15s ease-in; }
+.bypass-success-enter-from   { opacity: 0; transform: scale(0.96); }
+.bypass-success-leave-to     { opacity: 0; }
+
+/* Checkmark draw */
+.bypass-check-path {
+  stroke-dasharray: 28;
+  stroke-dashoffset: 28;
+  animation: bypassCheckDraw 0.4s ease-out 0.2s forwards;
+}
+
+/* Circle scale-in */
+.bypass-success-circle {
+  animation: bypassCircleIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes bypassCheckDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes bypassCircleIn {
+  from { transform: scale(0.4); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
 </style>

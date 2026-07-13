@@ -16,9 +16,9 @@ class SecurityGateController extends Controller
             'minutes'  => 'required|integer|in:15,30,60,240',
         ]);
 
-        $user = auth()->user();
+        $user = $request->user();
 
-        if (!Hash::check($request->password, $user->password)) {
+        if (!Hash::check($request->input('password'), $user->password)) {
             return response()->json(['message' => 'Password salah.'], 422);
         }
 
@@ -27,12 +27,40 @@ class SecurityGateController extends Controller
         }
 
         $google2fa = new Google2FA();
-        if (!$google2fa->verifyKey($user->google2fa_secret, $request->otp)) {
+        if (!$google2fa->verifyKey($user->google2fa_secret, $request->input('otp'))) {
             return response()->json(['message' => 'Kode 2FA tidak valid atau sudah kedaluwarsa.'], 422);
         }
 
-        $expiresAt = now()->addMinutes((int) $request->minutes)->timestamp;
+        $expiresAt = now()->addMinutes((int) $request->input('minutes'))->timestamp;
         session(['security_bypass_expires_at' => $expiresAt]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function verifyGate(Request $request)
+    {
+        $request->validate([
+            'method'     => 'required|in:password,2fa',
+            'credential' => 'required|string',
+        ]);
+
+        $user     = $request->user();
+        $method   = $request->input('method');
+        $cred     = $request->input('credential');
+
+        if ($method === 'password') {
+            if (!Hash::check($cred, $user->password)) {
+                return response()->json(['message' => 'Password salah, coba lagi.'], 422);
+            }
+        } else {
+            if (!$user->google2fa_secret) {
+                return response()->json(['message' => '2FA belum diaktifkan.'], 422);
+            }
+            $google2fa = new Google2FA();
+            if (!$google2fa->verifyKey($user->google2fa_secret, $cred)) {
+                return response()->json(['message' => 'Kode 2FA tidak valid atau sudah kedaluwarsa.'], 422);
+            }
+        }
 
         return response()->json(['success' => true]);
     }

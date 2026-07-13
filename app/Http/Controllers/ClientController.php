@@ -75,6 +75,43 @@ class ClientController extends Controller
         return redirect()->route('clients.index')->with('success', 'Client berhasil ditambahkan.');
     }
 
+    public function show(Client $client)
+    {
+        $client->load('category', 'emails', 'phones', 'socialMedia');
+
+        return Inertia::render('Clients/Show', [
+            'client' => [
+                'id'             => $client->id,
+                'company_name'   => $client->company_name,
+                'category'       => $client->category?->name,
+                'address'        => $client->address,
+                'city'           => $client->city,
+                'director'       => $client->director,
+                'pic'            => $client->pic,
+                'client_status'  => $client->client_status,
+                'is_active'      => $client->is_active,
+                'npwp_image_url' => $client->npwp_image ? Storage::url($client->npwp_image) : null,
+                'emails'         => $client->emails->map(fn($e) => [
+                    'id'        => $e->id,
+                    'email'     => $e->email,
+                    'is_active' => $e->is_active,
+                ]),
+                'phones'         => $client->phones->pluck('phone_number'),
+                'social_media'   => $client->socialMedia->pluck('url'),
+            ],
+        ]);
+    }
+
+    public function updateStatus(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'is_active'     => 'sometimes|boolean',
+            'client_status' => 'sometimes|in:prospect,active_client',
+        ]);
+        $client->update($data);
+        return back()->with('success', 'Status berhasil diperbarui.');
+    }
+
     public function edit(Client $client)
     {
         $client->load('phones', 'emails', 'socialMedia');

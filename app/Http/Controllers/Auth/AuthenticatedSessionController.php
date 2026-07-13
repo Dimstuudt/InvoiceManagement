@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 
 class AuthenticatedSessionController extends Controller
@@ -34,12 +35,24 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
+        $lockKey   = 'login_lockout_' . strtolower($request->input('email'));
+        $failCount = Cache::get($lockKey, 0);
+
+        if ($failCount >= 10) {
+            return back()->withErrors([
+                'email' => 'Akun dikunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam beberapa menit.',
+            ]);
+        }
+
         if (!Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
+            Cache::put($lockKey, $failCount + 1, now()->addMinutes(15));
+
             return back()->withErrors([
                 'email' => 'Email atau password salah.',
             ]);
         }
 
+        Cache::forget($lockKey);
         $request->session()->regenerate();
 
         ActivityLogger::log('user.login');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use PragmaRX\Google2FA\Google2FA;
 use PragmaRX\Google2FAQRCode\Google2FA as Google2FAQR;
@@ -49,7 +50,9 @@ class TwoFactorController extends Controller
             return back()->withErrors(['code' => 'Sesi habis, muat ulang halaman.']);
         }
 
-        if (!$this->google2fa->verifyKey($secret, $request->code)) {
+        $newTimestamp = $this->google2fa->verifyKeyNewer($secret, $request->code, null);
+
+        if ($newTimestamp === false) {
             return back()->withErrors(['code' => 'Kode salah atau sudah kedaluwarsa, coba lagi.']);
         }
 
@@ -77,11 +80,20 @@ class TwoFactorController extends Controller
     {
         $request->validate(['code' => 'required|string|min:6|max:8']);
 
-        $secret = $request->user()->google2fa_secret;
+        $user   = $request->user();
+        $secret = $user->google2fa_secret;
 
-        if (!$this->google2fa->verifyKey($secret, $request->code)) {
+        $cacheKey     = '2fa_ts_' . $user->id;
+        $oldTimestamp = Cache::get($cacheKey);
+
+        $newTimestamp = $this->google2fa->verifyKeyNewer($secret, $request->code, $oldTimestamp);
+
+        if ($newTimestamp === false) {
             return back()->withErrors(['code' => 'Kode salah atau sudah kedaluwarsa, coba lagi.']);
         }
+
+        // Store last-used OTP timestamp to block replay within the same window
+        Cache::put($cacheKey, $newTimestamp, now()->addMinutes(5));
 
         $request->session()->put('2fa_verified', true);
 
@@ -92,14 +104,27 @@ class TwoFactorController extends Controller
     {
         $request->validate(['code' => 'required|string|min:6|max:8']);
 
-        $secret = $request->user()->google2fa_secret;
+        $user   = $request->user();
+        $secret = $user->google2fa_secret;
 
-        if (!$secret || !$this->google2fa->verifyKey($secret, $request->code)) {
+        if (!$secret) {
             return back()->withErrors(['2fa_code' => 'Kode salah atau sudah kedaluwarsa.']);
         }
 
-        $request->user()->update(['google2fa_secret' => null]);
+        $cacheKey     = '2fa_ts_' . $user->id;
+        $oldTimestamp = Cache::get($cacheKey);
+
+        $newTimestamp = $this->google2fa->verifyKeyNewer($secret, $request->code, $oldTimestamp);
+
+        if ($newTimestamp === false) {
+            return back()->withErrors(['2fa_code' => 'Kode salah atau sudah kedaluwarsa.']);
+        }
+
+        Cache::put($cacheKey, $newTimestamp, now()->addMinutes(5));
+
+        $user->update(['google2fa_secret' => null]);
         $request->session()->forget('2fa_verified');
+        Cache::forget($cacheKey);
 
         return redirect()->route('2fa.setup');
     }

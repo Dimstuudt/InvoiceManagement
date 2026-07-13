@@ -32,7 +32,7 @@ Route::get('/cron/run', [CronController::class, 'run'])->name('cron.run');
 // Auth
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
-    Route::post('/login', [AuthenticatedSessionController::class, 'store']);
+    Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:login');
 });
 
 // App
@@ -43,7 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/2fa/setup',      [TwoFactorController::class, 'setup'])->name('2fa.setup');
     Route::post('/2fa/setup',     [TwoFactorController::class, 'enable'])->name('2fa.enable');
     Route::get('/2fa/challenge',  [TwoFactorController::class, 'challenge'])->name('2fa.challenge');
-    Route::post('/2fa/challenge', [TwoFactorController::class, 'verify'])->name('2fa.verify');
+    Route::post('/2fa/challenge', [TwoFactorController::class, 'verify'])->name('2fa.verify')->middleware('throttle:2fa');
 
     // All routes below require 2FA to be verified
     Route::middleware('2fa')->group(function () {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Master;
 
 use App\Http\Controllers\Controller;
+use App\Models\DocumentIssuer;
 use App\Models\EmailTemplateGroup;
 use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
@@ -94,6 +95,32 @@ class EmailTemplateGroupController extends Controller
 
         return redirect()->route('master.email-template-groups.index')
             ->with('success', 'Grup template email berhasil diperbarui.');
+    }
+
+    public function previewWrapper(string $type)
+    {
+        abort_if(!in_array($type, ['invoice', 'receipt']), 404);
+
+        $issuerModel = DocumentIssuer::first();
+        $issuer = $issuerModel ?? (object)[
+            'name'           => config('app.name'),
+            'tax_id_address' => null,
+        ];
+
+        $invoice = (object)[
+            'invoice_number'  => 'INV/2025/VII/001',
+            'documentIssuer'  => $issuer,
+        ];
+
+        $isReceipt = $type === 'receipt';
+        $filename  = $isReceipt ? 'RCP-INV-2025-VII-001.pdf' : 'INV-2025-VII-001.pdf';
+        $body      = $isReceipt
+            ? "Yth. Bapak/Ibu,\n\nTerima kasih atas kepercayaan Bapak/Ibu kepada kami.\n\nPembayaran invoice INV/2025/VII/001 senilai Rp 15.000.000 telah kami terima dengan baik pada 13 Juli 2025. Terlampir bukti penerimaan pembayaran sebagai arsip Bapak/Ibu.\n\nKami berharap dapat terus melayani kebutuhan Bapak/Ibu di masa mendatang.\n\nHormat kami,\nTim Penagihan"
+            : "Yth. Bapak/Ibu,\n\nBersama email ini kami sampaikan invoice INV/2025/VII/001 dengan nilai Rp 15.000.000 dan jatuh tempo pada 30 Juli 2025.\n\nMohon kiranya dapat melakukan pembayaran sesuai informasi rekening yang tertera pada lampiran sebelum tanggal jatuh tempo.\n\nApabila Bapak/Ibu memiliki pertanyaan terkait invoice ini, jangan ragu untuk menghubungi kami.\n\nTerima kasih atas kepercayaan Bapak/Ibu.\n\nHormat kami,\nTim Penagihan";
+
+        return response(
+            view('emails.wrapper', compact('invoice', 'filename', 'body'))->render()
+        )->header('Content-Type', 'text/html');
     }
 
     public function destroy(EmailTemplateGroup $emailTemplateGroup)

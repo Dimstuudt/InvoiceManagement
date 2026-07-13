@@ -121,6 +121,7 @@ Route::middleware('auth')->group(function () {
             Route::resource('document-issuers', DocumentIssuerController::class)->except(['show']);
             Route::resource('bank-accounts', BankAccountController::class)->except(['show']);
             Route::resource('signatures', SignatureController::class)->except(['show']);
+            Route::get('email-template-groups/preview-wrapper/{type}', [EmailTemplateGroupController::class, 'previewWrapper'])->name('email-template-groups.preview-wrapper');
             Route::resource('email-template-groups', EmailTemplateGroupController::class)->except(['show']);
         });
     });

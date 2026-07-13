@@ -13,7 +13,18 @@ class UserController extends Controller
     public function index()
     {
         return Inertia::render('Users/Index', [
-            'users' => User::latest()->get(['id', 'name', 'email', 'role', 'created_at']),
+            'users' => User::latest()
+                ->get(['id', 'name', 'email', 'role', 'created_at', 'google2fa_secret'])
+                ->map(function (User $u): array {
+                    return [
+                        'id'         => $u->id,
+                        'name'       => $u->name,
+                        'email'      => $u->email,
+                        'role'       => $u->role,
+                        'created_at' => $u->created_at,
+                        'has_2fa'    => !empty($u->google2fa_secret),
+                    ];
+                }),
         ]);
     }
 

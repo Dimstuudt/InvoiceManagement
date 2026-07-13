@@ -38,7 +38,8 @@ class InvoiceAutoSend extends Command
         // verified + unpaid + tidak frozen/carried + issue_date sudah lewat atau hari ini
         $candidates = Invoice::with([
                 'client.emails', 'projectCategory', 'documentIssuer',
-                'bankAccount', 'signature', 'items', 'user',
+                'bankAccount', 'signature', 'items',
+                'user.notificationEmails',
                 'emailTemplateGroup', 'carriedFrom.items',
             ])
             ->where('document_status', 'verified')
@@ -55,9 +56,9 @@ class InvoiceAutoSend extends Command
                 continue;
             }
 
-            $emails = $invoice->client->emails->where('is_active', true)->pluck('email')->toArray();
+            $activeEmails = $invoice->client->emails->where('is_active', true)->sortBy('id')->values();
 
-            if (empty($emails)) {
+            if ($activeEmails->isEmpty()) {
                 $details[] = [
                     'invoice_id'     => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
@@ -69,6 +70,10 @@ class InvoiceAutoSend extends Command
                 $failed++;
                 continue;
             }
+
+            $emails  = $activeEmails->pluck('email')->toArray();
+            $toList  = [['email' => $activeEmails->first()->email]];
+            $ccList  = $activeEmails->skip(1)->map(fn($e) => ['email' => $e->email])->values()->toArray();
 
             $group = $invoice->emailTemplateGroup
                 ?? EmailTemplateGroup::where('is_default', true)->first()
@@ -89,13 +94,9 @@ class InvoiceAutoSend extends Command
 
                 $pdfBase64 = $pdfService->generate($html);
                 $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
-                $toList    = array_map(fn($e) => ['email' => $e], $emails);
                 $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
-                $response = Http::withHeaders([
-                    'api-key'      => config('services.brevo.key'),
-                    'Content-Type' => 'application/json',
-                ])->post('https://api.brevo.com/v3/smtp/email', [
+                $payload = [
                     'sender'      => [
                         'name'  => config('services.brevo.sender_name'),
                         'email' => config('services.brevo.sender_email'),
@@ -107,13 +108,24 @@ class InvoiceAutoSend extends Command
                         'content' => $pdfBase64,
                         'name'    => $filename,
                     ]],
-                ]);
+                ];
+                if (!empty($ccList)) {
+                    $payload['cc'] = $ccList;
+                }
+
+                $response = Http::withHeaders([
+                    'api-key'      => config('services.brevo.key'),
+                    'Content-Type' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', $payload);
 
                 if (! $response->successful()) {
                     throw new \RuntimeException($response->json('message', 'Brevo error'));
                 }
 
                 $invoice->update(['send_status' => $nextStage]);
+
+                // Request 2: notifikasi internal
+                $this->sendInternalNotification($invoice, $nextStage);
                 ActivityLogger::log('invoice.auto_sent', $invoice, [
                     'to'    => $emails,
                     'stage' => $nextStage,
@@ -147,7 +159,8 @@ class InvoiceAutoSend extends Command
         // ── Loop 2: Kirim receipt ke invoice yang baru lunas ──────────────────
         $paidCandidates = Invoice::with([
                 'client.emails', 'projectCategory', 'documentIssuer',
-                'bankAccount', 'signature', 'items', 'user',
+                'bankAccount', 'signature', 'items',
+                'user.notificationEmails',
                 'emailTemplateGroup', 'carriedFrom.items',
                 'reaktivasiChain', 'prepayChain',
             ])
@@ -158,9 +171,9 @@ class InvoiceAutoSend extends Command
             ->get();
 
         foreach ($paidCandidates as $invoice) {
-            $emails = $invoice->client->emails->where('is_active', true)->pluck('email')->toArray();
+            $activeEmails = $invoice->client->emails->where('is_active', true)->sortBy('id')->values();
 
-            if (empty($emails)) {
+            if ($activeEmails->isEmpty()) {
                 $invoice->update(['receipt_sent_at' => now()]);
                 $details[] = [
                     'invoice_id'     => $invoice->id,
@@ -173,6 +186,10 @@ class InvoiceAutoSend extends Command
                 $failed++;
                 continue;
             }
+
+            $emails  = $activeEmails->pluck('email')->toArray();
+            $toList  = [['email' => $activeEmails->first()->email]];
+            $ccList  = $activeEmails->skip(1)->map(fn($e) => ['email' => $e->email])->values()->toArray();
 
             $group = $invoice->emailTemplateGroup
                 ?? EmailTemplateGroup::where('is_default', true)->first()
@@ -193,13 +210,9 @@ class InvoiceAutoSend extends Command
 
                 $pdfBase64 = $pdfService->generate($html);
                 $filename  = 'RCP-' . str_replace('/', '-', $invoice->invoice_number) . '.pdf';
-                $toList    = array_map(fn($e) => ['email' => $e], $emails);
                 $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
-                $response = Http::withHeaders([
-                    'api-key'      => config('services.brevo.key'),
-                    'Content-Type' => 'application/json',
-                ])->post('https://api.brevo.com/v3/smtp/email', [
+                $payload = [
                     'sender'      => [
                         'name'  => config('services.brevo.sender_name'),
                         'email' => config('services.brevo.sender_email'),
@@ -211,13 +224,24 @@ class InvoiceAutoSend extends Command
                         'content' => $pdfBase64,
                         'name'    => $filename,
                     ]],
-                ]);
+                ];
+                if (!empty($ccList)) {
+                    $payload['cc'] = $ccList;
+                }
+
+                $response = Http::withHeaders([
+                    'api-key'      => config('services.brevo.key'),
+                    'Content-Type' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', $payload);
 
                 if (! $response->successful()) {
                     throw new \RuntimeException($response->json('message', 'Brevo error'));
                 }
 
                 $invoice->update(['receipt_sent_at' => now()]);
+
+                // Request 2: notifikasi internal
+                $this->sendInternalNotification($invoice, 'paid');
                 ActivityLogger::log('invoice.receipt_sent', $invoice, ['to' => $emails]);
 
                 $details[] = [
@@ -270,6 +294,73 @@ class InvoiceAutoSend extends Command
         $this->info("Selesai: {$found} kandidat, {$sent} terkirim, {$failed} gagal ({$duration} ms)");
 
         return self::SUCCESS;
+    }
+
+    private function sendInternalNotification(Invoice $invoice, string $stage): void
+    {
+        if (! $invoice->user) return;
+
+        $notifEmails = $invoice->user->notificationEmails
+            ->where('is_active', true)
+            ->map(fn($ne) => [
+                'id'         => $ne->id,
+                'is_default' => $ne->is_default,
+                'email'      => $ne->is_default ? $invoice->user->email : $ne->email,
+            ])
+            ->filter(fn($ne) => !empty($ne['email']))
+            ->values();
+
+        if ($notifEmails->isEmpty()) return;
+
+        // Tentukan To dan CC
+        $defaultEntry = $notifEmails->firstWhere('is_default', true);
+        if ($defaultEntry) {
+            $internalTo = [['email' => $defaultEntry['email']]];
+            $internalCc = $notifEmails->where('is_default', false)
+                ->map(fn($ne) => ['email' => $ne['email']])->values()->toArray();
+        } else {
+            $sorted     = $notifEmails->sortBy('id')->values();
+            $internalTo = [['email' => $sorted->first()['email']]];
+            $internalCc = $sorted->skip(1)->map(fn($ne) => ['email' => $ne['email']])->values()->toArray();
+        }
+
+        $stageLabels = [
+            'send1' => 'Pengiriman Pertama',
+            'send2' => 'Pengiriman Kedua',
+            'send3' => 'Pengiriman Ketiga',
+            'send4' => 'Pengiriman Keempat',
+            'send5' => 'Pengiriman Kelima (Terakhir)',
+            'paid'  => 'Pembayaran Diterima',
+        ];
+        $stageLabel = $stageLabels[$stage] ?? $stage;
+        $subject    = "[Notifikasi] {$invoice->invoice_number} — {$stageLabel}";
+
+        try {
+            $htmlNotif = view('emails.internal_notification', [
+                'invoice' => $invoice,
+                'stage'   => $stage,
+            ])->render();
+
+            $payload = [
+                'sender'      => [
+                    'name'  => config('services.brevo.sender_name'),
+                    'email' => config('services.brevo.sender_email'),
+                ],
+                'to'          => $internalTo,
+                'subject'     => $subject,
+                'htmlContent' => $htmlNotif,
+            ];
+            if (!empty($internalCc)) {
+                $payload['cc'] = $internalCc;
+            }
+
+            Http::withHeaders([
+                'api-key'      => config('services.brevo.key'),
+                'Content-Type' => 'application/json',
+            ])->post('https://api.brevo.com/v3/smtp/email', $payload);
+        } catch (\Throwable) {
+            // Gagal notif internal tidak menggagalkan pengiriman utama
+        }
     }
 
     /**

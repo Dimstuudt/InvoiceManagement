@@ -27,6 +27,23 @@ class User extends Authenticatable
         'google2fa_secret',
     ];
 
+    protected static function booted(): void
+    {
+        static::created(function (User $user) {
+            $user->notificationEmails()->create([
+                'email'      => null,
+                'label'      => 'This User',
+                'is_active'  => true,
+                'is_default' => true,
+            ]);
+        });
+    }
+
+    public function notificationEmails()
+    {
+        return $this->hasMany(UserNotificationEmail::class)->orderBy('is_default', 'desc')->orderBy('id');
+    }
+
     public function getAvatarUrlAttribute(): ?string
     {
         return $this->avatar ? \Illuminate\Support\Facades\Storage::url($this->avatar) : null;

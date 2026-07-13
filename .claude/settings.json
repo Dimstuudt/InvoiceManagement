@@ -11,7 +11,8 @@
       "Skill(artifact-design)",
       "Skill(artifact-design:*)",
       "Bash(php -r ' *)",
-      "Bash(grep -v \"//\")"
+      "Bash(grep -v \"//\")",
+      "Bash(npx vite *)"
     ]
   }
 }

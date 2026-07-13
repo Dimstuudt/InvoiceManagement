@@ -10,6 +10,7 @@ use App\Http\Controllers\Master\BankAccountController;
 use App\Http\Controllers\Master\ClientCategoryController;
 use App\Http\Controllers\Master\DocumentIssuerController;
 use App\Http\Controllers\Master\EmailTemplateGroupController;
+use App\Http\Controllers\Master\CompanyController;
 use App\Http\Controllers\Master\ProjectCategoryController;
 use App\Http\Controllers\Master\SignatureController;
 use App\Http\Controllers\TwoFactorController;
@@ -112,6 +113,8 @@ Route::middleware('auth')->group(function () {
 
         // Master Data
         Route::prefix('master')->name('master.')->group(function () {
+            Route::resource('companies', CompanyController::class)->except(['show', 'create', 'edit']);
+            Route::patch('companies/{company}/assign', [CompanyController::class, 'assign'])->name('companies.assign');
             Route::resource('client-categories', ClientCategoryController::class)->except(['show']);
             Route::resource('project-categories', ProjectCategoryController::class)->except(['show']);
             Route::resource('document-issuers', DocumentIssuerController::class)->except(['show']);

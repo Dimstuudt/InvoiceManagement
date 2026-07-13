@@ -1,6 +1,36 @@
 <template>
   <AppLayout title="Semua Invoice">
-    <div class="space-y-4">
+    <div class="relative">
+
+    <!-- Lock overlay — muncul saat bypass tidak aktif -->
+    <Transition name="schedule-lock">
+      <div v-if="!bypassActive"
+        class="absolute inset-0 flex items-start justify-center z-20 pt-20">
+        <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 px-8 py-10 text-center max-w-sm w-full mx-4">
+          <div class="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mx-auto mb-5">
+            <svg class="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-bold text-gray-900 mb-2">Halaman Terkunci</h3>
+          <p class="text-sm text-gray-500 leading-relaxed mb-6">
+            Email Schedule hanya bisa diakses saat <strong class="text-gray-700">Bypass Verifikasi</strong> aktif.<br>
+            Aktifkan bypass terlebih dahulu melalui ikon kunci di pojok kanan atas.
+          </p>
+          <div class="flex items-center justify-center gap-2 text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+            </svg>
+            <span class="font-medium">Klik ikon kunci <span class="font-bold">🔒</span> di topbar untuk mengaktifkan</span>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Page content — blur saat bypass tidak aktif -->
+    <div class="space-y-4 transition-[filter] duration-300"
+      :class="!bypassActive ? 'blur-sm pointer-events-none select-none' : ''"
+    >
 
       <!-- Header -->
       <div class="flex items-center justify-between">
@@ -316,6 +346,7 @@
 
     </div>
 
+    </div><!-- /relative wrapper -->
   </AppLayout>
 </template>
 
@@ -323,6 +354,9 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { useSecurityGate } from '@/Composables/useSecurityGate';
+
+const { bypassActive } = useSecurityGate()
 
 const props = defineProps({
   priorityInvoices: Array,
@@ -443,3 +477,10 @@ function deleteInvoice(invoice) {
   router.delete(route('invoices.destroy', invoice.id), { preserveScroll: true });
 }
 </script>
+
+<style scoped>
+.schedule-lock-enter-active { transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.schedule-lock-leave-active { transition: opacity 0.15s ease; }
+.schedule-lock-enter-from   { opacity: 0; transform: translateY(-8px) scale(0.97); }
+.schedule-lock-leave-to     { opacity: 0; }
+</style>

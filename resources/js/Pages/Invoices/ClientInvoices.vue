@@ -35,13 +35,13 @@
                   <span class="text-xs text-gray-400">{{ invoices.length }} invoice</span>
                 </div>
               </div>
-              <Link :href="route('invoices.create', { client_id: client.id })"
+              <button @click="createInvoice"
                 class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm shrink-0">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
                 Buat Invoice
-              </Link>
+              </button>
             </div>
             <!-- Meta row -->
             <div class="flex flex-wrap gap-x-6 gap-y-2 mt-3.5 pt-3.5 border-t border-gray-50">
@@ -417,10 +417,10 @@
                                   <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                   Carry Head
                                 </span>
-                                <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
-                                  class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
+                                <button @click="viewInvoice(invoice.id)"
+                                  class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate text-left">
                                   {{ invoice.invoice_number }}
-                                </Link>
+                                </button>
                               </div>
                               <!-- Status track: 3 kolom eksplisit -->
                               <div class="flex items-center gap-2.5 flex-wrap mt-1.5">
@@ -544,10 +544,10 @@
                                     class="text-[9px] font-bold text-violet-700 bg-violet-100 border border-violet-200 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
                                     Reaktivasi
                                   </span>
-                                  <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
-                                    class="font-mono text-xs font-semibold text-gray-500 hover:text-indigo-600 hover:underline truncate">
+                                  <button @click="viewInvoice(invoice.id)"
+                                    class="font-mono text-xs font-semibold text-gray-500 hover:text-indigo-600 hover:underline truncate text-left">
                                     {{ invoice.invoice_number }}
-                                  </Link>
+                                  </button>
                                   <span class="px-1 py-0.5 rounded text-[9px] font-semibold shrink-0 select-none inline-flex items-center gap-0.5"
                                     :class="[docBadgeClass(invoice.document_status), !['frozen','carried'].includes(invoice.document_status) && invoice.payment_status !== 'paid' && !isPrepayMember(invoice) ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default']"
                                     @click.stop="toggleStatusMenu($event, invoice)">
@@ -621,10 +621,10 @@
                   ]">
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
-                      <Link :href="route('invoices.show', invoice.id) + '?back=' + encodeURIComponent($page.url)"
-                        class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate">
+                      <button @click="viewInvoice(invoice.id)"
+                        class="font-mono text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline truncate text-left">
                         {{ invoice.invoice_number }}
-                      </Link>
+                      </button>
                     </div>
                     <!-- Status track: 3 kolom eksplisit -->
                     <div class="flex items-center gap-2.5 flex-wrap mt-1.5">
@@ -983,9 +983,10 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import SendEmailModal from '@/Components/SendEmailModal.vue';
-import { Link, router } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from 'vue';
 import Swal from 'sweetalert2';
+import { useSecurityGate } from '@/Composables/useSecurityGate';
 
 const props = defineProps({
   client:         Object,
@@ -993,6 +994,21 @@ const props = defineProps({
   highlight:      { type: Number, default: null },
   emailTemplates: { type: Array, default: () => [] },
 });
+
+const page = usePage()
+const { requireGate } = useSecurityGate()
+
+async function viewInvoice(invoiceId) {
+  const passed = await requireGate()
+  if (!passed) return
+  router.visit(route('invoices.show', invoiceId) + '?back=' + encodeURIComponent(page.url))
+}
+
+async function createInvoice() {
+  const passed = await requireGate()
+  if (!passed) return
+  router.visit(route('invoices.create', { client_id: props.client.id }))
+}
 
 // ── Tabs ────────────────────────────────────────────────────
 const activeTab      = ref(0)

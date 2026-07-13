@@ -24,7 +24,7 @@
             </svg>
             Reset
           </button>
-          <button @click="showExport = true"
+          <button @click="openExport"
             class="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-50 transition-colors">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -32,13 +32,13 @@
             </svg>
             Export
           </button>
-          <Link :href="route('invoices.create')"
+          <button @click="goCreateInvoice()"
             class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
             Buat Invoice
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -270,20 +270,20 @@
 
           <!-- Actions -->
           <div class="mt-auto border-t border-gray-50 px-4 py-3 flex items-center gap-2">
-            <Link :href="route('invoices.create', { client_id: client.id })"
+            <button @click="goCreateInvoice(client.id)"
               class="flex items-center justify-center gap-1.5 flex-1 text-[11px] px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors font-semibold">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
               </svg>
               Buat Invoice
-            </Link>
-            <Link :href="route('invoices.client', client.id)"
+            </button>
+            <button @click="goViewClient(client.id)"
               class="flex items-center justify-center gap-1.5 flex-1 text-[11px] px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors font-semibold">
               Lihat Invoice
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
               </svg>
-            </Link>
+            </button>
           </div>
 
         </div>
@@ -414,8 +414,29 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import { useSecurityGate } from '@/Composables/useSecurityGate'
 
 const props = defineProps({ clients: Array, summary: Object })
+
+const { requireGate } = useSecurityGate()
+
+async function goCreateInvoice(clientId = null) {
+  const passed = await requireGate()
+  if (!passed) return
+  router.visit(clientId ? route('invoices.create', { client_id: clientId }) : route('invoices.create'))
+}
+
+async function goViewClient(clientId) {
+  const passed = await requireGate()
+  if (!passed) return
+  router.visit(route('invoices.client', clientId))
+}
+
+async function openExport() {
+  const passed = await requireGate()
+  if (!passed) return
+  showExport.value = true
+}
 
 const search      = ref('')
 const statusFilter = ref('all')

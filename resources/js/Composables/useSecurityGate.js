@@ -55,7 +55,22 @@ export function useSecurityGate() {
     const has2fa = computed(() => !!page.props.auth?.user?.has_2fa)
 
     function requireGate() {
-        if (bypassActive.value) return Promise.resolve(true)
+        if (bypassActive.value) {
+            return new Promise(resolve => {
+                gateState.isOpen       = true
+                gateState.isSuccess    = false
+                gateState.isLoading    = false
+                gateState.credential   = ''
+                gateState.errorMessage = ''
+                // Biarkan card spring-in dulu, baru tampilkan success state
+                setTimeout(() => { gateState.isSuccess = true }, 80)
+                setTimeout(() => {
+                    gateState.isOpen    = false
+                    gateState.isSuccess = false
+                    resolve(true)
+                }, 1500)
+            })
+        }
 
         return new Promise(resolve => {
             gateState._resolve     = resolve

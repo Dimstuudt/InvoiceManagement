@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientCategory;
+use App\Models\ClientEmail;
 use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -130,6 +131,13 @@ class ClientController extends Controller
         return redirect()->route('clients.index')->with('success', 'Client berhasil diupdate.');
     }
 
+    public function toggleEmail(Client $client, ClientEmail $email)
+    {
+        abort_if($email->client_id !== $client->id, 403);
+        $email->update(['is_active' => !$email->is_active]);
+        return back();
+    }
+
     public function destroy(Client $client)
     {
         ActivityLogger::log('client.deleted', $client);
@@ -143,12 +151,25 @@ class ClientController extends Controller
         return redirect()->route('clients.index')->with('success', 'Client berhasil dihapus.');
     }
 
+    private function normalizePhone(string $raw): string
+    {
+        $digits = preg_replace('/[^\d]/', '', $raw);
+        if ($digits === '') return '';
+        if (str_starts_with($digits, '62'))  return $digits;
+        if (str_starts_with($digits, '0'))   return '62' . substr($digits, 1);
+        if (str_starts_with($digits, '8'))   return '62' . $digits;
+        return $digits;
+    }
+
     private function syncPhones(Client $client, array $phones): void
     {
         $client->phones()->delete();
         $filtered = array_values(array_filter($phones, fn($p) => trim($p) !== ''));
         foreach ($filtered as $phone) {
-            $client->phones()->create(['phone_number' => trim($phone)]);
+            $normalized = $this->normalizePhone(trim($phone));
+            if ($normalized !== '') {
+                $client->phones()->create(['phone_number' => $normalized]);
+            }
         }
     }
 

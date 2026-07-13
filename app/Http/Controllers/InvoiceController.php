@@ -210,7 +210,7 @@ class InvoiceController extends Controller
 
     public function clientInvoices(Client $client, Request $request)
     {
-        $client->load('category', 'emails');
+        $client->load('category', 'emails', 'phones', 'socialMedia');
 
         $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user', 'emailTemplateGroup'])
             ->withSum('items', 'amount')
@@ -220,9 +220,10 @@ class InvoiceController extends Controller
             ->get();
 
         return Inertia::render('Invoices/ClientInvoices', [
-            'client'    => $client->toArray(),
-            'invoices'  => $invoices,
-            'highlight' => $request->integer('highlight') ?: null,
+            'client'         => $client->toArray(),
+            'invoices'       => $invoices,
+            'highlight'      => $request->integer('highlight') ?: null,
+            'emailTemplates' => EmailTemplateGroup::orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }
 

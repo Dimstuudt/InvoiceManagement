@@ -7,5 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class ClientEmail extends Model
 {
     public $timestamps = false;
-    protected $fillable = ['client_id', 'email'];
+    protected $fillable = ['client_id', 'email', 'is_active'];
+    protected $casts    = ['is_active' => 'boolean'];
 }

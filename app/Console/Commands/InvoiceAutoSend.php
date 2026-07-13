@@ -55,7 +55,7 @@ class InvoiceAutoSend extends Command
                 continue;
             }
 
-            $emails = $invoice->client->emails->pluck('email')->toArray();
+            $emails = $invoice->client->emails->where('is_active', true)->pluck('email')->toArray();
 
             if (empty($emails)) {
                 $details[] = [
@@ -158,7 +158,7 @@ class InvoiceAutoSend extends Command
             ->get();
 
         foreach ($paidCandidates as $invoice) {
-            $emails = $invoice->client->emails->pluck('email')->toArray();
+            $emails = $invoice->client->emails->where('is_active', true)->pluck('email')->toArray();
 
             if (empty($emails)) {
                 $invoice->update(['receipt_sent_at' => now()]);

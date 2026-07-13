@@ -71,6 +71,7 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::resource('clients', ClientController::class)->except(['show']);
+        Route::patch('clients/{client}/emails/{email}/toggle', [ClientController::class, 'toggleEmail'])->name('clients.email.toggle');
 
         Route::get('spk', [SpkController::class, 'index'])->name('spk.index');
         Route::get('spk/create', [SpkController::class, 'create'])->name('spk.create');

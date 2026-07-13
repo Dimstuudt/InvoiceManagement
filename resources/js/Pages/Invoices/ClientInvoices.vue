@@ -49,9 +49,9 @@
                 <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">PIC</p>
                 <p class="text-sm text-gray-700 mt-0.5">{{ client.pic }}</p>
               </div>
-              <div v-if="client.emails?.length > 0">
-                <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Email</p>
-                <p class="text-sm text-gray-700 mt-0.5">{{ client.emails.map(e => e.email).join(' · ') }}</p>
+              <div v-if="client.director">
+                <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Direktur</p>
+                <p class="text-sm text-gray-700 mt-0.5">{{ client.director }}</p>
               </div>
               <div v-if="client.address">
                 <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Alamat</p>
@@ -59,6 +59,78 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Contact Card -->
+      <div v-if="client.emails?.length > 0 || client.phones?.length > 0 || client.social_media?.length > 0"
+        class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Kontak</p>
+        </div>
+        <div class="p-5 grid grid-cols-1 sm:grid-cols-3 gap-5 divide-y sm:divide-y-0 sm:divide-x divide-gray-50">
+
+          <!-- Email -->
+          <div v-if="client.emails?.length > 0">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
+              Email
+              <span class="ml-1.5 text-[9px] font-normal text-gray-300 normal-case tracking-normal">
+                · klik untuk on/off auto-send
+              </span>
+            </p>
+            <div class="space-y-1.5">
+              <button v-for="em in client.emails" :key="em.id"
+                @click="toggleEmail(em)"
+                :title="em.is_active ? 'Nonaktifkan dari auto-send' : 'Aktifkan kembali untuk auto-send'"
+                class="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                :class="em.is_active
+                  ? 'bg-emerald-50 border-emerald-100 text-emerald-800 hover:border-emerald-300'
+                  : 'bg-gray-50 border-gray-100 text-gray-400 hover:border-gray-200'">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0"
+                  :class="em.is_active ? 'bg-emerald-400' : 'bg-gray-300'"/>
+                <span :class="{ 'line-through opacity-60': !em.is_active }">{{ em.email }}</span>
+                <span v-if="!em.is_active" class="ml-auto text-[10px] text-gray-300 shrink-0">off</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Telepon -->
+          <div v-if="client.phones?.length > 0" class="pt-4 sm:pt-0 sm:pl-5">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">Telepon</p>
+            <div class="space-y-1.5">
+              <a v-for="ph in client.phones" :key="ph.id"
+                :href="`https://wa.me/${ph.phone_number}`" target="_blank"
+                class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-100 hover:bg-emerald-50 hover:border-emerald-100 transition-all group">
+                <svg class="w-3 h-3 text-gray-300 group-hover:text-emerald-500 shrink-0 transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.556 4.112 1.527 5.84L0 24l6.324-1.508A11.932 11.932 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 01-5.012-1.374l-.36-.214-3.752.894.953-3.655-.234-.376A9.807 9.807 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                </svg>
+                <span class="text-xs font-mono text-gray-700 group-hover:text-emerald-700 transition-colors">
+                  {{ ph.phone_number }}
+                </span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Social Media -->
+          <div v-if="client.social_media?.length > 0" class="pt-4 sm:pt-0 sm:pl-5">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">Social Media</p>
+            <div class="space-y-1.5">
+              <a v-for="sm in client.social_media" :key="sm.id"
+                :href="sm.url" target="_blank"
+                class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-100 hover:bg-indigo-50 hover:border-indigo-100 transition-all group">
+                <svg class="w-3 h-3 text-gray-300 group-hover:text-indigo-500 shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+                <span class="text-xs text-gray-600 group-hover:text-indigo-600 truncate transition-colors">{{ sm.url }}</span>
+              </a>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -716,6 +788,25 @@
           </button>
         </template>
 
+        <!-- Kirim Email -->
+        <template v-if="menuInvoice.document_status === 'verified' && menuInvoice.payment_status !== 'paid'">
+          <div class="border-t border-gray-50 mt-1">
+            <div class="px-3 pt-2 pb-0.5">
+              <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Email</p>
+            </div>
+            <button @click="openSendEmail(menuInvoice); activeMenu = null"
+              class="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors text-left">
+              <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+              Kirim Email
+              <span v-if="client.emails?.length > 1" class="ml-auto text-[10px] text-indigo-400 font-medium">
+                {{ client.emails.length }} email
+              </span>
+            </button>
+          </div>
+        </template>
+
         <!-- Dokumen section -->
         <div class="border-t border-gray-50 mt-1">
           <div class="px-3 pt-2 pb-0.5">
@@ -853,6 +944,14 @@
       </div>
     </Teleport>
 
+    <!-- Send Email Modal -->
+    <SendEmailModal
+      :show="showSendModal"
+      :invoice="sendModalInvoice"
+      :client-emails="client.emails?.map(e => e.email) ?? []"
+      :email-templates="emailTemplates"
+      @close="showSendModal = false"/>
+
     <!-- Status quick-change dropdown -->
     <Teleport to="body">
       <div v-if="activeStatusMenu !== null"
@@ -883,11 +982,17 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import SendEmailModal from '@/Components/SendEmailModal.vue';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from 'vue';
 import Swal from 'sweetalert2';
 
-const props = defineProps({ client: Object, invoices: Array, highlight: { type: Number, default: null } });
+const props = defineProps({
+  client:         Object,
+  invoices:       Array,
+  highlight:      { type: Number, default: null },
+  emailTemplates: { type: Array, default: () => [] },
+});
 
 // ── Tabs ────────────────────────────────────────────────────
 const activeTab      = ref(0)
@@ -896,7 +1001,9 @@ const tipsOpen      = ref(false)
 const activeInvoice = (group) => group.invoices[0] ?? null
 
 // ── Menu / Modal state ──────────────────────────────────────
-const receiptUrl  = ref(null);
+const receiptUrl      = ref(null);
+const showSendModal   = ref(false);
+const sendModalInvoice = ref(null);
 const activeMenu  = ref(null);
 const menuInvoice = ref(null);
 const menuPosition = ref({ top: 0, right: 0 });
@@ -994,6 +1101,24 @@ onMounted(() => {
 onUnmounted(() => document.removeEventListener('click', closeAll));
 
 function openReceipt(invoice) { receiptUrl.value = route('invoices.receipt', invoice.id); }
+
+function toggleEmail(em) {
+  router.patch(route('clients.email.toggle', { client: props.client.id, email: em.id }), {}, {
+    preserveScroll: true,
+    preserveState: false,
+  })
+}
+
+function openSendEmail(invoice) {
+  sendModalInvoice.value = {
+    ...invoice,
+    client:         props.client,
+    project_category: invoice.projectCategory ?? null,
+    document_issuer:  invoice.documentIssuer ?? null,
+    bank_account:     invoice.bankAccount ?? null,
+  }
+  showSendModal.value = true
+}
 
 // ── Grouping logic ──────────────────────────────────────────
 function getDescendants(parentId) {

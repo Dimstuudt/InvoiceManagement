@@ -247,6 +247,173 @@
 
         <div class="ml-auto flex items-center gap-2 flex-shrink-0">
 
+          <!-- ── Bell Notification ── -->
+          <div class="relative" ref="notifRef">
+            <button @click="toggleNotif"
+              class="relative p-1.5 rounded-lg transition-colors"
+              :class="notifOpen ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+              </svg>
+              <span v-if="$page.props.notifCount > 0"
+                class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none">
+                {{ $page.props.notifCount > 99 ? '99+' : $page.props.notifCount }}
+              </span>
+            </button>
+
+            <!-- Dropdown panel -->
+            <Transition name="notif-drop">
+              <div v-if="notifOpen"
+                class="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-[100]">
+
+                <!-- Header -->
+                <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <p class="text-sm font-bold text-gray-900">Notifikasi</p>
+                  <span v-if="notifData"
+                    class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    :class="notifData.total > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'">
+                    {{ notifData.total > 0 ? notifData.total + ' perlu perhatian' : 'Semua aman' }}
+                  </span>
+                </div>
+
+                <!-- Loading -->
+                <div v-if="notifLoading" class="py-10 flex flex-col items-center gap-2">
+                  <svg class="w-5 h-5 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  <p class="text-xs text-gray-400">Memuat...</p>
+                </div>
+
+                <!-- Empty -->
+                <div v-else-if="notifData && notifData.total === 0"
+                  class="py-10 flex flex-col items-center gap-2 text-center px-4">
+                  <div class="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+                  <p class="text-sm font-medium text-gray-500">Semua invoice aman</p>
+                  <p class="text-xs text-gray-400">Tidak ada yang overdue, mendekati jatuh tempo, atau draft belum diverifikasi</p>
+                </div>
+
+                <!-- List -->
+                <div v-else-if="notifData" class="max-h-80 overflow-y-auto divide-y divide-gray-50">
+
+                  <!-- Overdue -->
+                  <template v-if="notifData.overdue.length > 0">
+                    <div class="px-4 py-2 bg-red-50/60 sticky top-0">
+                      <p class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"/>
+                        Overdue · {{ notifData.overdue.length }}
+                      </p>
+                    </div>
+                    <button v-for="n in notifData.overdue" :key="n.id"
+                      @click="goToInvoice(n)"
+                      class="w-full flex items-start gap-3 px-4 py-3 hover:bg-red-50/50 transition-colors text-left">
+                      <div class="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-gray-800 truncate">{{ n.client_name }}</p>
+                        <p class="text-[10px] font-mono text-red-500 mt-0.5">{{ n.invoice_number }}</p>
+                        <p class="text-[10px] text-red-400 mt-0.5 font-medium">{{ n.days_overdue }} hari lewat jatuh tempo</p>
+                      </div>
+                    </button>
+                  </template>
+
+                  <!-- Due today -->
+                  <template v-if="notifData.due_today.length > 0">
+                    <div class="px-4 py-2 bg-orange-50/60 sticky top-0">
+                      <p class="text-[10px] font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-orange-400"/>
+                        Jatuh Tempo Hari Ini · {{ notifData.due_today.length }}
+                      </p>
+                    </div>
+                    <button v-for="n in notifData.due_today" :key="n.id"
+                      @click="goToInvoice(n)"
+                      class="w-full flex items-start gap-3 px-4 py-3 hover:bg-orange-50/50 transition-colors text-left">
+                      <div class="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-gray-800 truncate">{{ n.client_name }}</p>
+                        <p class="text-[10px] font-mono text-orange-500 mt-0.5">{{ n.invoice_number }}</p>
+                        <p class="text-[10px] text-orange-400 mt-0.5 font-medium">Jatuh tempo hari ini</p>
+                      </div>
+                    </button>
+                  </template>
+
+                  <!-- Due soon -->
+                  <template v-if="notifData.due_soon.length > 0">
+                    <div class="px-4 py-2 bg-amber-50/60 sticky top-0">
+                      <p class="text-[10px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"/>
+                        Segera Jatuh Tempo · {{ notifData.due_soon.length }}
+                      </p>
+                    </div>
+                    <button v-for="n in notifData.due_soon" :key="n.id"
+                      @click="goToInvoice(n)"
+                      class="w-full flex items-start gap-3 px-4 py-3 hover:bg-amber-50/50 transition-colors text-left">
+                      <div class="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-gray-800 truncate">{{ n.client_name }}</p>
+                        <p class="text-[10px] font-mono text-amber-600 mt-0.5">{{ n.invoice_number }}</p>
+                        <p class="text-[10px] text-amber-500 mt-0.5 font-medium">{{ n.days_until }} hari lagi</p>
+                      </div>
+                    </button>
+                  </template>
+
+                  <!-- Draft belum diverifikasi -->
+                  <template v-if="notifData.draft_unverified?.length > 0">
+                    <div class="px-4 py-2 bg-blue-50/60 sticky top-0">
+                      <p class="text-[10px] font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-400"/>
+                        Draft Belum Diverifikasi · {{ notifData.draft_unverified.length }}
+                      </p>
+                    </div>
+                    <button v-for="n in notifData.draft_unverified" :key="'d'+n.id"
+                      @click="goToInvoice(n)"
+                      class="w-full flex items-start gap-3 px-4 py-3 hover:bg-blue-50/50 transition-colors text-left">
+                      <div class="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-gray-800 truncate">{{ n.client_name }}</p>
+                        <p class="text-[10px] font-mono text-blue-500 mt-0.5">{{ n.invoice_number }}</p>
+                        <p v-if="n.days_until_issue < 0" class="text-[10px] text-blue-400 mt-0.5 font-medium">
+                          Issue date lewat {{ Math.abs(n.days_until_issue) }} hari lalu
+                        </p>
+                        <p v-else-if="n.days_until_issue === 0" class="text-[10px] text-blue-400 mt-0.5 font-medium">
+                          Issue date hari ini — segera verifikasi
+                        </p>
+                        <p v-else class="text-[10px] text-blue-400 mt-0.5 font-medium">
+                          Issue date {{ n.days_until_issue }} hari lagi
+                        </p>
+                      </div>
+                    </button>
+                  </template>
+                </div>
+
+                <!-- Footer -->
+                <div v-if="notifData && notifData.total > 0"
+                  class="px-4 py-2.5 border-t border-gray-100 bg-gray-50/50">
+                  <p class="text-[10px] text-gray-400 text-center">Klik item untuk ke halaman invoice</p>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
           <!-- Bypass active indicator -->
           <div v-if="bypassActive"
             class="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 pl-2.5 pr-1 py-1 rounded-full text-xs font-semibold">
@@ -287,7 +454,7 @@
   <Transition name="bypass-overlay">
     <div v-if="showBypassModal" class="fixed inset-0 z-[200] overflow-y-auto">
       <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm"
-           @click="!isActivatingBypass && !bypassSuccess && (showBypassModal = false)"></div>
+           @click="!isActivatingBypass && !bypassSuccess && closeBypassModal()"></div>
       <div class="flex min-h-full items-center justify-center p-4">
         <Transition name="bypass-card" appear>
           <div v-if="showBypassModal"
@@ -328,7 +495,7 @@
                       <p class="text-xs text-gray-400 mt-0.5">Lewati gate selama durasi yang dipilih</p>
                     </div>
                   </div>
-                  <button v-if="!isActivatingBypass" @click="showBypassModal = false"
+                  <button v-if="!isActivatingBypass" @click="closeBypassModal()"
                     class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -408,7 +575,7 @@
               </div>
 
               <div class="px-6 pb-6 flex gap-3">
-                <button @click="showBypassModal = false"
+                <button @click="closeBypassModal()"
                   :disabled="isActivatingBypass"
                   class="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-50">
                   Batal
@@ -472,6 +639,55 @@ defineProps({ title: { type: String, default: '' } });
 const page        = usePage();
 const sidebarOpen = ref(false);
 
+// ── Notification bell ─────────────────────────────────────────────────────────
+const notifRef      = ref(null)
+const notifOpen     = ref(false)
+const notifLoading  = ref(false)
+const notifData     = ref(null)
+const notifPendingNav = ref(null)
+
+async function fetchNotif() {
+  notifLoading.value = true
+  try {
+    const { data } = await axios.get(route('notifications.index'))
+    notifData.value = data
+  } finally {
+    notifLoading.value = false
+  }
+}
+
+function toggleNotif() {
+  notifOpen.value = !notifOpen.value
+  if (notifOpen.value && !notifData.value) fetchNotif()
+}
+
+function goToInvoice(n) {
+  notifOpen.value = false
+  const dest = route('invoices.client', n.client_id) + '?highlight=' + n.id
+  if (bypassActive.value) {
+    router.visit(dest)
+  } else {
+    notifPendingNav.value = dest
+    openBypassModal()
+  }
+}
+
+function handleNotifOutside(e) {
+  if (notifRef.value && !notifRef.value.contains(e.target)) {
+    notifOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleNotifOutside)
+  // refresh count setiap 60 detik
+  const interval = setInterval(() => {
+    if (notifOpen.value) fetchNotif()
+  }, 60000)
+  onBeforeUnmount(() => clearInterval(interval))
+})
+onBeforeUnmount(() => document.removeEventListener('mousedown', handleNotifOutside))
+
 // ── Toast system ─────────────────────────────────────────────────────────────
 const toasts   = ref([])
 let   _toastId = 0
@@ -526,10 +742,15 @@ onBeforeUnmount(() => clearInterval(_bypassInterval))
 watch(bypassExpiresAt, updateBypassTimer)
 
 function openBypassModal() {
-  bypassPassword.value = ''
-  bypassOtp.value      = ''
-  bypassMinutes.value  = 30
+  bypassPassword.value  = ''
+  bypassOtp.value       = ''
+  bypassMinutes.value   = 30
   showBypassModal.value = true
+}
+
+function closeBypassModal() {
+  showBypassModal.value = false
+  notifPendingNav.value = null
 }
 
 async function submitActivateBypass() {
@@ -546,7 +767,13 @@ async function submitActivateBypass() {
     setTimeout(() => {
       showBypassModal.value = false
       bypassSuccess.value   = false
-      router.reload()
+      if (notifPendingNav.value) {
+        const dest = notifPendingNav.value
+        notifPendingNav.value = null
+        router.visit(dest)
+      } else {
+        router.reload()
+      }
     }, 1500)
   } catch (e) {
     isActivatingBypass.value = false
@@ -622,6 +849,12 @@ function navClass(routeUrl, exclude = []) {
 .fade-overlay-leave-active { transition: opacity 0.25s ease; }
 .fade-overlay-enter-from,
 .fade-overlay-leave-to     { opacity: 0; }
+
+/* Notification dropdown */
+.notif-drop-enter-active { transition: opacity 0.15s ease, transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+.notif-drop-leave-active { transition: opacity 0.1s ease, transform 0.1s ease; }
+.notif-drop-enter-from   { opacity: 0; transform: translateY(-6px) scale(0.97); }
+.notif-drop-leave-to     { opacity: 0; transform: translateY(-4px) scale(0.98); }
 
 /* Bypass modal backdrop */
 .bypass-overlay-enter-active,

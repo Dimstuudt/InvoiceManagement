@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\NotificationController;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -47,6 +48,7 @@ class HandleInertiaRequests extends Middleware
                     'has_2fa'    => !empty($request->user()->google2fa_secret),
                 ] : null,
             ],
+            'notifCount'      => $request->user() ? NotificationController::pendingCount() : 0,
             'bypassExpiresAt' => session('security_bypass_expires_at'),
             'flash' => [
                 'success'   => session('success'),

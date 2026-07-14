@@ -868,8 +868,11 @@ class InvoiceController extends Controller
             'body'     => 'required|string',
         ]);
 
-        $invoice->load(['client', 'projectCategory', 'documentIssuer',
+        $invoice->load(['client', 'projectCategory', 'documentIssuer.senderDomain',
                         'bankAccount', 'signature', 'items', 'user', 'carriedFrom.items']);
+
+        $senderName  = $invoice->documentIssuer?->senderDomain?->display_name  ?? config('services.brevo.sender_name');
+        $senderEmail = $invoice->documentIssuer?->senderDomain?->sender_email   ?? config('services.brevo.sender_email');
 
         $html = view('invoices.pdf', [
             'invoice' => $invoice,
@@ -886,8 +889,8 @@ class InvoiceController extends Controller
             'Content-Type' => 'application/json',
         ])->post('https://api.brevo.com/v3/smtp/email', [
             'sender'      => [
-                'name'  => config('services.brevo.sender_name'),
-                'email' => config('services.brevo.sender_email'),
+                'name'  => $senderName,
+                'email' => $senderEmail,
             ],
             'to'          => $toList,
             'subject'     => $validated['subject'],

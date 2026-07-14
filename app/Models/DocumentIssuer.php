@@ -7,7 +7,12 @@ use Illuminate\Support\Facades\Storage;
 
 class DocumentIssuer extends Model
 {
-    protected $fillable = ['name', 'header_image', 'tax_id_name', 'tax_id_address', 'tax_id_number'];
+    protected $fillable = ['name', 'header_image', 'tax_id_name', 'tax_id_address', 'tax_id_number', 'sender_domain_id'];
+
+    public function senderDomain()
+    {
+        return $this->belongsTo(SenderDomain::class);
+    }
     protected $appends  = ['header_image_url'];
 
     public function getHeaderImageUrlAttribute(): ?string

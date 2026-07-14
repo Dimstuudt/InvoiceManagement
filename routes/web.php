@@ -12,6 +12,7 @@ use App\Http\Controllers\Master\DocumentIssuerController;
 use App\Http\Controllers\Master\EmailTemplateGroupController;
 use App\Http\Controllers\Master\CompanyController;
 use App\Http\Controllers\Master\ProjectCategoryController;
+use App\Http\Controllers\Master\SenderDomainController;
 use App\Http\Controllers\Master\SignatureController;
 use App\Http\Controllers\TwoFactorController;
 use App\Http\Controllers\UserController;
@@ -136,6 +137,7 @@ Route::middleware('auth')->group(function () {
             Route::resource('project-categories', ProjectCategoryController::class)->except(['show']);
             Route::resource('document-issuers', DocumentIssuerController::class)->except(['show']);
             Route::resource('bank-accounts', BankAccountController::class)->except(['show']);
+            Route::resource('sender-domains', SenderDomainController::class)->except(['show', 'create', 'edit']);
             Route::resource('signatures', SignatureController::class)->except(['show']);
             Route::get('email-template-groups/preview-wrapper/{type}', [EmailTemplateGroupController::class, 'previewWrapper'])->name('email-template-groups.preview-wrapper');
             Route::resource('email-template-groups', EmailTemplateGroupController::class)->except(['show']);

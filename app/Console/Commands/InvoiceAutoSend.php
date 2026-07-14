@@ -37,7 +37,7 @@ class InvoiceAutoSend extends Command
         // Ambil semua invoice yang perlu dicek:
         // verified + unpaid + tidak frozen/carried + issue_date sudah lewat atau hari ini
         $candidates = Invoice::with([
-                'client.emails', 'projectCategory', 'documentIssuer',
+                'client.emails', 'projectCategory', 'documentIssuer.senderDomain',
                 'bankAccount', 'signature', 'items',
                 'user.notificationEmails',
                 'emailTemplateGroup', 'carriedFrom.items',
@@ -96,10 +96,13 @@ class InvoiceAutoSend extends Command
                 $filename  = str_replace('/', '-', $invoice->invoice_number) . '.pdf';
                 $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
+                $senderName  = $invoice->documentIssuer?->senderDomain?->display_name  ?? config('services.brevo.sender_name');
+                $senderEmail = $invoice->documentIssuer?->senderDomain?->sender_email   ?? config('services.brevo.sender_email');
+
                 $payload = [
                     'sender'      => [
-                        'name'  => config('services.brevo.sender_name'),
-                        'email' => config('services.brevo.sender_email'),
+                        'name'  => $senderName,
+                        'email' => $senderEmail,
                     ],
                     'to'          => $toList,
                     'subject'     => $subject,
@@ -158,7 +161,7 @@ class InvoiceAutoSend extends Command
 
         // ── Loop 2: Kirim receipt ke invoice yang baru lunas ──────────────────
         $paidCandidates = Invoice::with([
-                'client.emails', 'projectCategory', 'documentIssuer',
+                'client.emails', 'projectCategory', 'documentIssuer.senderDomain',
                 'bankAccount', 'signature', 'items',
                 'user.notificationEmails',
                 'emailTemplateGroup', 'carriedFrom.items',
@@ -212,10 +215,13 @@ class InvoiceAutoSend extends Command
                 $filename  = 'RCP-' . str_replace('/', '-', $invoice->invoice_number) . '.pdf';
                 $htmlEmail = view('emails.wrapper', ['invoice' => $invoice, 'body' => $body, 'filename' => $filename])->render();
 
+                $senderName  = $invoice->documentIssuer?->senderDomain?->display_name  ?? config('services.brevo.sender_name');
+                $senderEmail = $invoice->documentIssuer?->senderDomain?->sender_email   ?? config('services.brevo.sender_email');
+
                 $payload = [
                     'sender'      => [
-                        'name'  => config('services.brevo.sender_name'),
-                        'email' => config('services.brevo.sender_email'),
+                        'name'  => $senderName,
+                        'email' => $senderEmail,
                     ],
                     'to'          => $toList,
                     'subject'     => $subject,

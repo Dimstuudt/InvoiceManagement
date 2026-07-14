@@ -40,6 +40,22 @@
               <ImageUpload :error="form.errors.header_image" @change="form.header_image = $event" />
             </div>
 
+            <!-- Sender Domain -->
+            <div class="border-t border-gray-100 pt-6">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Email Pengirim</p>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Sender Domain</label>
+                <select v-model="form.sender_domain_id"
+                  class="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+                  <option :value="null">— Gunakan default dari .env —</option>
+                  <option v-for="sd in senderDomains" :key="sd.id" :value="sd.id">
+                    {{ sd.display_name }} &lt;{{ sd.sender_email }}&gt;
+                  </option>
+                </select>
+                <p class="mt-1.5 text-xs text-gray-400">Kosong = pakai sender default dari konfigurasi server</p>
+              </div>
+            </div>
+
             <!-- Divider -->
             <div class="border-t border-gray-100 pt-6">
               <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Informasi Pajak</p>
@@ -97,6 +113,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import ImageUpload from '@/Components/ImageUpload.vue';
 import { Link, useForm } from '@inertiajs/vue3';
 
-const form = useForm({ name: '', header_image: null, tax_id_name: '', tax_id_address: '', tax_id_number: '' });
+defineProps({ senderDomains: Array });
+const form = useForm({ name: '', header_image: null, tax_id_name: '', tax_id_address: '', tax_id_number: '', sender_domain_id: null });
 function submit() { form.post(route('master.document-issuers.store')); }
 </script>

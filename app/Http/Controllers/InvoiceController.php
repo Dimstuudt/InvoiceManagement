@@ -75,19 +75,27 @@ class InvoiceController extends Controller
 
     public function index()
     {
+        $userId = auth()->id();
+
         $clients = Client::where('is_active', true)
             ->with(['category', 'invoices' => fn($q) => $q->with('items')])
             ->withCount([
-                'invoices as draft_count'   => fn($q) => $q->where('document_status', 'draft'),
-                'invoices as sent_count'    => fn($q) => $q->where('document_status', 'verified')->where('payment_status', 'unpaid'),
-                'invoices as paid_count'    => fn($q) => $q->where('payment_status', 'paid'),
-                'invoices as unpaid_count'  => fn($q) => $q->where('payment_status', 'unpaid')->where('document_status', 'verified')->where('send_status', '!=', 'unsent'),
-                'invoices as frozen_count'  => fn($q) => $q->where('document_status', 'frozen'),
-                'invoices as overdue_count' => fn($q) => $q->where('payment_status', '!=', 'paid')->where('document_status', '!=', 'frozen')->where('due_date', '<', now()),
+                'invoices as draft_count'      => fn($q) => $q->where('document_status', 'draft'),
+                'invoices as sent_count'       => fn($q) => $q->where('document_status', 'verified')->where('payment_status', 'unpaid'),
+                'invoices as paid_count'       => fn($q) => $q->where('payment_status', 'paid'),
+                'invoices as unpaid_count'     => fn($q) => $q->where('payment_status', 'unpaid')->where('document_status', 'verified')->where('send_status', '!=', 'unsent'),
+                'invoices as frozen_count'     => fn($q) => $q->where('document_status', 'frozen'),
+                'invoices as overdue_count'    => fn($q) => $q->where('payment_status', '!=', 'paid')->where('document_status', '!=', 'frozen')->where('due_date', '<', now()),
+                'invoices as my_invoice_count' => fn($q) => $q->where('user_id', $userId),
             ])
             ->withMax('invoices', 'issue_date')
             ->orderBy('company_name')
-            ->get();
+            ->get()
+            ->sortBy([
+                fn($a, $b) => ($b->my_invoice_count > 0) <=> ($a->my_invoice_count > 0),
+                fn($a, $b) => strcmp($a->company_name, $b->company_name),
+            ])
+            ->values();
 
         $clients->each(function ($c) {
             $c->product_type_count = $c->invoices->pluck('project_category_id')->unique()->filter()->count();
@@ -117,7 +125,7 @@ class InvoiceController extends Controller
 
         $next = Carbon::create($year, $month, 1)->addMonth();
         $with = [
-            'client.emails', 'projectCategory', 'user', 'bankAccount', 'documentIssuer', 'emailTemplateGroup',
+            'client.emails', 'projectCategory.company', 'user', 'bankAccount', 'documentIssuer', 'emailTemplateGroup',
             'items',
             'carriedFrom.items', 'carriedFrom.carriedFrom.items',
             'reaktivasiChain.items',
@@ -212,7 +220,7 @@ class InvoiceController extends Controller
     {
         $client->load('category', 'emails', 'phones', 'socialMedia');
 
-        $invoices = Invoice::with(['projectCategory', 'documentIssuer', 'user', 'emailTemplateGroup'])
+        $invoices = Invoice::with(['projectCategory.company', 'documentIssuer', 'user', 'emailTemplateGroup'])
             ->withSum('items', 'amount')
             ->withSum('items', 'discount')
             ->where('client_id', $client->id)
@@ -297,6 +305,7 @@ class InvoiceController extends Controller
             fn($s) => in_array($s, ['draft', 'verified', 'paid', 'frozen', 'carried'])
         ));
         $clientId    = $request->integer('client_id', 0);
+        $companyId   = $request->integer('company_id', 0);
         $overdueOnly = $request->boolean('overdue_only');
         $verifiedOnly = $request->boolean('is_marked'); // is_marked sekarang = verified
 
@@ -328,10 +337,11 @@ class InvoiceController extends Controller
             ->pluck('m')
             ->values();
 
-        $clients = Client::orderBy('company_name')->get(['id', 'company_name']);
+        $clients   = Client::orderBy('company_name')->get(['id', 'company_name']);
+        $companies = \App\Models\Company::orderBy('name')->get(['id', 'name', 'code']);
 
         $query = Invoice::with([
-                'client', 'projectCategory', 'items',
+                'client', 'projectCategory.company', 'items',
                 'carriedFrom.items',
                 'carriedFrom.carriedFrom.items',
                 'prepayChain.items',
@@ -342,6 +352,7 @@ class InvoiceController extends Controller
             ->where('is_demo', false)
             ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
             ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
+            ->when($companyId > 0, fn($q) => $q->whereHas('projectCategory', fn($inner) => $inner->where('company_id', $companyId)))
             ->when($verifiedOnly, fn($q) => $q->where('document_status', 'verified'));
 
         $query = $this->applyStatusFilter($query, $statuses);
@@ -390,9 +401,11 @@ class InvoiceController extends Controller
             'nextSeq'         => $nextSeq,
             'summary'         => $summary,
             'clients'         => $clients,
+            'companies'       => $companies,
             'filters'         => [
                 'statuses'    => $statuses,
                 'client_id'   => $clientId ?: null,
+                'company_id'  => $companyId ?: null,
                 'overdue_only'=> $overdueOnly,
                 'is_marked'   => $verifiedOnly,
             ],

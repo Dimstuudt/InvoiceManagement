@@ -320,36 +320,73 @@
           <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
             <!-- Tab bar -->
-            <div class="flex overflow-x-auto border-b border-gray-100 scrollbar-none">
-
-              <!-- Recurring tabs -->
-              <button v-for="(group, i) in recurringGroups" :key="group.root.id"
-                @click="activeTab = i"
-                class="flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                :class="activeTab === i
-                  ? 'border-indigo-500 text-indigo-600 bg-indigo-50/60'
-                  : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
-                <span class="w-2 h-2 rounded-full shrink-0"
-                  :class="hasOverdue(group) ? 'bg-red-400' : (activeInvoice(group)?.payment_status !== 'paid' && activeInvoice(group)?.document_status === 'verified') ? 'bg-blue-400' : activeInvoice(group)?.payment_status === 'paid' ? 'bg-emerald-400' : 'bg-gray-300'"/>
-                {{ recurringTabLabels[i] }}
-                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                  :class="activeTab === i ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'">
-                  {{ group.invoices.length }}
-                </span>
+            <div class="relative border-b border-gray-100">
+              <!-- Left fade + arrow -->
+              <div v-if="tabCanScrollLeft"
+                class="absolute left-0 top-0 bottom-0 z-10 flex items-center pointer-events-none">
+                <div class="w-10 h-full bg-gradient-to-r from-white to-transparent"/>
+              </div>
+              <button v-if="tabCanScrollLeft"
+                @click="scrollTabs(-1)"
+                class="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 flex items-center justify-center bg-white border border-gray-200 rounded-full shadow-sm text-gray-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
               </button>
 
-              <!-- Mandiri tab (selalu paling kanan, hanya tampil kalau ada) -->
-              <button v-if="standaloneInvoices.length > 0"
-                @click="activeTab = recurringGroups.length"
-                class="flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                :class="activeTab === recurringGroups.length
-                  ? 'border-gray-500 text-gray-700 bg-gray-50/60'
-                  : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
-                Invoice Mandiri
-                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                  :class="activeTab === recurringGroups.length ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-400'">
-                  {{ standaloneInvoices.length }}
-                </span>
+              <!-- Scrollable tabs -->
+              <div ref="tabScrollEl" @scroll="onTabScroll"
+                class="flex overflow-x-auto scrollbar-none"
+                :class="tabCanScrollLeft ? 'pl-8' : ''"
+                :style="tabCanScrollRight ? 'padding-right: 2rem' : ''">
+
+                <!-- Recurring tabs -->
+                <button v-for="(group, i) in recurringGroups" :key="group.root.id"
+                  @click="activeTab = i"
+                  class="flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                  :class="activeTab === i
+                    ? 'border-indigo-500 text-indigo-600 bg-indigo-50/60'
+                    : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
+                  <span class="w-2 h-2 rounded-full shrink-0"
+                    :class="hasOverdue(group) ? 'bg-red-400' : (activeInvoice(group)?.payment_status !== 'paid' && activeInvoice(group)?.document_status === 'verified') ? 'bg-blue-400' : activeInvoice(group)?.payment_status === 'paid' ? 'bg-emerald-400' : 'bg-gray-300'"/>
+                  <span v-if="recurringTabLabels[i].companyCode"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[9px] font-bold leading-none"
+                    :class="activeTab === i ? 'bg-indigo-200 text-indigo-700' : 'bg-gray-200 text-gray-500'">
+                    {{ recurringTabLabels[i].companyCode }}
+                  </span>
+                  {{ recurringTabLabels[i].label }}
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                    :class="activeTab === i ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'">
+                    {{ group.invoices.length }}
+                  </span>
+                </button>
+
+                <!-- Mandiri tab (selalu paling kanan, hanya tampil kalau ada) -->
+                <button v-if="standaloneInvoices.length > 0"
+                  @click="activeTab = recurringGroups.length"
+                  class="flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                  :class="activeTab === recurringGroups.length
+                    ? 'border-gray-500 text-gray-700 bg-gray-50/60'
+                    : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'">
+                  Invoice Mandiri
+                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                    :class="activeTab === recurringGroups.length ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-400'">
+                    {{ standaloneInvoices.length }}
+                  </span>
+                </button>
+              </div>
+
+              <!-- Right fade + arrow -->
+              <div v-if="tabCanScrollRight"
+                class="absolute right-0 top-0 bottom-0 z-10 flex items-center pointer-events-none">
+                <div class="w-10 h-full bg-gradient-to-l from-white to-transparent"/>
+              </div>
+              <button v-if="tabCanScrollRight"
+                @click="scrollTabs(1)"
+                class="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 flex items-center justify-center bg-white border border-gray-200 rounded-full shadow-sm text-gray-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
               </button>
             </div>
 
@@ -668,7 +705,11 @@
                         lewat {{ daysPastDue(invoice) }} hari
                       </span>
                     </div>
-                    <p class="text-xs text-gray-400 mt-1">
+                    <p class="text-xs text-gray-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span v-if="invoice.project_category?.company"
+                        class="inline-flex items-center px-1.5 py-0.5 bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded font-mono leading-none">
+                        {{ invoice.project_category.company.code }}
+                      </span>
                       {{ invoice.project_category?.name ?? '—' }} &bull;
                       {{ fmtDateShort(invoice.issue_date) }} <span class="text-gray-300">→</span>
                       <span :class="isPastDue(invoice) ? 'text-red-500 font-medium' : ''">{{ fmtDateShort(invoice.due_date) }}</span>
@@ -998,6 +1039,30 @@ const props = defineProps({
 const page = usePage()
 const { requireGate } = useSecurityGate()
 
+// ── Tab scroll ────────────────────────────────────────────────
+const tabScrollEl       = ref(null)
+const tabCanScrollLeft  = ref(false)
+const tabCanScrollRight = ref(false)
+
+function onTabScroll() {
+  const el = tabScrollEl.value
+  if (!el) return
+  tabCanScrollLeft.value  = el.scrollLeft > 2
+  tabCanScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+}
+
+function scrollTabs(dir) {
+  const el = tabScrollEl.value
+  if (!el) return
+  el.scrollBy({ left: dir * 180, behavior: 'smooth' })
+}
+
+onMounted(() => nextTick(() => {
+  onTabScroll()
+  tabScrollEl.value?.addEventListener('scroll', onTabScroll, { passive: true })
+}))
+onUnmounted(() => tabScrollEl.value?.removeEventListener('scroll', onTabScroll))
+
 async function viewInvoice(invoiceId) {
   const passed = await requireGate()
   if (!passed) return
@@ -1169,11 +1234,13 @@ const recurringTabLabels = computed(() => {
   const seen = {}
   return recurringGroups.value.map(g => {
     const name = g.root.project_category?.name ?? '—'
+    const companyCode = g.root.project_category?.company?.code ?? null
+    let label = name
     if (count[name] > 1) {
       seen[name] = (seen[name] ?? 0) + 1
-      return `${name} (${seen[name]})`
+      label = `${name} (${seen[name]})`
     }
-    return name
+    return { label, companyCode }
   })
 })
 

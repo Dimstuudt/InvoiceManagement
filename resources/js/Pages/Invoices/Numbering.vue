@@ -144,6 +144,11 @@
               {{ clientName(filters.client_id) }}
               <button @click="removeClient" class="opacity-70 hover:opacity-100 leading-none">×</button>
             </span>
+            <span v-if="filters.company_id && companyName(filters.company_id)"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+              {{ companyName(filters.company_id) }}
+              <button @click="removeCompany" class="opacity-70 hover:opacity-100 leading-none">×</button>
+            </span>
             <span v-if="filters.overdue_only"
               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
               Overdue saja
@@ -258,6 +263,22 @@
             </select>
           </div>
 
+          <!-- Company dropdown -->
+          <div>
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+              </svg>
+              Perusahaan
+            </p>
+            <select v-model="form.company_id"
+              class="w-full max-w-xs text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              :class="form.company_id ? 'border-indigo-300 bg-indigo-50' : ''">
+              <option value="">Semua Perusahaan</option>
+              <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} — {{ c.name }}</option>
+            </select>
+          </div>
+
           <!-- Boolean toggles -->
           <div>
             <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -364,6 +385,10 @@
                   @click="inv.client?.id ? router.visit(route('invoices.client', inv.client.id) + '?highlight=' + inv.id) : router.visit(route('invoices.show', inv.id))">
                   <span class="text-xs font-mono text-indigo-600 hover:text-indigo-800 hover:underline bg-indigo-50 px-2 py-1 rounded-lg whitespace-nowrap transition-colors">
                     {{ inv.invoice_number }}
+                  </span>
+                  <span v-if="inv.project_category?.company"
+                    class="block mt-1 text-[10px] font-bold text-indigo-500 font-mono">
+                    {{ inv.project_category.company.code }}
                   </span>
                 </td>
 
@@ -518,6 +543,7 @@ const props = defineProps({
   nextSeq:         Number,
   summary:         Object,
   clients:         Array,
+  companies:       Array,
   filters:         Object,
 })
 
@@ -535,6 +561,7 @@ const showFilter = ref(false)
 const form = reactive({
   statuses:    [...(props.filters?.statuses ?? [])],
   client_id:   props.filters?.client_id ?? '',
+  company_id:  props.filters?.company_id ?? '',
   overdue_only: props.filters?.overdue_only ?? false,
   is_marked:   props.filters?.is_marked ?? false,
 })
@@ -542,6 +569,7 @@ const form = reactive({
 const activeFilterCount = computed(() => {
   let n = form.statuses.length
   if (form.client_id)    n++
+  if (form.company_id)   n++
   if (form.overdue_only) n++
   if (form.is_marked)    n++
   return n
@@ -557,12 +585,12 @@ function buildParams(overrides = {}) {
     year:  props.year,
     ...(props.month > 0 ? { month: props.month } : {}),
     ...(form.statuses.length ? { statuses: form.statuses } : {}),
-    ...(form.client_id ? { client_id: form.client_id } : {}),
+    ...(form.client_id  ? { client_id:  form.client_id  } : {}),
+    ...(form.company_id ? { company_id: form.company_id } : {}),
     ...(form.overdue_only ? { overdue_only: 1 } : {}),
     ...(form.is_marked ? { is_marked: 1 } : {}),
     ...overrides,
   }
-  // bersihkan undefined/null/0
   return Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== 0 && v !== false))
 }
 
@@ -578,6 +606,7 @@ function applyFilter(overrides) {
 function resetFilters() {
   form.statuses    = []
   form.client_id   = ''
+  form.company_id  = ''
   form.overdue_only = false
   form.is_marked   = false
   showFilter.value = false
@@ -588,13 +617,13 @@ function removeStatus(val) {
   form.statuses = form.statuses.filter(s => s !== val)
   router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true })
 }
-function removeClient()  { form.client_id   = '';    router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
-function removeOverdue() { form.overdue_only = false; router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
-function removeMarked()  { form.is_marked   = false;  router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
+function removeClient()   { form.client_id   = '';    router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
+function removeCompany()  { form.company_id  = '';    router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
+function removeOverdue()  { form.overdue_only = false; router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
+function removeMarked()   { form.is_marked   = false;  router.get(route('invoices.numbering'), buildParams(), { preserveScroll: true }) }
 
-function clientName(id) {
-  return props.clients?.find(c => c.id == id)?.company_name ?? ''
-}
+function clientName(id)  { return props.clients?.find(c => c.id == id)?.company_name ?? '' }
+function companyName(id) { return props.companies?.find(c => c.id == id)?.name ?? '' }
 
 // ── Export column selector ────────────────────────────────────
 const COLUMN_OPTIONS = [
@@ -628,7 +657,8 @@ const exportUrl = computed(() => {
   params.set('year', props.year)
   if (props.month > 0) params.set('month', props.month)
   ;(props.filters?.statuses ?? []).forEach(s => params.append('statuses[]', s))
-  if (props.filters?.client_id) params.set('client_id', props.filters.client_id)
+  if (props.filters?.client_id)  params.set('client_id',  props.filters.client_id)
+  if (props.filters?.company_id) params.set('company_id', props.filters.company_id)
   if (props.filters?.overdue_only) params.set('overdue_only', '1')
   if (props.filters?.is_marked) params.set('is_marked', '1')
   exportColumns.value.forEach(c => params.append('columns[]', c))

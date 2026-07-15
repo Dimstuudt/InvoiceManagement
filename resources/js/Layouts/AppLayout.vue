@@ -296,31 +296,25 @@
                   <p class="text-sm font-medium text-gray-500">Semua invoice aman</p>
                 </div>
 
-                <!-- Summary rows -->
-                <div v-else-if="notifData" class="divide-y divide-gray-50">
-                  <div v-if="notifData.overdue.length > 0"
-                    class="flex items-center gap-3 px-4 py-3">
-                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"/>
-                    <span class="text-sm text-gray-700 flex-1">Overdue</span>
-                    <span class="text-sm font-bold text-red-500">{{ notifData.overdue.length }}</span>
-                  </div>
-                  <div v-if="notifData.due_today.length > 0"
-                    class="flex items-center gap-3 px-4 py-3">
-                    <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"/>
-                    <span class="text-sm text-gray-700 flex-1">Jatuh tempo hari ini</span>
-                    <span class="text-sm font-bold text-orange-500">{{ notifData.due_today.length }}</span>
-                  </div>
-                  <div v-if="notifData.due_soon.length > 0"
-                    class="flex items-center gap-3 px-4 py-3">
-                    <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"/>
-                    <span class="text-sm text-gray-700 flex-1">Segera jatuh tempo</span>
-                    <span class="text-sm font-bold text-amber-500">{{ notifData.due_soon.length }}</span>
-                  </div>
-                  <div v-if="notifData.draft_unverified?.length > 0"
-                    class="flex items-center gap-3 px-4 py-3">
-                    <span class="w-2 h-2 rounded-full bg-blue-400 shrink-0"/>
-                    <span class="text-sm text-gray-700 flex-1">Draft belum diverifikasi</span>
-                    <span class="text-sm font-bold text-blue-500">{{ notifData.draft_unverified.length }}</span>
+                <!-- Individual invoice rows -->
+                <div v-else-if="notifData" class="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                  <button
+                    v-for="item in previewItems"
+                    :key="item.type + '-' + item.id"
+                    @click="goToInvoice(item)"
+                    class="flex items-center gap-3 px-4 py-3 w-full text-left transition-colors hover:bg-gray-50/80">
+                    <span class="w-2 h-2 rounded-full shrink-0 mt-0.5" :class="dotClassForType(item.type)"/>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs font-mono font-semibold text-gray-700 truncate">{{ item.invoice_number }}</p>
+                      <p class="text-[10px] text-gray-400 truncate mt-0.5">{{ item.client_name }}</p>
+                    </div>
+                    <p class="text-[10px] font-semibold text-right shrink-0 ml-2" :class="labelColorForType(item.type)">
+                      {{ labelForType(item) }}
+                    </p>
+                  </button>
+                  <div v-if="notifData.total > previewItems.length"
+                    class="px-4 py-2 text-center text-[10px] text-gray-400">
+                    +{{ notifData.total - previewItems.length }} notifikasi lainnya
                   </div>
                 </div>
 
@@ -570,6 +564,32 @@ const notifOpen     = ref(false)
 const notifLoading  = ref(false)
 const notifData     = ref(null)
 const notifPendingNav = ref(null)
+
+const previewItems = computed(() => {
+  if (!notifData.value) return []
+  return [
+    ...(notifData.value.overdue       ?? []),
+    ...(notifData.value.due_today     ?? []),
+    ...(notifData.value.due_soon      ?? []),
+    ...(notifData.value.draft_late    ?? []),
+    ...(notifData.value.draft_upcoming ?? []),
+  ].slice(0, 5)
+})
+
+function dotClassForType(type) {
+  return { overdue: 'bg-red-500 animate-pulse', due_today: 'bg-orange-400', due_soon: 'bg-amber-400', draft_late: 'bg-violet-400', draft_upcoming: 'bg-blue-400' }[type] ?? 'bg-gray-300'
+}
+function labelColorForType(type) {
+  return { overdue: 'text-red-500', due_today: 'text-orange-500', due_soon: 'text-amber-500', draft_late: 'text-violet-500', draft_upcoming: 'text-blue-500' }[type] ?? 'text-gray-400'
+}
+function labelForType(item) {
+  if (item.type === 'overdue')        return `${item.days_overdue}h overdue`
+  if (item.type === 'due_today')      return 'jatuh tempo hari ini'
+  if (item.type === 'due_soon')       return `${item.days_until}h lagi`
+  if (item.type === 'draft_late')     return `draft +${item.days_past}h`
+  if (item.type === 'draft_upcoming') return item.days_until === 0 ? 'draft — hari ini' : `draft ${item.days_until}h lagi`
+  return ''
+}
 
 async function fetchNotif() {
   notifLoading.value = true

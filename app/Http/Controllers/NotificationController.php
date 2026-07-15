@@ -73,33 +73,51 @@ class NotificationController extends Controller
                 'client_id'      => $inv->client_id,
             ]);
 
-        $draftUnverified = Invoice::with($with)
+        $draftBase = Invoice::with($with)
             ->where('is_demo', false)
             ->where('user_id', auth()->id())
             ->where('document_status', 'draft')
-            ->whereNotNull('issue_date')
+            ->where('payment_status', 'unpaid')
+            ->whereNotNull('issue_date');
+
+        $draftLate = (clone $draftBase)
+            ->whereDate('issue_date', '<', $today)
+            ->orderBy('issue_date')
+            ->get()
+            ->map(fn($inv) => [
+                'type'         => 'draft_late',
+                'id'           => $inv->id,
+                'invoice_number' => $inv->invoice_number,
+                'client_name'  => $inv->client?->company_name ?? '—',
+                'category'     => $inv->projectCategory?->name ?? '—',
+                'issue_date'   => $inv->issue_date->toDateString(),
+                'days_past'    => (int) $today->diffInDays($inv->issue_date),
+                'client_id'    => $inv->client_id,
+            ]);
+
+        $draftUpcoming = (clone $draftBase)
+            ->whereDate('issue_date', '>=', $today)
             ->whereDate('issue_date', '<=', $in5days)
             ->orderBy('issue_date')
             ->get()
             ->map(fn($inv) => [
-                'type'             => 'draft_unverified',
-                'id'               => $inv->id,
-                'invoice_number'   => $inv->invoice_number,
-                'client_name'      => $inv->client?->company_name ?? '—',
-                'category'         => $inv->projectCategory?->name ?? '—',
-                'issue_date'       => $inv->issue_date->toDateString(),
-                'days_until_issue' => $inv->issue_date->gte($today)
-                    ? (int) $today->diffInDays($inv->issue_date)
-                    : -(int) $today->diffInDays($inv->issue_date),
-                'client_id'        => $inv->client_id,
+                'type'         => 'draft_upcoming',
+                'id'           => $inv->id,
+                'invoice_number' => $inv->invoice_number,
+                'client_name'  => $inv->client?->company_name ?? '—',
+                'category'     => $inv->projectCategory?->name ?? '—',
+                'issue_date'   => $inv->issue_date->toDateString(),
+                'days_until'   => (int) $today->diffInDays($inv->issue_date),
+                'client_id'    => $inv->client_id,
             ]);
 
         return [
-            'overdue'          => $overdue->values(),
-            'due_today'        => $dueToday->values(),
-            'due_soon'         => $dueSoon->values(),
-            'draft_unverified' => $draftUnverified->values(),
-            'total'            => $overdue->count() + $dueToday->count() + $dueSoon->count() + $draftUnverified->count(),
+            'overdue'        => $overdue->values(),
+            'due_today'      => $dueToday->values(),
+            'due_soon'       => $dueSoon->values(),
+            'draft_late'     => $draftLate->values(),
+            'draft_upcoming' => $draftUpcoming->values(),
+            'total'          => $overdue->count() + $dueToday->count() + $dueSoon->count() + $draftLate->count() + $draftUpcoming->count(),
         ];
     }
 
@@ -132,6 +150,7 @@ class NotificationController extends Controller
         $draftCount = Invoice::where('is_demo', false)
             ->where('user_id', auth()->id())
             ->where('document_status', 'draft')
+            ->where('payment_status', 'unpaid')
             ->whereNotNull('issue_date')
             ->whereDate('issue_date', '<=', Carbon::today()->addDays(5))
             ->count();

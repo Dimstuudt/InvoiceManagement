@@ -418,15 +418,30 @@ class InvoiceController extends Controller
             'total_overdue'     => $invoices->where('is_overdue', true)->sum('computed_total'),
         ];
 
+        // Monthly stats: count per year/month (all user invoices, ignoring current filters)
+        $rawStats = Invoice::selectRaw('YEAR(issue_date) as y, MONTH(issue_date) as m, COUNT(*) as cnt')
+            ->where('invoice_number', 'regexp', '^[0-9]+/')
+            ->where('is_demo', false)
+            ->whereNotNull('issue_date')
+            ->groupByRaw('YEAR(issue_date), MONTH(issue_date)')
+            ->orderByRaw('YEAR(issue_date) DESC, MONTH(issue_date)')
+            ->get();
+
+        $monthlyStats = [];
+        foreach ($rawStats as $row) {
+            $monthlyStats[(int)$row->y][(int)$row->m] = (int)$row->cnt;
+        }
+
         return Inertia::render('Invoices/Numbering', [
-            'invoices'    => $invoices->map(fn($inv) => $inv->makeHidden(['items', 'carried_from', 'prepay_chain', 'reaktivasi_chain'])),
-            'from_date'   => $fromDate,
-            'to_date'     => $toDate,
-            'clients'     => $clients,
-            'companies'   => $companies,
-            'categories'  => $allCats,
-            'summary'     => $summary,
-            'filters'     => [
+            'invoices'      => $invoices->map(fn($inv) => $inv->makeHidden(['items', 'carried_from', 'prepay_chain', 'reaktivasi_chain'])),
+            'from_date'     => $fromDate,
+            'to_date'       => $toDate,
+            'clients'       => $clients,
+            'companies'     => $companies,
+            'categories'    => $allCats,
+            'summary'       => $summary,
+            'monthly_stats' => $monthlyStats,
+            'filters'       => [
                 'statuses'         => $statuses,
                 'payment_statuses' => $paymentStatuses,
                 'send_statuses'    => $sendStatuses,

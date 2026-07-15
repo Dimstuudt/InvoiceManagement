@@ -33,6 +33,66 @@
             </p>
           </div>
 
+          <div class="flex items-center gap-2">
+
+          <!-- Calendar dropdown -->
+          <div class="relative" ref="calRef">
+            <button @click="showCalendar = !showCalendar"
+              :class="['flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl border transition-colors',
+                showCalendar
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+              Kalender
+            </button>
+
+            <div v-if="showCalendar"
+              class="absolute right-0 top-full mt-1.5 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-4">
+
+              <!-- Year nav -->
+              <div class="flex items-center justify-between mb-3">
+                <button @click="prevCalYear"
+                  :disabled="calYear <= 2000"
+                  :class="['w-7 h-7 flex items-center justify-center rounded-lg border transition-colors',
+                    calYear <= 2000
+                      ? 'border-gray-100 text-gray-300 cursor-not-allowed'
+                      : 'border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                  </svg>
+                </button>
+                <span class="text-sm font-bold text-gray-800">{{ calYear }}</span>
+                <button @click="nextCalYear"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Month grid 4x3 -->
+              <div class="grid grid-cols-4 gap-1.5">
+                <button v-for="m in 12" :key="m"
+                  @click="goToCalMonth(m)"
+                  :disabled="!calCount(m)"
+                  :class="['flex flex-col items-center gap-0.5 py-2 rounded-xl border text-xs font-semibold transition-colors',
+                    isActiveCalMonth(m)
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : calCount(m)
+                        ? 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700'
+                        : 'bg-gray-50/60 border-gray-100 text-gray-300 cursor-not-allowed']">
+                  <span class="text-[11px]">{{ MONTHS[m-1].slice(0,3) }}</span>
+                  <span :class="['text-[10px] font-bold tabular-nums',
+                    isActiveCalMonth(m) ? 'text-indigo-200' : calCount(m) ? 'text-indigo-500' : 'text-gray-300']">
+                    {{ calCount(m) || '·' }}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Export dropdown -->
           <div class="relative" ref="exportRef">
             <button @click="showExport = !showExport"
@@ -75,71 +135,76 @@
               </div>
             </div>
           </div>
+          </div>
         </div>
 
         <!-- ── Period bar ──────────────────────────────────────────── -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
-          <!-- Presets + month nav on same row -->
-          <div class="flex items-center gap-2 flex-wrap">
-            <div class="flex items-center gap-1">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+
+          <!-- Row 1: Month pagination -->
+          <div class="px-4 py-3 flex items-center justify-between gap-3">
+            <button @click="shiftMonth(-1)"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 text-xs font-semibold transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+              </svg>
+              Bulan Lalu
+            </button>
+
+            <span class="text-sm font-bold text-gray-800 select-none">{{ navMonthLabel }}</span>
+
+            <button @click="shiftMonth(1)"
+              :disabled="isAtCurrentMonth"
+              :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors',
+                isAtCurrentMonth
+                  ? 'border-gray-100 text-gray-300 cursor-not-allowed'
+                  : 'border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
+              Bulan Depan
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Row 2: Pilihan Cepat + Rentang Bebas -->
+          <div class="px-4 py-3 flex items-center gap-4 flex-wrap">
+            <!-- Presets -->
+            <div class="flex items-center gap-1.5 flex-wrap">
               <button v-for="p in PRESETS" :key="p.key"
                 @click="applyPreset(p)"
-                :class="['px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                :title="p.desc"
+                :class="['px-3 py-1 rounded-lg text-xs font-semibold transition-colors border',
                   activePreset === p.key
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200']">
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
                 {{ p.label }}
               </button>
             </div>
 
-            <div class="w-px h-5 bg-gray-200 mx-1"/>
+            <div class="w-px h-5 bg-gray-200 shrink-0 hidden sm:block"/>
 
-            <!-- Month navigator -->
-            <div class="flex items-center gap-1.5">
-              <button @click="shiftMonth(-1)"
-                class="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-                </svg>
-              </button>
-              <span class="text-xs font-semibold text-gray-600 min-w-[100px] text-center tabular-nums">{{ navMonthLabel }}</span>
-              <button @click="shiftMonth(1)"
-                :disabled="isAtCurrentMonth"
-                :class="['w-7 h-7 flex items-center justify-center rounded-lg border transition-colors',
-                  isAtCurrentMonth
-                    ? 'border-gray-100 text-gray-300 cursor-not-allowed'
-                    : 'border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-                </svg>
+            <!-- Rentang bebas -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5">
+                <label class="text-xs text-gray-400 shrink-0">Mulai</label>
+                <input type="date" v-model="localFrom" :max="localTo || todayStr"
+                  class="text-xs border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white"
+                  @change="activePreset = null"/>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <label class="text-xs text-gray-400 shrink-0">Sampai</label>
+                <input type="date" v-model="localTo" :min="localFrom" :max="todayStr"
+                  class="text-xs border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white"
+                  @change="activePreset = null"/>
+              </div>
+              <button @click="applyDateRange"
+                :disabled="!localFrom || !localTo"
+                class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg transition-colors shrink-0">
+                Tampilkan
               </button>
             </div>
           </div>
 
-          <!-- Date range inputs -->
-          <div class="flex items-center gap-3 flex-wrap">
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dari</span>
-              <input type="date" v-model="localFrom" :max="localTo || todayStr"
-                class="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 font-mono bg-white"
-                @change="activePreset = null"/>
-            </div>
-            <span class="text-gray-300">—</span>
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">S/D</span>
-              <input type="date" v-model="localTo" :min="localFrom" :max="todayStr"
-                class="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 font-mono bg-white"
-                @change="activePreset = null"/>
-            </div>
-            <button @click="applyDateRange"
-              :disabled="!localFrom || !localTo"
-              class="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg transition-colors">
-              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-              </svg>
-              Tampilkan
-            </button>
-          </div>
         </div>
 
         <!-- ── Filter bar ──────────────────────────────────────────── -->
@@ -498,14 +563,15 @@ const vIndeterminate = {
 const { bypassActive } = useSecurityGate()
 
 const props = defineProps({
-  invoices:   Array,
-  from_date:  String,
-  to_date:    String,
-  clients:    Array,
-  companies:  Array,
-  categories: Array,
-  summary:    Object,
-  filters:    Object,
+  invoices:      Array,
+  from_date:     String,
+  to_date:       String,
+  clients:       Array,
+  companies:     Array,
+  categories:    Array,
+  summary:       Object,
+  monthly_stats: Object,
+  filters:       Object,
 })
 
 // ── Constants ──────────────────────────────────────────────────
@@ -513,10 +579,10 @@ const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni',
                 'Juli','Agustus','September','Oktober','November','Desember']
 
 const PRESETS = [
-  { key: 'month', label: 'Bulan Ini' },
-  { key: '3m',    label: '3 Bulan'   },
-  { key: '6m',    label: '6 Bulan'   },
-  { key: 'year',  label: 'Tahun Ini' },
+  { key: 'month', label: 'Bulan Ini',        desc: 'Invoice bulan ini' },
+  { key: '3m',    label: '3 Bulan Terakhir', desc: '3 bulan ke belakang' },
+  { key: '6m',    label: '6 Bulan Terakhir', desc: '6 bulan ke belakang' },
+  { key: 'year',  label: 'Tahun Ini',        desc: 'Seluruh tahun berjalan' },
 ]
 
 // Status invoice — document_status + computed (overdue/outstanding)
@@ -564,9 +630,41 @@ const localFrom = ref(props.from_date)
 const localTo   = ref(props.to_date)
 const activePreset = ref(detectPreset(props.from_date, props.to_date))
 
-// Month nav tracks a reference month (default: current)
+// Month nav
 const navYear  = ref(now.getFullYear())
 const navMonth = ref(now.getMonth() + 1)
+
+// Calendar popup
+const showCalendar = ref(false)
+const calRef       = ref(null)
+const calYear      = ref(now.getFullYear())
+
+function prevCalYear() { if (calYear.value > 2000) calYear.value-- }
+function nextCalYear() { calYear.value++ }
+
+function calCount(month) {
+  return props.monthly_stats?.[calYear.value]?.[month] ?? 0
+}
+
+function goToCalMonth(month) {
+  if (!calCount(month)) return
+  navYear.value  = calYear.value
+  navMonth.value = month
+  const lastDay   = new Date(calYear.value, month, 0).getDate()
+  const isCurrent = calYear.value === now.getFullYear() && month === now.getMonth() + 1
+  const from = isoDate(calYear.value, month, 1)
+  const to   = isCurrent ? todayStr : isoDate(calYear.value, month, lastDay)
+  localFrom.value    = from
+  localTo.value      = to
+  activePreset.value = isCurrent ? 'month' : null
+  showCalendar.value = false
+  fetchWith(from, to)
+}
+
+function isActiveCalMonth(month) {
+  return navYear.value === calYear.value && navMonth.value === month
+    && activePreset.value !== 'year' && activePreset.value !== '3m' && activePreset.value !== '6m'
+}
 
 function isoDate(y, m, d) {
   return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
@@ -630,11 +728,10 @@ function shiftMonth(dir) {
   let y = navYear.value
   if (m > 12) { m = 1;  y++ }
   if (m < 1)  { m = 12; y-- }
-  // Don't go into the future
   if (y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth() + 1)) return
   navYear.value  = y
   navMonth.value = m
-  const lastDay  = new Date(y, m, 0).getDate()
+  const lastDay   = new Date(y, m, 0).getDate()
   const isCurrent = (y === now.getFullYear() && m === now.getMonth() + 1)
   const from = isoDate(y, m, 1)
   const to   = isCurrent ? todayStr : isoDate(y, m, lastDay)
@@ -656,7 +753,7 @@ function fetchWith(from, to) {
     from_date: from,
     to_date:   to,
     ...buildActivePayload(),
-  }, { preserveScroll: true })
+  }, { preserveScroll: true, preserveState: true })
 }
 
 // ── Filter state ───────────────────────────────────────────────
@@ -906,6 +1003,7 @@ const exportFilename = computed(() =>
 
 function closeExport(e) {
   if (exportRef.value && !exportRef.value.contains(e.target)) showExport.value = false
+  if (calRef.value   && !calRef.value.contains(e.target))    showCalendar.value = false
 }
 onMounted(()      => document.addEventListener('mousedown', closeExport))
 onBeforeUnmount(() => document.removeEventListener('mousedown', closeExport))

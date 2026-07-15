@@ -5,23 +5,26 @@ namespace App\Http\Controllers;
 use App\Models\Invoice;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 class NotificationController extends Controller
 {
-    public function index(): JsonResponse
+    private function buildData(): array
     {
-        $today    = Carbon::today();
-        $in3days  = Carbon::today()->addDays(3);
-        $in5days  = Carbon::today()->addDays(5);
+        $today   = Carbon::today();
+        $in3days = Carbon::today()->addDays(3);
+        $in5days = Carbon::today()->addDays(5);
 
-        $base = Invoice::with(['client:id,company_name', 'projectCategory:id,name,code'])
+        $with = ['client:id,company_name', 'projectCategory:id,name,code'];
+
+        $base = Invoice::with($with)
             ->where('is_demo', false)
             ->where('user_id', auth()->id())
             ->where('payment_status', 'unpaid')
             ->whereNotIn('document_status', ['frozen', 'carried'])
             ->whereNotNull('due_date');
 
-        // Overdue
         $overdue = (clone $base)
             ->where('due_date', '<', $today)
             ->orderBy('due_date')
@@ -37,7 +40,6 @@ class NotificationController extends Controller
                 'client_id'      => $inv->client_id,
             ]);
 
-        // Jatuh tempo hari ini
         $dueToday = (clone $base)
             ->where('document_status', 'verified')
             ->whereDate('due_date', $today)
@@ -54,7 +56,6 @@ class NotificationController extends Controller
                 'client_id'      => $inv->client_id,
             ]);
 
-        // Jatuh tempo 1-3 hari lagi
         $dueSoon = (clone $base)
             ->where('document_status', 'verified')
             ->whereDate('due_date', '>', $today)
@@ -72,8 +73,7 @@ class NotificationController extends Controller
                 'client_id'      => $inv->client_id,
             ]);
 
-        // Draft belum diverifikasi — issue_date dalam 5 hari ke depan (atau sudah lewat)
-        $draftUnverified = Invoice::with(['client:id,company_name', 'projectCategory:id,name,code'])
+        $draftUnverified = Invoice::with($with)
             ->where('is_demo', false)
             ->where('user_id', auth()->id())
             ->where('document_status', 'draft')
@@ -94,13 +94,23 @@ class NotificationController extends Controller
                 'client_id'        => $inv->client_id,
             ]);
 
-        return response()->json([
-            'overdue'          => $overdue,
-            'due_today'        => $dueToday,
-            'due_soon'         => $dueSoon,
-            'draft_unverified' => $draftUnverified,
+        return [
+            'overdue'          => $overdue->values(),
+            'due_today'        => $dueToday->values(),
+            'due_soon'         => $dueSoon->values(),
+            'draft_unverified' => $draftUnverified->values(),
             'total'            => $overdue->count() + $dueToday->count() + $dueSoon->count() + $draftUnverified->count(),
-        ]);
+        ];
+    }
+
+    public function index(): JsonResponse
+    {
+        return response()->json($this->buildData());
+    }
+
+    public function page(): InertiaResponse
+    {
+        return Inertia::render('Notifications/Index', $this->buildData());
     }
 
     public static function pendingCount(): int

@@ -58,6 +58,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 
         Route::get('notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('notifications/page', [\App\Http\Controllers\NotificationController::class, 'page'])->name('notifications.page');
 
         Route::get('logs', [ActivityLogController::class, 'index'])->name('logs.index');
         Route::get('logs/cron', [ActivityLogController::class, 'cronLogs'])->name('logs.cron');

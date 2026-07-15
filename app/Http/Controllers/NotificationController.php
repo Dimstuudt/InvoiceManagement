@@ -22,7 +22,7 @@ class NotificationController extends Controller
             ->where('is_demo', false)
             ->where('user_id', auth()->id())
             ->where('payment_status', 'unpaid')
-            ->whereNotIn('document_status', ['frozen', 'carried'])
+            ->whereNotIn('document_status', ['frozen', 'carried', 'inactive'])
             ->whereNotNull('due_date');
 
         $overdue = (clone $base)
@@ -118,7 +118,7 @@ class NotificationController extends Controller
         $paymentCount = Invoice::where('is_demo', false)
             ->where('user_id', auth()->id())
             ->where('payment_status', 'unpaid')
-            ->whereNotIn('document_status', ['frozen', 'carried'])
+            ->whereNotIn('document_status', ['frozen', 'carried', 'inactive'])
             ->whereNotNull('due_date')
             ->where(function ($q) {
                 $q->where('due_date', '<', Carbon::today())

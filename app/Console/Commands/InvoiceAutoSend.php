@@ -45,6 +45,7 @@ class InvoiceAutoSend extends Command
             ->where('document_status', 'verified')
             ->where('payment_status', 'unpaid')
             ->where('is_demo', false)
+            ->whereNull('reaktivasi_chain_id')
             ->whereDate('issue_date', '<=', $today)
             ->get();
 

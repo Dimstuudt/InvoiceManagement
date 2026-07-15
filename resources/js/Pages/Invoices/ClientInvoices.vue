@@ -32,7 +32,7 @@
                   </span>
                   <span v-if="client.city" class="text-xs text-gray-400">{{ client.city }}</span>
                   <span class="text-xs text-gray-300">·</span>
-                  <span class="text-xs text-gray-400">{{ invoices.length }} invoice</span>
+                  <span class="text-xs text-gray-400">{{ summary.totalCount }} invoice</span>
                 </div>
               </div>
               <button @click="createInvoice"
@@ -156,7 +156,7 @@
               </svg>
             </div>
             <p class="text-[11px] text-gray-400 font-medium">Total Invoice</p>
-            <p class="text-2xl font-bold text-gray-800 mt-0.5">{{ invoices.length }}</p>
+            <p class="text-2xl font-bold text-gray-800 mt-0.5">{{ summary.totalCount }}</p>
             <p class="text-[10px] text-gray-300 mt-1">semua status</p>
           </div>
 
@@ -783,8 +783,26 @@
             </svg>
             Perbarui — lanjutkan
           </button>
-          <!-- Reaktivasi: hanya jika TIDAK sedang dalam carry/prepay chain -->
-          <button v-if="isPastDue(menuInvoice) && menuInvoice.interval_months && !hasChild(menuInvoice) && !menuInvoice.is_reaktivasi && !menuInvoice.carried_from_id && !menuInvoice.is_prepay"
+          <!-- Nonaktifkan: hanya untuk overdue yang belum inactive -->
+          <button v-if="isPastDue(menuInvoice) && menuInvoice.payment_status !== 'paid'"
+            @click="deactivateInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+            </svg>
+            Nonaktifkan
+          </button>
+          <!-- Aktifkan: hanya jika inactive -->
+          <button v-if="menuInvoice.document_status === 'inactive' && menuInvoice.payment_status !== 'paid'"
+            @click="activateInvoice(menuInvoice); activeMenu = null"
+            class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors text-left">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Aktifkan
+          </button>
+          <!-- Reaktivasi: hanya jika inactive + punya interval + belum ada chain -->
+          <button v-if="menuInvoice.document_status === 'inactive' && menuInvoice.interval_months && !hasChild(menuInvoice) && !menuInvoice.is_reaktivasi && !menuInvoice.carried_from_id && !menuInvoice.is_prepay"
             @click="reactivateInvoice(menuInvoice); activeMenu = null"
             class="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors text-left">
             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1312,10 +1330,14 @@ function headChainLabel(invoice) {
   return null
 }
 
+const isPureInvoice = i => !/^[CRPF]-/.test(i.invoice_number)
+
 const summary = computed(() => {
-  const paid    = props.invoices.filter(i => i.payment_status === 'paid')
-  const pending = props.invoices.filter(i => i.payment_status !== 'paid' && !['frozen','carried'].includes(i.document_status))
+  const pure    = props.invoices.filter(isPureInvoice)
+  const paid    = pure.filter(i => i.payment_status === 'paid')
+  const pending = pure.filter(i => i.payment_status !== 'paid' && !['frozen','carried','inactive'].includes(i.document_status))
   return {
+    totalCount:   pure.length,
     paid:         paid.reduce((s, i) => s + invoiceTotal(i), 0),
     paidCount:    paid.length,
     pending:      pending.reduce((s, i) => s + invoiceTotal(i), 0),
@@ -1340,7 +1362,7 @@ const fmtCurrency = v => v != null
   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v)
   : '-';
 
-const isPastDue    = inv => inv.payment_status !== 'paid' && inv.document_status !== 'frozen' && inv.document_status !== 'carried' && new Date(inv.due_date) < new Date(new Date().toDateString())
+const isPastDue    = inv => inv.payment_status !== 'paid' && !['frozen', 'carried', 'inactive'].includes(inv.document_status) && new Date(inv.due_date) < new Date(new Date().toDateString())
 const daysPastDue  = inv => Math.floor((new Date(new Date().toDateString()) - new Date(inv.due_date)) / 86400000)
 const hasOverdue   = group => group.invoices.some(isPastDue)
 
@@ -1360,10 +1382,11 @@ const nextSendInfo = (inv) => {
 
 function computedStatus(inv) {
   if (!inv) return 'draft'
-  if (inv.document_status === 'frozen')  return 'frozen'
-  if (inv.document_status === 'carried') return 'carried'
-  if (inv.payment_status  === 'paid')    return 'paid'
-  if (inv.document_status === 'draft')   return 'draft'
+  if (inv.document_status === 'inactive') return 'inactive'
+  if (inv.document_status === 'frozen')   return 'frozen'
+  if (inv.document_status === 'carried')  return 'carried'
+  if (inv.payment_status  === 'paid')     return 'paid'
+  if (inv.document_status === 'draft')    return 'draft'
   return inv.send_status !== 'unsent' ? 'sent' : 'verified'
 }
 
@@ -1374,6 +1397,7 @@ const statusLabel = s => ({
   paid:     'Dibayarkan',
   frozen:   'Frozen',
   carried:  'Carried',
+  inactive: 'Tidak Aktif',
 }[s] ?? s)
 
 const docBadgeClass = (s) => ({
@@ -1381,6 +1405,7 @@ const docBadgeClass = (s) => ({
   verified: 'bg-amber-50 text-amber-600 ring-1 ring-amber-200',
   frozen:   'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
   carried:  'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+  inactive: 'bg-gray-100 text-gray-400 ring-1 ring-gray-200',
 }[s] ?? 'bg-gray-100 text-gray-500')
 
 const docBadgeLabel = (s) => ({
@@ -1388,6 +1413,7 @@ const docBadgeLabel = (s) => ({
   verified: 'Antrean',
   frozen:   'Frozen',
   carried:  'Carried',
+  inactive: 'Nonaktif',
 }[s] ?? s)
 
 const statusClass = s => ({
@@ -1397,12 +1423,14 @@ const statusClass = s => ({
   paid:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
   frozen:   'bg-sky-100 text-sky-600 ring-1 ring-sky-200',
   carried:  'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+  inactive: 'bg-gray-100 text-gray-400 ring-1 ring-gray-200',
 }[s] ?? 'bg-gray-100 text-gray-500')
 
 const dotClass = inv => {
-  if (inv.document_status === 'frozen')  return 'bg-sky-400'
-  if (inv.document_status === 'carried') return 'bg-orange-400'
-  if (isPastDue(inv))                    return 'bg-red-500'
+  if (inv.document_status === 'inactive') return 'bg-gray-400'
+  if (inv.document_status === 'frozen')   return 'bg-sky-400'
+  if (inv.document_status === 'carried')  return 'bg-orange-400'
+  if (isPastDue(inv))                     return 'bg-red-500'
   const s = computedStatus(inv)
   return { draft: 'bg-gray-300', verified: 'bg-amber-400', sent: 'bg-blue-400', paid: 'bg-emerald-500' }[s] ?? 'bg-gray-300'
 }
@@ -1449,10 +1477,13 @@ function hasChild(invoice) {
 function hasLifecycleAction(inv) {
   if (!inv) return false
   const unpaid = inv.payment_status !== 'paid'
-  const active = !['frozen', 'carried'].includes(inv.document_status)
+  const active = !['frozen', 'carried', 'inactive'].includes(inv.document_status)
   const inCarry      = !!inv.carried_from_id
   const inPrepay     = !!inv.is_prepay
   const inReaktivasi = !!inv.is_reaktivasi
+
+  // Inactive: selalu ada aksi (Aktifkan / Reaktivasi)
+  if (inv.document_status === 'inactive' && unpaid) return true
 
   // Rollback reaktivasi: HEAD chain reaktivasi selalu punya aksi
   if (inReaktivasi && !inv.reaktivasi_chain_id) return true
@@ -1466,9 +1497,9 @@ function hasLifecycleAction(inv) {
   // Prepay chain: hanya freeze (carry/reaktivasi diblokir)
   if (inPrepay) return unpaid && active && !!inv.parent_invoice_id
 
-  // Normal (bukan chain): semua aksi berlaku
+  // Normal (bukan chain): semua aksi berlaku (termasuk Nonaktifkan kalau overdue)
   return (
-    (isPastDue(inv) && inv.interval_months && !hasChild(inv)) ||
+    (isPastDue(inv) && unpaid) ||
     (unpaid && active && inv.interval_months && !hasChild(inv)) ||
     (unpaid && active && inv.interval_months && !inv.prepay_chain_id) ||
     (unpaid && active && !!inv.parent_invoice_id)
@@ -1564,6 +1595,40 @@ function carryInvoice(invoice) {
         onSuccess: () => toast(times === 1 ? 'Invoice berhasil di-carry' : `Invoice berhasil di-carry ${times}× sekaligus`),
       })
     }
+  })
+}
+
+function activateInvoice(invoice) {
+  Swal.fire({
+    title: 'Aktifkan kembali?',
+    text: `${invoice.invoice_number} → status kembali ke Draft`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#059669',
+    confirmButtonText: 'Ya, Aktifkan',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) router.patch(route('invoices.status', invoice.id), { document_status: 'draft' }, {
+      preserveScroll: true,
+      onSuccess: () => toast('Invoice diaktifkan kembali'),
+    })
+  })
+}
+
+function deactivateInvoice(invoice) {
+  Swal.fire({
+    title: 'Nonaktifkan invoice?',
+    text: `${invoice.invoice_number} akan ditandai tidak aktif`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc2626',
+    confirmButtonText: 'Ya, Nonaktifkan',
+    cancelButtonText: 'Batal',
+  }).then(r => {
+    if (r.isConfirmed) router.post(route('invoices.deactivate', invoice.id), {}, {
+      preserveScroll: true,
+      onSuccess: () => toast('Invoice dinonaktifkan'),
+    })
   })
 }
 

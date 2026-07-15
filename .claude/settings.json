@@ -12,7 +12,9 @@
       "Skill(artifact-design:*)",
       "Bash(php -r ' *)",
       "Bash(grep -v \"//\")",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(php c:/laragon/www/InvoiceManagement/artisan make:migration add_inactive_to_document_status_enum --path=database/migrations)",
+      "Bash(php c:/laragon/www/InvoiceManagement/artisan migrate --path=database/migrations/2026_07_15_094740_add_inactive_to_document_status_enum.php)"
     ]
   }
 }

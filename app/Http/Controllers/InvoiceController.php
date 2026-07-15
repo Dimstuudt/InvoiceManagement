@@ -22,6 +22,7 @@ class InvoiceController extends Controller
     {
         if ($inv->document_status === 'frozen')   return 'Dibekukan';
         if ($inv->document_status === 'carried')  return 'Carry';
+        if ($inv->document_status === 'inactive') return 'Tidak Aktif';
         if ($inv->payment_status  === 'paid')     return 'Lunas';
         if ($inv->document_status === 'draft')    return 'Draft';
         // verified + unpaid
@@ -45,10 +46,10 @@ class InvoiceController extends Controller
                 $q->orWhere(function ($inner) use ($s) {
                     match ($s) {
                         'draft'    => $inner->where('document_status', 'draft'),
-                        'verified' => $inner->where('document_status', 'verified')->where('payment_status', 'unpaid'),
-                        'paid'     => $inner->where('payment_status', 'paid'),
+                        'verified' => $inner->where('document_status', 'verified'),
                         'frozen'   => $inner->where('document_status', 'frozen'),
                         'carried'  => $inner->where('document_status', 'carried'),
+                        'inactive' => $inner->where('document_status', 'inactive'),
                         default    => null,
                     };
                 });
@@ -80,12 +81,16 @@ class InvoiceController extends Controller
         $clients = Client::where('is_active', true)
             ->with(['category', 'invoices' => fn($q) => $q->with('items')])
             ->withCount([
-                'invoices as draft_count'      => fn($q) => $q->where('document_status', 'draft'),
+                'invoices as draft_count'      => fn($q) => $q->where('document_status', 'draft')->where('send_status', 'unsent')->where('payment_status', '!=', 'paid'),
                 'invoices as sent_count'       => fn($q) => $q->where('document_status', 'verified')->where('payment_status', 'unpaid'),
-                'invoices as paid_count'       => fn($q) => $q->where('payment_status', 'paid'),
+                'invoices as paid_count'       => fn($q) => $q->where('payment_status', 'paid')->where('document_status', '!=', 'carried'),
                 'invoices as unpaid_count'     => fn($q) => $q->where('payment_status', 'unpaid')->where('document_status', 'verified')->where('send_status', '!=', 'unsent'),
                 'invoices as frozen_count'     => fn($q) => $q->where('document_status', 'frozen'),
-                'invoices as overdue_count'    => fn($q) => $q->where('payment_status', '!=', 'paid')->where('document_status', '!=', 'frozen')->where('due_date', '<', now()),
+                'invoices as inactive_count'   => fn($q) => $q->where('document_status', 'inactive'),
+                'invoices as overdue_count'    => fn($q) => $q->where('payment_status', '!=', 'paid')
+                    ->whereNotIn('document_status', ['frozen', 'carried', 'inactive'])
+                    ->whereNotNull('due_date')
+                    ->where('due_date', '<', now()),
                 'invoices as my_invoice_count' => fn($q) => $q->where('user_id', $userId),
             ])
             ->withMax('invoices', 'issue_date')
@@ -106,12 +111,20 @@ class InvoiceController extends Controller
         });
 
         $summary = [
+            // Status Pembayaran
             'total_outstanding' => $clients->sum('unpaid_amount'),
-            'total_overdue'     => $clients->sum('overdue_count'),
-            'total_unpaid'      => $clients->sum('sent_count'),
-            'total_frozen'      => $clients->sum('frozen_count'),
-            'total_invoices'    => $clients->sum(fn($c) => ($c->draft_count + $c->sent_count + $c->paid_count + $c->frozen_count)),
-            'total_paid_amount' => $clients->sum(fn($c) => (float) $c->invoices->where('payment_status', 'paid')->sum(fn($inv) => $inv->total)),
+            'total_paid_amount' => $clients->sum(fn($c) => (float) $c->invoices
+                ->filter(fn($inv) => $inv->payment_status === 'paid' && $inv->document_status !== 'carried')
+                ->sum(fn($inv) => $inv->total)),
+            'count_unpaid'      => $clients->sum('sent_count'),
+            'count_paid'        => $clients->sum('paid_count'),
+            // Status Invoice (doc_status)
+            'count_overdue'     => $clients->sum('overdue_count'),
+            'count_draft'       => $clients->sum('draft_count'),
+            'count_frozen'      => $clients->sum('frozen_count'),
+            'count_inactive'    => $clients->sum('inactive_count'),
+            // General
+            'total_invoices'    => $clients->sum(fn($c) => $c->invoices->count()),
         ];
 
         return Inertia::render('Invoices/Index', compact('clients', 'summary'));
@@ -297,48 +310,33 @@ class InvoiceController extends Controller
 
     public function numbering(Request $request)
     {
-        $currentYear = now()->year;
-        $year        = $request->integer('year', $currentYear);
-        $month       = $request->integer('month', 0);
-        $statuses    = array_values(array_filter(
+        $now         = now();
+        $defaultFrom = $now->copy()->startOfMonth()->toDateString();
+        $defaultTo   = $now->toDateString();
+
+        $fromDate     = $request->input('from_date', $defaultFrom) ?: $defaultFrom;
+        $toDate       = $request->input('to_date',   $defaultTo)   ?: $defaultTo;
+        $statuses = array_values(array_filter(
             (array) $request->input('statuses', []),
-            fn($s) => in_array($s, ['draft', 'verified', 'paid', 'frozen', 'carried'])
+            fn($s) => in_array($s, ['draft', 'verified', 'frozen', 'carried', 'inactive', 'overdue', 'outstanding'])
+        ));
+        $paymentStatuses = array_values(array_filter(
+            (array) $request->input('payment_statuses', []),
+            fn($s) => in_array($s, ['paid', 'unpaid'])
+        ));
+        $sendStatuses = array_values(array_filter(
+            (array) $request->input('send_statuses', []),
+            fn($s) => in_array($s, ['unsent', 'send1', 'send2', 'send3', 'send4', 'send5'])
         ));
         $clientId    = $request->integer('client_id', 0);
-        $companyId   = $request->integer('company_id', 0);
-        $overdueOnly = $request->boolean('overdue_only');
-        $verifiedOnly = $request->boolean('is_marked'); // is_marked sekarang = verified
+        $companyIds  = array_values(array_filter((array) $request->input('company_ids', []),  fn($v) => is_numeric($v)));
+        $categoryIds = array_values(array_filter((array) $request->input('category_ids', []), fn($v) => is_numeric($v)));
 
-        $years = Invoice::selectRaw('YEAR(issue_date) as yr')
-            ->where('is_demo', false)
-            ->groupBy('yr')
-            ->orderByDesc('yr')
-            ->pluck('yr')
-            ->values();
-
-        if ($years->isEmpty()) {
-            $years = collect([$currentYear]);
-        }
-
-        $nextSeq = (Invoice::whereYear('issue_date', $year)
-            ->where('invoice_number', 'like', "%/INV/MVC/%/{$year}")
-            ->where('is_demo', false)
-            ->get()
-            ->map(fn($inv) => (int) (explode('/', $inv->invoice_number)[0] ?? 0))
-            ->filter(fn($s) => $s > 0)
-            ->max() ?? 0) + 1;
-
-        $availableMonths = Invoice::selectRaw('MONTH(issue_date) as m')
-            ->whereYear('issue_date', $year)
-            ->where('invoice_number', 'regexp', '^[0-9]+/')
-            ->where('is_demo', false)
-            ->groupBy('m')
-            ->orderBy('m')
-            ->pluck('m')
-            ->values();
-
-        $clients   = Client::orderBy('company_name')->get(['id', 'company_name']);
-        $companies = \App\Models\Company::orderBy('name')->get(['id', 'name', 'code']);
+        $clients    = Client::orderBy('company_name')->get(['id', 'company_name']);
+        $userCatIds = Invoice::where('is_demo', false)->whereNotNull('project_category_id')->pluck('project_category_id')->unique();
+        $allCats    = ProjectCategory::whereIn('id', $userCatIds)->orderBy('name')->get(['id', 'name', 'code', 'company_id']);
+        $companies  = \App\Models\Company::whereIn('id', $allCats->pluck('company_id')->unique())
+            ->orderBy('name')->get(['id', 'name', 'code']);
 
         $query = Invoice::with([
                 'client', 'projectCategory.company', 'items',
@@ -347,110 +345,154 @@ class InvoiceController extends Controller
                 'prepayChain.items',
                 'reaktivasiChain.items',
             ])
-            ->whereYear('issue_date', $year)
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
-            ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
-            ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
-            ->when($companyId > 0, fn($q) => $q->whereHas('projectCategory', fn($inner) => $inner->where('company_id', $companyId)))
-            ->when($verifiedOnly, fn($q) => $q->where('document_status', 'verified'));
+            ->whereBetween('issue_date', [$fromDate, $toDate])
+            ->when($clientId > 0,         fn($q) => $q->where('client_id', $clientId))
+            ->when(!empty($companyIds),   fn($q) => $q->whereHas('projectCategory', fn($i) => $i->whereIn('company_id', $companyIds)))
+            ->when(!empty($categoryIds),  fn($q) => $q->whereIn('project_category_id', $categoryIds))
+            ->when(!empty($sendStatuses), fn($q) => $q->whereIn('send_status', $sendStatuses))
+            ->when(!empty($paymentStatuses), fn($q) => $q->whereIn('payment_status', $paymentStatuses));
 
-        $query = $this->applyStatusFilter($query, $statuses);
+        // Status invoice (document_status + computed overdue/outstanding)
+        $hasComputed = !empty(array_filter($statuses, fn($s) => in_array($s, ['overdue', 'outstanding'])));
+        if (!$hasComputed && !empty($statuses)) {
+            $query = $this->applyStatusFilter($query, $statuses);
+        }
 
+        $today    = $now->toDateString();
         $invoices = $query->get()
-            ->map(function ($inv) {
+            ->map(function ($inv) use ($today) {
                 $parts    = explode('/', $inv->invoice_number);
                 $inv->seq = (int) ($parts[0] ?? 0);
 
                 if ($inv->carried_from_id) {
                     $grandTotal = $inv->grand_total;
-                } elseif ($inv->is_prepay && ! $inv->prepay_chain_id) {
+                } elseif ($inv->is_prepay && !$inv->prepay_chain_id) {
                     $grandTotal = $inv->prepay_grand_total;
-                } elseif ($inv->is_reaktivasi && ! $inv->reaktivasi_chain_id) {
+                } elseif ($inv->is_reaktivasi && !$inv->reaktivasi_chain_id) {
                     $grandTotal = $inv->reaktivasi_grand_total;
                 } else {
                     $grandTotal = $inv->total;
                 }
 
                 $inv->setAttribute('computed_total', $grandTotal);
-                $inv->setAttribute('is_overdue',
-                    $inv->payment_status !== 'paid'
-                    && $inv->document_status !== 'frozen'
-                    && $inv->due_date && $inv->due_date->lt(now())
-                );
+
+                $isOverdue = $inv->payment_status !== 'paid'
+                    && !in_array($inv->document_status, ['frozen', 'carried', 'inactive'])
+                    && $inv->due_date && $inv->due_date->toDateString() < $today;
+
+                $isOutstanding = $inv->payment_status === 'unpaid'
+                    && $inv->document_status === 'verified'
+                    && $inv->issue_date && $inv->issue_date->toDateString() <= $today
+                    && $inv->due_date  && $inv->due_date->toDateString()  >= $today;
+
+                $inv->setAttribute('is_overdue',     $isOverdue);
+                $inv->setAttribute('is_outstanding', $isOutstanding);
+
                 return $inv;
             })
-            ->filter(fn($inv) => $inv->seq > 0)
-            ->when($overdueOnly, fn($c) => $c->where('is_overdue', true))
-            ->sortBy('seq')
-            ->values();
+            ->filter(fn($inv) => $inv->seq > 0);
+
+        // Post-query status invoice filter (ketika ada computed status)
+        if (!empty($statuses) && $hasComputed) {
+            $invoices = $invoices->filter(function ($inv) use ($statuses) {
+                foreach ($statuses as $s) {
+                    if ($s === 'overdue'     && $inv->is_overdue)                     return true;
+                    if ($s === 'outstanding' && $inv->is_outstanding)                 return true;
+                    if ($s === 'draft'       && $inv->document_status === 'draft')    return true;
+                    if ($s === 'verified'    && $inv->document_status === 'verified') return true;
+                    if ($s === 'frozen'      && $inv->document_status === 'frozen')   return true;
+                    if ($s === 'carried'     && $inv->document_status === 'carried')  return true;
+                    if ($s === 'inactive'    && $inv->document_status === 'inactive') return true;
+                }
+                return false;
+            });
+        }
+
+        $invoices = $invoices->sortByDesc('seq')->values();
 
         $summary = [
             'total_nilai'       => $invoices->sum('computed_total'),
-            'total_lunas'       => $invoices->where('payment_status', 'paid')->sum('computed_total'),
-            'total_outstanding' => $invoices->filter(fn($inv) => $inv->payment_status === 'unpaid' && $inv->document_status === 'verified')->sum('computed_total'),
-            'count_overdue'     => $invoices->where('is_overdue', true)->count(),
+            'total_outstanding' => $invoices->where('is_outstanding', true)->sum('computed_total'),
+            'total_overdue'     => $invoices->where('is_overdue', true)->sum('computed_total'),
         ];
 
         return Inertia::render('Invoices/Numbering', [
-            'invoices'        => $invoices->map(fn($inv) => $inv->makeHidden(['items', 'carried_from', 'prepay_chain', 'reaktivasi_chain'])),
-            'year'            => $year,
-            'month'           => $month,
-            'years'           => $years,
-            'availableMonths' => $availableMonths,
-            'nextSeq'         => $nextSeq,
-            'summary'         => $summary,
-            'clients'         => $clients,
-            'companies'       => $companies,
-            'filters'         => [
-                'statuses'    => $statuses,
-                'client_id'   => $clientId ?: null,
-                'company_id'  => $companyId ?: null,
-                'overdue_only'=> $overdueOnly,
-                'is_marked'   => $verifiedOnly,
+            'invoices'    => $invoices->map(fn($inv) => $inv->makeHidden(['items', 'carried_from', 'prepay_chain', 'reaktivasi_chain'])),
+            'from_date'   => $fromDate,
+            'to_date'     => $toDate,
+            'clients'     => $clients,
+            'companies'   => $companies,
+            'categories'  => $allCats,
+            'summary'     => $summary,
+            'filters'     => [
+                'statuses'         => $statuses,
+                'payment_statuses' => $paymentStatuses,
+                'send_statuses'    => $sendStatuses,
+                'client_id'        => $clientId ?: null,
+                'company_ids'      => $companyIds,
+                'category_ids'     => $categoryIds,
             ],
         ]);
     }
 
     public function numberingExport(Request $request)
     {
-        $currentYear = now()->year;
-        $year        = $request->integer('year', $currentYear);
-        $month       = $request->integer('month', 0);
-        $statuses    = array_values(array_filter(
+        $now         = now();
+        $defaultFrom = $now->copy()->startOfMonth()->toDateString();
+        $defaultTo   = $now->toDateString();
+
+        $fromDate     = $request->input('from_date', $defaultFrom) ?: $defaultFrom;
+        $toDate       = $request->input('to_date',   $defaultTo)   ?: $defaultTo;
+        $statuses = array_values(array_filter(
             (array) $request->input('statuses', []),
-            fn($s) => in_array($s, ['draft', 'verified', 'paid', 'frozen', 'carried'])
+            fn($s) => in_array($s, ['draft', 'verified', 'frozen', 'carried', 'inactive', 'overdue', 'outstanding'])
+        ));
+        $paymentStatuses = array_values(array_filter(
+            (array) $request->input('payment_statuses', []),
+            fn($s) => in_array($s, ['paid', 'unpaid'])
+        ));
+        $sendStatuses = array_values(array_filter(
+            (array) $request->input('send_statuses', []),
+            fn($s) => in_array($s, ['unsent', 'send1', 'send2', 'send3', 'send4', 'send5'])
         ));
         $clientId    = $request->integer('client_id', 0);
-        $overdueOnly = $request->boolean('overdue_only');
-        $verifiedOnly = $request->boolean('is_marked');
+        $companyIds  = array_values(array_filter((array) $request->input('company_ids', []),  fn($v) => is_numeric($v)));
+        $categoryIds = array_values(array_filter((array) $request->input('category_ids', []), fn($v) => is_numeric($v)));
 
         $query = Invoice::with([
-                'client', 'projectCategory', 'items',
+                'client', 'projectCategory.company', 'items',
                 'carriedFrom.items',
                 'carriedFrom.carriedFrom.items',
                 'prepayChain.items',
                 'reaktivasiChain.items',
             ])
-            ->whereYear('issue_date', $year)
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
-            ->when($month > 0, fn($q) => $q->whereMonth('issue_date', $month))
-            ->when($clientId > 0, fn($q) => $q->where('client_id', $clientId))
-            ->when($verifiedOnly, fn($q) => $q->where('document_status', 'verified'));
+            ->whereBetween('issue_date', [$fromDate, $toDate])
+            ->when($clientId > 0,         fn($q) => $q->where('client_id', $clientId))
+            ->when(!empty($companyIds),   fn($q) => $q->whereHas('projectCategory', fn($i) => $i->whereIn('company_id', $companyIds)))
+            ->when(!empty($categoryIds),  fn($q) => $q->whereIn('project_category_id', $categoryIds))
+            ->when(!empty($sendStatuses), fn($q) => $q->whereIn('send_status', $sendStatuses))
+            ->when(!empty($paymentStatuses), fn($q) => $q->whereIn('payment_status', $paymentStatuses));
 
-        $query = $this->applyStatusFilter($query, $statuses);
+        $hasComputed = !empty(array_filter($statuses, fn($s) => in_array($s, ['overdue', 'outstanding'])));
+        if (!$hasComputed && !empty($statuses)) {
+            $query = $this->applyStatusFilter($query, $statuses);
+        }
 
+        $today    = $now->toDateString();
         $invoices = $query->get()
-            ->map(function ($inv) {
+            ->map(function ($inv) use ($today) {
                 $parts    = explode('/', $inv->invoice_number);
                 $inv->seq = (int) ($parts[0] ?? 0);
 
                 if ($inv->carried_from_id) {
                     $grandTotal = $inv->grand_total;
-                } elseif ($inv->is_prepay && ! $inv->prepay_chain_id) {
+                } elseif ($inv->is_prepay && !$inv->prepay_chain_id) {
                     $grandTotal = $inv->prepay_grand_total;
-                } elseif ($inv->is_reaktivasi && ! $inv->reaktivasi_chain_id) {
+                } elseif ($inv->is_reaktivasi && !$inv->reaktivasi_chain_id) {
                     $grandTotal = $inv->reaktivasi_grand_total;
                 } else {
                     $grandTotal = $inv->total;
@@ -459,15 +501,35 @@ class InvoiceController extends Controller
                 $inv->setAttribute('computed_total', $grandTotal);
                 $inv->setAttribute('is_overdue',
                     $inv->payment_status !== 'paid'
-                    && $inv->document_status !== 'frozen'
-                    && $inv->due_date && $inv->due_date->lt(now())
+                    && !in_array($inv->document_status, ['frozen', 'carried', 'inactive'])
+                    && $inv->due_date && $inv->due_date->toDateString() < $today
+                );
+                $inv->setAttribute('is_outstanding',
+                    $inv->payment_status === 'unpaid'
+                    && $inv->document_status === 'verified'
+                    && $inv->issue_date && $inv->issue_date->toDateString() <= $today
+                    && $inv->due_date  && $inv->due_date->toDateString()  >= $today
                 );
                 return $inv;
             })
-            ->filter(fn($inv) => $inv->seq > 0)
-            ->when($overdueOnly, fn($c) => $c->where('is_overdue', true))
-            ->sortBy('seq')
-            ->values();
+            ->filter(fn($inv) => $inv->seq > 0);
+
+        if (!empty($statuses) && $hasComputed) {
+            $invoices = $invoices->filter(function ($inv) use ($statuses) {
+                foreach ($statuses as $s) {
+                    if ($s === 'overdue'     && $inv->is_overdue)                     return true;
+                    if ($s === 'outstanding' && $inv->is_outstanding)                 return true;
+                    if ($s === 'draft'       && $inv->document_status === 'draft')    return true;
+                    if ($s === 'verified'    && $inv->document_status === 'verified') return true;
+                    if ($s === 'frozen'      && $inv->document_status === 'frozen')   return true;
+                    if ($s === 'carried'     && $inv->document_status === 'carried')  return true;
+                    if ($s === 'inactive'    && $inv->document_status === 'inactive') return true;
+                }
+                return false;
+            });
+        }
+
+        $invoices = $invoices->sortByDesc('seq')->values();
 
         // ── Column selector ───────────────────────────────────────
         $allColDefs = [
@@ -479,7 +541,6 @@ class InvoiceController extends Controller
             'due_date'       => ['Jatuh Tempo',   14],
             'status'         => ['Status',        18],
             'overdue'        => ['Overdue',       10],
-            'is_marked'      => ['Terverifikasi', 14],
             'nominal'        => ['Nominal (Rp)',  20],
         ];
         $validKeys    = array_keys($allColDefs);
@@ -498,7 +559,7 @@ class InvoiceController extends Controller
         // ── Spreadsheet setup ─────────────────────────────────────
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Urutan Nomor Invoice');
+        $sheet->setTitle('Semua Invoice');
 
         $headerStyle = [
             'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
@@ -531,7 +592,6 @@ class InvoiceController extends Controller
                 'due_date'       => $inv->due_date?->format('d/m/Y') ?? '-',
                 'status'         => $this->statusLabel($inv),
                 'overdue'        => $inv->is_overdue ? 'Ya' : '-',
-                'is_marked'      => $inv->document_status === 'verified' ? 'Ya' : '-',
                 'nominal'        => (int) $inv->computed_total,
             ];
 
@@ -558,16 +618,15 @@ class InvoiceController extends Controller
             $sheet->getStyle("{$nomCol}1:{$nomCol}{$lastRow}")->getFont()->setBold(true);
         }
 
-        $periodLabel = $month > 0 ? "-bln{$month}" : '';
-        $filename    = "urutan-nomor-{$year}{$periodLabel}.xlsx";
-        $tmpPath     = sys_get_temp_dir() . '/' . $filename;
+        $filename = "invoice-{$fromDate}-sd-{$toDate}.xlsx";
+        $tmpPath  = sys_get_temp_dir() . '/' . $filename;
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($tmpPath);
 
         ActivityLogger::log('invoice.numbering_exported', null, [
-            'year'  => $year,
-            'month' => $month ?: 'all',
+            'from'  => $fromDate,
+            'to'    => $toDate,
             'count' => $invoices->count(),
         ]);
 
@@ -1520,13 +1579,28 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice dilanjutkan. Draft baru telah dibuat.');
     }
 
+    public function deactivate(Invoice $invoice)
+    {
+        if (!in_array($invoice->document_status, ['verified', 'inactive']) || $invoice->payment_status === 'paid') {
+            return back()->with('error', 'Hanya invoice aktif atau overdue yang belum dibayar yang bisa dinonaktifkan.');
+        }
+
+        $invoice->update(['document_status' => 'inactive']);
+
+        ActivityLogger::log('invoice.deactivated', $invoice, [
+            'note' => 'Invoice dinonaktifkan oleh user',
+        ]);
+
+        return back()->with('success', 'Invoice berhasil dinonaktifkan.');
+    }
+
     public function reactivate(Invoice $invoice)
     {
         if (preg_match('/^[CRPF]-/', $invoice->invoice_number)) {
             return back()->with('error', 'Reaktivasi hanya bisa dilakukan dari invoice utama (head).');
         }
-        if ($invoice->payment_status !== 'unpaid' || $invoice->document_status !== 'verified') {
-            return back()->with('error', 'Hanya invoice aktif yang belum dibayar (verified + unpaid) yang bisa direaktivasi.');
+        if ($invoice->payment_status !== 'unpaid' || $invoice->document_status !== 'inactive') {
+            return back()->with('error', 'Hanya invoice nonaktif yang belum dibayar yang bisa direaktivasi.');
         }
         if (!$invoice->interval_months) {
             return back()->with('error', 'Invoice tidak memiliki interval perpanjangan.');

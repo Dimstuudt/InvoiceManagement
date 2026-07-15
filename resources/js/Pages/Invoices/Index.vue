@@ -43,60 +43,100 @@
       </div>
 
       <!-- Summary stats -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="space-y-3">
 
-        <!-- Outstanding -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
-          <div class="absolute top-0 right-0 w-20 h-20 bg-indigo-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
-          <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Outstanding</p>
-          <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_outstanding) }}</p>
-          <p class="text-[10px] text-indigo-400 mt-1.5 font-medium">belum terbayar</p>
-          <div class="flex items-center gap-1.5 mt-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"/>
-            <span class="text-[10px] text-gray-400">{{ summary.total_unpaid }} dalam antrean</span>
+        <!-- Grup: Status Pembayaran -->
+        <div>
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-0.5">Status Pembayaran</p>
+          <div class="grid grid-cols-2 gap-3">
+
+            <!-- Belum Dibayar -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-amber-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Belum Dibayar</p>
+              <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_outstanding) }}</p>
+              <p class="text-[10px] text-amber-500 mt-1.5 font-medium">outstanding</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"/>
+                <span class="text-[10px] text-gray-400">{{ summary.count_unpaid }} invoice aktif</span>
+              </div>
+            </div>
+
+            <!-- Lunas -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Lunas</p>
+              <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_paid_amount) }}</p>
+              <p class="text-[10px] text-emerald-500 mt-1.5 font-medium">sudah dibayarkan</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
+                <span class="text-[10px] text-gray-400">{{ summary.count_paid }} invoice lunas</span>
+              </div>
+            </div>
+
           </div>
         </div>
 
-        <!-- Total Paid -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
-          <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
-          <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Total Lunas</p>
-          <p class="text-xl font-bold text-gray-900 mt-1.5 truncate">{{ fmtShort(summary.total_paid_amount) }}</p>
-          <p class="text-[10px] text-emerald-500 mt-1.5 font-medium">sudah dibayarkan</p>
-          <div class="flex items-center gap-1.5 mt-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
-            <span class="text-[10px] text-gray-400">{{ clients.reduce((s,c)=>s+(c.paid_count??0),0) }} invoice paid</span>
-          </div>
-        </div>
+        <!-- Grup: Status Invoice -->
+        <div>
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-0.5">Status Invoice</p>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
 
-        <!-- Overdue -->
-        <div class="rounded-2xl border shadow-sm p-4 relative overflow-hidden"
-          :class="summary.total_overdue > 0 ? 'bg-red-50/70 border-red-100' : 'bg-white border-gray-100'">
-          <div class="absolute top-0 right-0 w-20 h-20 rounded-full -translate-y-8 translate-x-8 opacity-60"
-            :class="summary.total_overdue > 0 ? 'bg-red-100' : 'bg-gray-50'"/>
-          <p class="text-[11px] font-semibold uppercase tracking-wide"
-            :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">Jatuh Tempo</p>
-          <p class="text-xl font-bold mt-1.5"
-            :class="summary.total_overdue > 0 ? 'text-red-600' : 'text-gray-900'">{{ summary.total_overdue }}</p>
-          <p class="text-[10px] mt-1.5 font-medium"
-            :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-300'">invoice overdue</p>
-          <div class="flex items-center gap-1.5 mt-2">
-            <span class="w-1.5 h-1.5 rounded-full" :class="summary.total_overdue > 0 ? 'bg-red-400' : 'bg-gray-200'"/>
-            <span class="text-[10px]" :class="summary.total_overdue > 0 ? 'text-red-400' : 'text-gray-400'">
-              {{ summary.total_overdue > 0 ? 'perlu tindakan segera' : 'semua aman' }}
-            </span>
-          </div>
-        </div>
+            <!-- Overdue -->
+            <div class="rounded-2xl border shadow-sm p-4 relative overflow-hidden"
+              :class="summary.count_overdue > 0 ? 'bg-red-50/70 border-red-100' : 'bg-white border-gray-100'">
+              <div class="absolute top-0 right-0 w-20 h-20 rounded-full -translate-y-8 translate-x-8 opacity-60"
+                :class="summary.count_overdue > 0 ? 'bg-red-100' : 'bg-gray-50'"/>
+              <p class="text-[11px] font-semibold uppercase tracking-wide"
+                :class="summary.count_overdue > 0 ? 'text-red-400' : 'text-gray-400'">Overdue</p>
+              <p class="text-xl font-bold mt-1.5"
+                :class="summary.count_overdue > 0 ? 'text-red-600' : 'text-gray-900'">{{ summary.count_overdue }}</p>
+              <p class="text-[10px] mt-1.5 font-medium"
+                :class="summary.count_overdue > 0 ? 'text-red-400' : 'text-gray-300'">invoice jatuh tempo</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 rounded-full" :class="summary.count_overdue > 0 ? 'bg-red-400' : 'bg-gray-200'"/>
+                <span class="text-[10px]" :class="summary.count_overdue > 0 ? 'text-red-400' : 'text-gray-400'">
+                  {{ summary.count_overdue > 0 ? 'perlu tindakan segera' : 'semua aman' }}
+                </span>
+              </div>
+            </div>
 
-        <!-- Client & Frozen -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
-          <div class="absolute top-0 right-0 w-20 h-20 bg-sky-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
-          <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Client Aktif</p>
-          <p class="text-xl font-bold text-gray-900 mt-1.5">{{ clients.length }}</p>
-          <p class="text-[10px] text-gray-400 mt-1.5 font-medium">{{ summary.total_invoices }} total invoice</p>
-          <div class="flex items-center gap-1.5 mt-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-sky-400"/>
-            <span class="text-[10px] text-gray-400">{{ summary.total_frozen ?? 0 }} frozen</span>
+            <!-- Draft -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-gray-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Draft Baru</p>
+              <p class="text-xl font-bold text-gray-900 mt-1.5">{{ summary.count_draft }}</p>
+              <p class="text-[10px] text-gray-400 mt-1.5 font-medium">belum pernah dikirim</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-gray-300"/>
+                <span class="text-[10px] text-gray-400">send_status: unsent</span>
+              </div>
+            </div>
+
+            <!-- Frozen -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-sky-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Frozen</p>
+              <p class="text-xl font-bold text-gray-900 mt-1.5">{{ summary.count_frozen }}</p>
+              <p class="text-[10px] text-sky-500 mt-1.5 font-medium">ditangguhkan</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"/>
+                <span class="text-[10px] text-gray-400">{{ summary.total_invoices }} total invoice</span>
+              </div>
+            </div>
+
+            <!-- Tidak Aktif -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-orange-50 rounded-full -translate-y-8 translate-x-8 opacity-60"/>
+              <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Tidak Aktif</p>
+              <p class="text-xl font-bold text-gray-900 mt-1.5">{{ summary.count_inactive }}</p>
+              <p class="text-[10px] text-orange-400 mt-1.5 font-medium">dinonaktifkan</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-300"/>
+                <span class="text-[10px] text-gray-400">bisa diaktifkan kembali</span>
+              </div>
+            </div>
+
           </div>
         </div>
 

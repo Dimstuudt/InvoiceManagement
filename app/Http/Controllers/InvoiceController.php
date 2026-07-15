@@ -314,6 +314,7 @@ class InvoiceController extends Controller
         $defaultFrom = $now->copy()->startOfMonth()->toDateString();
         $defaultTo   = $now->toDateString();
 
+        $search       = trim($request->input('search', ''));
         $fromDate     = $request->input('from_date', $defaultFrom) ?: $defaultFrom;
         $toDate       = $request->input('to_date',   $defaultTo)   ?: $defaultTo;
         $statuses = array_values(array_filter(
@@ -347,7 +348,14 @@ class InvoiceController extends Controller
             ])
             ->where('invoice_number', 'regexp', '^[0-9]+/')
             ->where('is_demo', false)
-            ->whereBetween('issue_date', [$fromDate, $toDate])
+            ->when($search !== '', fn($q) => $q->where(function ($inner) use ($search) {
+                $inner->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('client', fn($c) => $c->where('company_name', 'like', "%{$search}%"))
+                    ->orWhereHas('projectCategory', fn($pc) =>
+                        $pc->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")
+                    );
+            }))
+            ->when($search === '', fn($q) => $q->whereBetween('issue_date', [$fromDate, $toDate]))
             ->when($clientId > 0,         fn($q) => $q->where('client_id', $clientId))
             ->when(!empty($companyIds),   fn($q) => $q->whereHas('projectCategory', fn($i) => $i->whereIn('company_id', $companyIds)))
             ->when(!empty($categoryIds),  fn($q) => $q->whereIn('project_category_id', $categoryIds))
@@ -442,6 +450,7 @@ class InvoiceController extends Controller
             'summary'       => $summary,
             'monthly_stats' => $monthlyStats,
             'filters'       => [
+                'search'           => $search ?: null,
                 'statuses'         => $statuses,
                 'payment_statuses' => $paymentStatuses,
                 'send_statuses'    => $sendStatuses,

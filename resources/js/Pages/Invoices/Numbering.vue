@@ -138,137 +138,149 @@
           </div>
         </div>
 
-        <!-- ── Period bar ──────────────────────────────────────────── -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+        <!-- ── Controls (period + filter) — satu card ────────────── -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-          <!-- Row 1: Month pagination -->
-          <div class="px-4 py-3 flex items-center justify-between gap-3">
-            <button @click="shiftMonth(-1)"
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 text-xs font-semibold transition-colors">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-              </svg>
-              Bulan Lalu
-            </button>
+          <!-- Toolbar row -->
+          <div class="px-4 py-2.5 flex items-center gap-2 flex-wrap">
 
-            <span class="text-sm font-bold text-gray-800 select-none">{{ navMonthLabel }}</span>
+            <!-- Search -->
+            <div class="flex items-center gap-1 shrink-0">
+              <div class="relative flex items-center">
+                <svg class="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="Cari invoice, client, kode..."
+                  @keyup.enter="doSearch"
+                  class="pl-8 pr-7 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white w-52 transition-all"
+                  :class="isSearchMode ? 'border-indigo-300 bg-indigo-50' : ''"/>
+                <button v-if="searchQuery" @click="clearSearch"
+                  class="absolute right-2 text-gray-400 hover:text-gray-600 leading-none font-bold text-sm">×</button>
+              </div>
+            </div>
 
-            <button @click="shiftMonth(1)"
-              :disabled="isAtCurrentMonth"
-              :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors',
-                isAtCurrentMonth
-                  ? 'border-gray-100 text-gray-300 cursor-not-allowed'
-                  : 'border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
-              Bulan Depan
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-              </svg>
-            </button>
-          </div>
+            <template v-if="!isSearchMode">
+            <div class="w-px h-4 bg-gray-200 shrink-0"/>
 
-          <!-- Row 2: Pilihan Cepat + Rentang Bebas -->
-          <div class="px-4 py-3 flex items-center gap-4 flex-wrap">
-            <!-- Presets -->
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <button v-for="p in PRESETS" :key="p.key"
-                @click="applyPreset(p)"
-                :title="p.desc"
-                :class="['px-3 py-1 rounded-lg text-xs font-semibold transition-colors border',
-                  activePreset === p.key
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
-                {{ p.label }}
+            <!-- Month nav -->
+            <div class="flex items-center gap-1 shrink-0">
+              <button @click="shiftMonth(-1)" title="Bulan Lalu"
+                class="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <span class="text-xs font-bold text-gray-800 select-none min-w-[96px] text-center px-1">{{ navMonthLabel }}</span>
+              <button @click="shiftMonth(1)" :disabled="isAtCurrentMonth" title="Bulan Depan"
+                :class="['w-7 h-7 flex items-center justify-center rounded-lg border transition-colors',
+                  isAtCurrentMonth ? 'border-gray-100 text-gray-300 cursor-not-allowed' : 'border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-600']">
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
               </button>
             </div>
 
-            <div class="w-px h-5 bg-gray-200 shrink-0 hidden sm:block"/>
+            <div class="w-px h-4 bg-gray-200 shrink-0"/>
+
+            <!-- Presets -->
+            <div class="flex items-center gap-1">
+              <button v-for="p in PRESETS" :key="p.key"
+                @click="applyPreset(p)" :title="p.label"
+                :class="['px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors border',
+                  activePreset === p.key
+                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                    : 'border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']">
+                {{ p.short }}
+              </button>
+            </div>
+
+            <div class="w-px h-4 bg-gray-200 shrink-0 hidden sm:block"/>
 
             <!-- Rentang bebas -->
-            <div class="flex items-center gap-2 flex-wrap">
-              <div class="flex items-center gap-1.5">
-                <label class="text-xs text-gray-400 shrink-0">Mulai</label>
-                <input type="date" v-model="localFrom" :max="localTo || todayStr"
-                  class="text-xs border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white"
-                  @change="activePreset = null"/>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <label class="text-xs text-gray-400 shrink-0">Sampai</label>
-                <input type="date" v-model="localTo" :min="localFrom" :max="todayStr"
-                  class="text-xs border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white"
-                  @change="activePreset = null"/>
-              </div>
-              <button @click="applyDateRange"
-                :disabled="!localFrom || !localTo"
-                class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg transition-colors shrink-0">
+            <div class="flex items-center gap-1 hidden sm:flex">
+              <input type="date" v-model="localFrom" :max="localTo || todayStr"
+                class="text-[11px] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white"
+                @change="activePreset = null"/>
+              <span class="text-gray-300 text-xs select-none">—</span>
+              <input type="date" v-model="localTo" :min="localFrom" :max="todayStr"
+                class="text-[11px] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 bg-white"
+                @change="activePreset = null"/>
+              <button @click="applyDateRange" :disabled="!localFrom || !localTo"
+                class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-[11px] font-semibold rounded-lg transition-colors shrink-0">
                 Tampilkan
               </button>
             </div>
-          </div>
+            </template>
 
-        </div>
+            <!-- Filter toggle (push to right) -->
+            <div class="ml-auto flex items-center gap-1.5">
+              <!-- Active chips -->
+              <div class="flex items-center gap-1 flex-wrap">
+                <span v-for="s in (filters.statuses ?? [])" :key="'s'+s"
+                  :class="['inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold', statusChipClass(s)]">
+                  {{ statusDisplayLabel(s) }}
+                  <button @click="removeStatus(s)" class="opacity-60 hover:opacity-100 leading-none ml-0.5">×</button>
+                </span>
+                <span v-for="s in (filters.payment_statuses ?? [])" :key="'ps'+s"
+                  :class="['inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold',
+                    s === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
+                  {{ s === 'paid' ? 'Lunas' : 'Belum Bayar' }}
+                  <button @click="removePaymentStatus(s)" class="opacity-60 hover:opacity-100 leading-none ml-0.5">×</button>
+                </span>
+                <span v-for="s in (filters.send_statuses ?? [])" :key="'ss'+s"
+                  class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700">
+                  {{ SEND_LABELS[s] }}
+                  <button @click="removeSendStatus(s)" class="opacity-60 hover:opacity-100 leading-none ml-0.5">×</button>
+                </span>
+                <span v-if="filters.client_id"
+                  class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
+                  {{ clientName(filters.client_id) }}
+                  <button @click="removeClient" class="opacity-60 hover:opacity-100 leading-none ml-0.5">×</button>
+                </span>
+                <span v-for="id in (filters.company_ids ?? [])" :key="'co'+id"
+                  class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                  {{ companyName(id) }}
+                  <button @click="removeCompany(id)" class="opacity-60 hover:opacity-100 leading-none ml-0.5">×</button>
+                </span>
+                <span v-for="id in (filters.category_ids ?? [])" :key="'ca'+id"
+                  class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-700">
+                  {{ categoryName(id) }}
+                  <button @click="removeCategory(id)" class="opacity-60 hover:opacity-100 leading-none ml-0.5">×</button>
+                </span>
+                <button v-if="activeFilterCount > 0" @click="resetFilters"
+                  class="text-[10px] text-gray-400 hover:text-red-500 transition-colors font-semibold px-1">
+                  Reset
+                </button>
+              </div>
 
-        <!-- ── Filter bar ──────────────────────────────────────────── -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <!-- Toggle + chips -->
-          <div class="flex items-center gap-2 px-4 py-3 flex-wrap min-h-[52px]">
-            <button @click="showFilter = !showFilter"
-              :class="['flex items-center gap-2 px-3.5 py-2 text-xs font-semibold border rounded-xl transition-all flex-shrink-0',
-                activeFilterCount > 0
-                  ? 'bg-indigo-600 border-indigo-600 text-white'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50']">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-              </svg>
-              Filter
-              <span v-if="activeFilterCount > 0"
-                class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black leading-none bg-white/30">
-                {{ activeFilterCount }}
-              </span>
-            </button>
-
-            <!-- Active chips -->
-            <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-              <span v-for="s in (filters.statuses ?? [])" :key="'s'+s"
-                :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold', statusChipClass(s)]">
-                {{ statusDisplayLabel(s) }}
-                <button @click="removeStatus(s)" class="opacity-60 hover:opacity-100 font-black leading-none">×</button>
-              </span>
-              <span v-for="s in (filters.payment_statuses ?? [])" :key="'ps'+s"
-                :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold',
-                  s === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
-                {{ s === 'paid' ? 'Lunas' : 'Belum Dibayar' }}
-                <button @click="removePaymentStatus(s)" class="opacity-60 hover:opacity-100 font-black leading-none">×</button>
-              </span>
-              <span v-for="s in (filters.send_statuses ?? [])" :key="'ss'+s"
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700">
-                {{ SEND_LABELS[s] }}
-                <button @click="removeSendStatus(s)" class="opacity-60 hover:opacity-100 font-black leading-none">×</button>
-              </span>
-              <span v-if="filters.client_id"
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
-                {{ clientName(filters.client_id) }}
-                <button @click="removeClient" class="opacity-60 hover:opacity-100 font-black leading-none">×</button>
-              </span>
-              <span v-for="id in (filters.company_ids ?? [])" :key="'co'+id"
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
-                {{ companyName(id) }}
-                <button @click="removeCompany(id)" class="opacity-60 hover:opacity-100 font-black leading-none">×</button>
-              </span>
-              <span v-for="id in (filters.category_ids ?? [])" :key="'ca'+id"
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-700">
-                {{ categoryName(id) }}
-                <button @click="removeCategory(id)" class="opacity-60 hover:opacity-100 font-black leading-none">×</button>
-              </span>
+              <button @click="showFilter = !showFilter"
+                :class="['flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border rounded-lg transition-all shrink-0',
+                  showFilter
+                    ? 'bg-gray-100 border-gray-300 text-gray-700'
+                    : activeFilterCount > 0
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50']">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+                <span v-if="activeFilterCount > 0 && !showFilter"
+                  class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black leading-none bg-white/30">
+                  {{ activeFilterCount }}
+                </span>
+                <svg :class="['w-3 h-3 transition-transform', showFilter ? 'rotate-180' : '']" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
             </div>
 
-            <button v-if="activeFilterCount > 0" @click="resetFilters"
-              class="text-xs text-gray-400 hover:text-red-500 transition-colors font-medium px-2 py-1 flex-shrink-0">
-              Reset
-            </button>
           </div>
 
           <!-- Filter panel -->
-          <div v-show="showFilter" class="border-t border-gray-100 px-5 py-5 space-y-6 bg-gray-50/40">
+          <div v-show="showFilter" class="border-t border-gray-100 px-5 py-4 space-y-5 bg-gray-50/40">
 
             <!-- Status Pembayaran -->
             <div>
@@ -579,10 +591,10 @@ const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni',
                 'Juli','Agustus','September','Oktober','November','Desember']
 
 const PRESETS = [
-  { key: 'month', label: 'Bulan Ini',        desc: 'Invoice bulan ini' },
-  { key: '3m',    label: '3 Bulan Terakhir', desc: '3 bulan ke belakang' },
-  { key: '6m',    label: '6 Bulan Terakhir', desc: '6 bulan ke belakang' },
-  { key: 'year',  label: 'Tahun Ini',        desc: 'Seluruh tahun berjalan' },
+  { key: 'month', label: 'Bulan Ini',        short: 'Bln Ini', desc: 'Invoice bulan ini' },
+  { key: '3m',    label: '3 Bulan Terakhir', short: '3 Bln',   desc: '3 bulan ke belakang' },
+  { key: '6m',    label: '6 Bulan Terakhir', short: '6 Bln',   desc: '6 bulan ke belakang' },
+  { key: 'year',  label: 'Tahun Ini',        short: 'Thn Ini', desc: 'Seluruh tahun berjalan' },
 ]
 
 // Status invoice — document_status + computed (overdue/outstanding)
@@ -623,9 +635,26 @@ const EXPORT_COLS = [
   { key: 'nominal',        label: 'Nominal'     },
 ]
 
+// ── Search ─────────────────────────────────────────────────────
+const searchQuery = ref(props.filters?.search ?? '')
+const isSearchMode = computed(() => !!(props.filters?.search))
+
+function doSearch() {
+  const s = searchQuery.value.trim()
+  if (!s) { clearSearch(); return }
+  router.get(route('invoices.numbering'), { search: s, ...buildActivePayload() }, { preserveScroll: true, preserveState: true })
+}
+
 // ── Period / date range ────────────────────────────────────────
 const now       = new Date()
 const todayStr  = now.toISOString().slice(0, 10)
+
+function clearSearch() {
+  searchQuery.value = ''
+  const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, '0')
+  const from = `${y}-${m}-01`
+  router.get(route('invoices.numbering'), { from_date: from, to_date: todayStr, ...buildActivePayload() }, { preserveScroll: true, preserveState: true })
+}
 const localFrom = ref(props.from_date)
 const localTo   = ref(props.to_date)
 const activePreset = ref(detectPreset(props.from_date, props.to_date))

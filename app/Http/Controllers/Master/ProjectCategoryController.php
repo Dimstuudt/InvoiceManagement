@@ -15,6 +15,7 @@ class ProjectCategoryController extends Controller
     {
         return Inertia::render('Master/ProjectCategories/Index', [
             'categories' => ProjectCategory::latest()->get(),
+            'trashed'    => ProjectCategory::onlyTrashed()->latest('deleted_at')->get(),
         ]);
     }
 
@@ -69,5 +70,17 @@ class ProjectCategoryController extends Controller
         $projectCategory->delete();
 
         return redirect()->route('master.project-categories.index')->with('success', 'Kategori proyek berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        ProjectCategory::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('project_category.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

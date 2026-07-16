@@ -21,6 +21,10 @@ class DocumentIssuerController extends Controller
                 'sender_email'     => $i->senderDomain?->sender_email,
                 'sender_name'      => $i->senderDomain?->display_name,
             ]),
+            'trashed' => DocumentIssuer::onlyTrashed()->latest('deleted_at')->get()->map(fn($i) => [
+                ...$i->toArray(),
+                'header_image_url' => $i->header_image ? Storage::url($i->header_image) : null,
+            ]),
         ]);
     }
 
@@ -102,13 +106,20 @@ class DocumentIssuerController extends Controller
     public function destroy(DocumentIssuer $documentIssuer)
     {
         ActivityLogger::log('document_issuer.deleted', $documentIssuer);
-
-        if ($documentIssuer->header_image) {
-            Storage::disk('public')->delete($documentIssuer->header_image);
-        }
-
         $documentIssuer->delete();
 
         return redirect()->route('master.document-issuers.index')->with('success', 'Document issuer berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        DocumentIssuer::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('document_issuer.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

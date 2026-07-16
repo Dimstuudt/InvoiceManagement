@@ -18,6 +18,10 @@ class SenderDomainController extends Controller
                 ...$s->toArray(),
                 'sender_email' => $s->sender_email,
             ]),
+            'trashed' => SenderDomain::onlyTrashed()->latest('deleted_at')->get()->map(fn($s) => [
+                ...$s->toArray(),
+                'sender_email' => $s->sender_email,
+            ]),
         ]);
     }
 
@@ -55,5 +59,17 @@ class SenderDomainController extends Controller
         $senderDomain->delete();
 
         return back()->with('success', 'Sender domain berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        SenderDomain::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('sender_domain.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

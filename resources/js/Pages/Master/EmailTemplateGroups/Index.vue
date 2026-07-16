@@ -29,12 +29,36 @@
             class="px-3.5 py-2 text-xs font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded-lg transition-colors">
             ✦ Mulai dari contoh
           </Link>
+          <TrashPanel type="email-template-groups" :items="trashed">
+            <template #info-header>Status</template>
+            <template #info="{ item }">{{ item.is_default ? 'Default' : '—' }}</template>
+          </TrashPanel>
           <Link :href="route('master.email-template-groups.create')"
             class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors">
             + Grup Baru
           </Link>
         </div>
       </div>
+
+      <!-- Bulk action bar -->
+      <Transition name="bulk-bar">
+        <div v-if="selected.length > 0"
+          class="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900">
+          <input type="checkbox" :checked="allSelected" @change="toggleAll"
+            class="rounded border-gray-300 dark:border-gray-600 text-indigo-500 focus:ring-indigo-400"/>
+          <span class="text-sm font-medium text-indigo-700 dark:text-indigo-300">{{ selected.length }} dipilih</span>
+          <button @click="selected = []" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-1">Batal</button>
+          <div class="ml-auto">
+            <button @click="bulkDestroy"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 dark:text-red-300 dark:bg-red-900/50 dark:hover:bg-red-900 rounded-lg transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Hapus ke Trash ({{ selected.length }})
+            </button>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Empty state -->
       <div v-if="groups.length === 0"
@@ -55,11 +79,14 @@
 
       <!-- List -->
       <div v-for="group in groups" :key="group.id"
-        class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        :class="['bg-white border rounded-2xl overflow-hidden transition-all',
+          selected.includes(group.id) ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-200']">
 
         <!-- Group header -->
         <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div class="flex items-center gap-3">
+            <input type="checkbox" :value="group.id" v-model="selected"
+              class="rounded border-gray-300 text-indigo-500 focus:ring-indigo-400 shrink-0"/>
             <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
               <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -78,10 +105,10 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <Link :href="route('master.email-template-groups.edit', group.id)"
+            <button @click="goEdit(group.id)"
               class="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-indigo-600 border border-gray-200 hover:border-indigo-300 rounded-lg transition-colors">
               Edit
-            </Link>
+            </button>
             <button @click="deleteGroup(group)"
               class="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-600 border border-transparent hover:border-red-200 rounded-lg transition-colors">
               Hapus
@@ -136,12 +163,32 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TrashPanel from '@/Components/TrashPanel.vue';
 import { Link, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import Swal from 'sweetalert2';
+import { useSecurityGate } from '@/Composables/useSecurityGate';
 
 const props = defineProps({
-  groups: Array,
+  groups:  Array,
+  trashed: { type: Array, default: () => [] },
 });
+
+const { requireGate } = useSecurityGate();
+const selected = ref([]);
+
+const allSelected = computed(() =>
+  props.groups.length > 0 && props.groups.every(g => selected.value.includes(g.id))
+);
+
+function toggleAll() {
+  selected.value = allSelected.value ? [] : props.groups.map(g => g.id);
+}
+
+async function goEdit(id) {
+  if (!await requireGate()) return;
+  router.visit(route('master.email-template-groups.edit', id));
+}
 
 const STAGES = [
   { key: 'send1', label: 'Send 1' },
@@ -167,7 +214,8 @@ function filledStages(group) {
   return STAGES.filter(s => hasStage(group, s.key)).length;
 }
 
-function deleteGroup(group) {
+async function deleteGroup(group) {
+  if (!await requireGate()) return;
   Swal.fire({
     title: 'Hapus grup ini?',
     html: `<span class="text-sm text-gray-600">Grup <strong>"${group.name}"</strong> akan dihapus permanen. Invoice yang menggunakan grup ini tidak akan terpengaruh, tapi tidak punya template lagi.</span>`,
@@ -195,4 +243,17 @@ function deleteGroup(group) {
     }
   });
 }
+
+async function bulkDestroy() {
+  if (!await requireGate()) return;
+  router.delete(route('master.email-template-groups.bulk-destroy'), {
+    data: { ids: selected.value },
+    onSuccess: () => { selected.value = []; },
+  });
+}
 </script>
+
+<style scoped>
+.bulk-bar-enter-active, .bulk-bar-leave-active { transition: all 0.15s ease; }
+.bulk-bar-enter-from, .bulk-bar-leave-to { opacity: 0; transform: translateY(-4px); }
+</style>

@@ -1,6 +1,6 @@
 <template>
   <AppLayout title="Project Categories">
-    <div class="space-y-6">
+    <div class="space-y-4">
 
       <!-- Header -->
       <div class="flex items-center justify-between">
@@ -8,14 +8,40 @@
           <h2 class="text-base font-semibold text-gray-900">Project Categories</h2>
           <p class="text-sm text-gray-400 mt-0.5">{{ categories.length }} kategori terdaftar</p>
         </div>
-        <Link :href="route('master.project-categories.create')"
-          class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
-          Tambah
-        </Link>
+        <div class="flex items-center gap-2">
+          <TrashPanel type="project-categories" :items="trashed">
+            <template #info-header>Kode</template>
+            <template #info="{ item }">{{ item.code ?? '—' }}</template>
+          </TrashPanel>
+          <Link :href="route('master.project-categories.create')"
+            class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Tambah
+          </Link>
+        </div>
       </div>
+
+      <!-- Bulk action bar -->
+      <Transition name="bulk-bar">
+        <div v-if="selected.length > 0"
+          class="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900">
+          <input type="checkbox" :checked="allSelected" @change="toggleAll"
+            class="rounded border-gray-300 dark:border-gray-600 text-indigo-500 focus:ring-indigo-400"/>
+          <span class="text-sm font-medium text-indigo-700 dark:text-indigo-300">{{ selected.length }} dipilih</span>
+          <button @click="selected = []" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-1">Batal</button>
+          <div class="ml-auto">
+            <button @click="bulkDestroy"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 dark:text-red-300 dark:bg-red-900/50 dark:hover:bg-red-900 rounded-lg transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Hapus ke Trash ({{ selected.length }})
+            </button>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Empty state -->
       <div v-if="categories.length === 0"
@@ -41,6 +67,10 @@
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-100 bg-gray-50/60">
+              <th class="px-4 py-3 w-10">
+                <input type="checkbox" :checked="allSelected" @change="toggleAll"
+                  class="rounded border-gray-300 dark:border-gray-600 text-indigo-500 focus:ring-indigo-400"/>
+              </th>
               <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Nama</th>
               <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Kode</th>
               <th class="text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Deskripsi</th>
@@ -49,7 +79,11 @@
           </thead>
           <tbody class="divide-y divide-gray-50">
             <tr v-for="cat in categories" :key="cat.id"
-              class="hover:bg-gray-50/50 transition-colors group">
+              :class="['transition-colors group', selected.includes(cat.id) ? 'bg-indigo-50/50' : 'hover:bg-gray-50/50']">
+              <td class="px-4 py-3.5">
+                <input type="checkbox" :value="cat.id" v-model="selected"
+                  class="rounded border-gray-300 dark:border-gray-600 text-indigo-500 focus:ring-indigo-400"/>
+              </td>
               <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
@@ -68,12 +102,12 @@
               <td class="px-4 py-3.5 text-sm text-gray-400">{{ cat.description || '—' }}</td>
               <td class="px-4 py-3.5">
                 <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Link :href="route('master.project-categories.edit', cat.id)" title="Edit"
+                  <button @click="goEdit(cat.id)" title="Edit"
                     class="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 transition-colors">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414A2 2 0 019 13z"/>
                     </svg>
-                  </Link>
+                  </button>
                   <button @click="destroy(cat)" title="Hapus"
                     class="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -93,13 +127,44 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TrashPanel from '@/Components/TrashPanel.vue';
 import { Link, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { useSecurityGate } from '@/Composables/useSecurityGate';
 
-defineProps({ categories: Array });
+const props = defineProps({ categories: Array, trashed: { type: Array, default: () => [] } });
 
-function destroy(cat) {
-  if (confirm(`Hapus "${cat.name}"?`)) {
-    router.delete(route('master.project-categories.destroy', cat.id));
-  }
+const { requireGate } = useSecurityGate();
+const selected = ref([]);
+
+const allSelected = computed(() =>
+  props.categories.length > 0 && props.categories.every(c => selected.value.includes(c.id))
+);
+
+function toggleAll() {
+  selected.value = allSelected.value ? [] : props.categories.map(c => c.id);
+}
+
+async function goEdit(id) {
+  if (!await requireGate()) return;
+  router.visit(route('master.project-categories.edit', id));
+}
+
+async function destroy(cat) {
+  if (!await requireGate()) return;
+  router.delete(route('master.project-categories.destroy', cat.id));
+}
+
+async function bulkDestroy() {
+  if (!await requireGate()) return;
+  router.delete(route('master.project-categories.bulk-destroy'), {
+    data: { ids: selected.value },
+    onSuccess: () => { selected.value = []; },
+  });
 }
 </script>
+
+<style scoped>
+.bulk-bar-enter-active, .bulk-bar-leave-active { transition: all 0.15s ease; }
+.bulk-bar-enter-from, .bulk-bar-leave-to { opacity: 0; transform: translateY(-4px); }
+</style>

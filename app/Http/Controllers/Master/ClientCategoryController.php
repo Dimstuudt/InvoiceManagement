@@ -14,6 +14,7 @@ class ClientCategoryController extends Controller
     {
         return Inertia::render('Master/ClientCategories/Index', [
             'categories' => ClientCategory::latest()->get(),
+            'trashed'    => ClientCategory::onlyTrashed()->latest('deleted_at')->get(),
         ]);
     }
 
@@ -61,5 +62,17 @@ class ClientCategoryController extends Controller
         $clientCategory->delete();
 
         return redirect()->route('master.client-categories.index')->with('success', 'Kategori klien berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        ClientCategory::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('client_category.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

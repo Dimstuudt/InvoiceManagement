@@ -18,6 +18,10 @@ class BankAccountController extends Controller
                 ...$a->toArray(),
                 'bank_logo_url' => $a->bank_logo ? Storage::url($a->bank_logo) : null,
             ]),
+            'trashed' => BankAccount::onlyTrashed()->latest('deleted_at')->get()->map(fn($a) => [
+                ...$a->toArray(),
+                'bank_logo_url' => $a->bank_logo ? Storage::url($a->bank_logo) : null,
+            ]),
         ]);
     }
 
@@ -84,13 +88,20 @@ class BankAccountController extends Controller
     public function destroy(BankAccount $bankAccount)
     {
         ActivityLogger::log('bank_account.deleted', $bankAccount);
-
-        if ($bankAccount->bank_logo) {
-            Storage::disk('public')->delete($bankAccount->bank_logo);
-        }
-
         $bankAccount->delete();
 
         return redirect()->route('master.bank-accounts.index')->with('success', 'Bank account berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        BankAccount::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('bank_account.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

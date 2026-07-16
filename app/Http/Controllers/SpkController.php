@@ -20,35 +20,150 @@ class SpkController extends Controller
 
     public function index()
     {
-        $clients = Client::with('category:id,name')
-            ->withCount('spks')
-            ->withSum('spks', 'contract_value')
+        $clients = Client::withCount([
+                'invoices as total_invoices' => fn($q) => $q->whereNull('parent_invoice_id'),
+                'invoices as spk_count'      => fn($q) => $q->whereNull('parent_invoice_id')
+                                                             ->whereNotNull('spk_number')
+                                                             ->where('spk_number', '!=', ''),
+            ])
+            ->with('category:id,name')
             ->orderBy('company_name')
-            ->get(['id', 'client_category_id', 'company_name', 'city', 'client_status', 'is_active', 'created_at']);
+            ->get(['id', 'client_category_id', 'company_name', 'city', 'is_active', 'client_status']);
 
-        return Inertia::render('Spk/Index', [
-            'clients' => $clients,
-        ]);
+        return Inertia::render('Spk/Index', ['clients' => $clients]);
     }
 
     public function clientSpks(Client $client)
     {
-        $client->load([
-            'spks' => fn($q) => $q->with([
-                'projectCategory:id,name,code',
-                'user:id,name',
-                'invoices' => fn($q) => $q->select('id', 'spk_id', 'parent_invoice_id', 'invoice_number', 'issue_date', 'payment_status', 'document_status')
-                                          ->orderByDesc('issue_date'),
-            ])->orderByDesc('created_at'),
-        ]);
+        // 1 query: ambil semua invoice klien ini (parent + semua turunan)
+        $all = Invoice::where('client_id', $client->id)
+            ->select('id', 'parent_invoice_id', 'invoice_number', 'spk_number',
+                     'issue_date', 'due_date', 'payment_status', 'document_status', 'project_category_id')
+            ->orderByDesc('issue_date')  // desc → children[0] = terbaru
+            ->get();
+
+        // Bangun plain PHP array: parent_id => [children sorted desc]
+        $roots      = [];
+        $childrenOf = []; // [parent_id (int) => [Invoice, ...]]
+        foreach ($all as $inv) {
+            if (is_null($inv->parent_invoice_id)) {
+                $roots[] = $inv;
+            } else {
+                $childrenOf[(int) $inv->parent_invoice_id][] = $inv;
+            }
+        }
+        // $all sudah sorted desc, jadi children per parent sudah desc otomatis
+
+        // Auto-backfill spk_number ke turunan data lama yang belum punya
+        $toFix = [];
+        foreach ($roots as $parent) {
+            if (!$parent->spk_number) continue;
+            $curId = (int) $parent->id;
+            while (isset($childrenOf[$curId])) {
+                $child = $childrenOf[$curId][0]; // [0] = terbaru (sorted desc)
+                if (!$child->spk_number) {
+                    $toFix[$parent->spk_number][] = $child->id;
+                    $child->spk_number = $parent->spk_number;
+                }
+                $curId = (int) $child->id;
+            }
+        }
+        foreach ($toFix as $spk => $ids) {
+            Invoice::whereIn('id', $ids)->update(['spk_number' => $spk]);
+        }
+
+        // Untuk setiap root, ikuti chain sampai leaf = invoice terbaru
+        $invoices = collect($roots)->map(function ($inv) use ($childrenOf) {
+            $currentId    = (int) $inv->id;
+            $latest       = null;
+            $renewalCount = 0;
+            while (isset($childrenOf[$currentId]) && $renewalCount < 100) {
+                $child        = $childrenOf[$currentId][0];
+                $latest       = $child;
+                $currentId    = (int) $child->id;
+                $renewalCount++;
+            }
+            $inv->setAttribute('latest', $latest);
+            $inv->setAttribute('renewal_count', $renewalCount);
+            return $inv;
+        })->values();
+
+        $spkFiles = Spk::where('client_id', $client->id)
+            ->whereNotNull('file_path')
+            ->whereNotNull('invoice_id')
+            ->get(['invoice_id', 'file_path'])
+            ->keyBy('invoice_id')
+            ->toArray();
 
         return Inertia::render('Spk/Client', [
-            'client'            => $client,
+            'client'            => $client->only('id', 'company_name', 'city'),
+            'invoices'          => $invoices,
+            'spkFiles'          => $spkFiles,
             'projectCategories' => \App\Models\ProjectCategory::all(['id', 'name', 'code']),
-            'clientCategories'  => \App\Models\ClientCategory::all(['id', 'name']),
             'documentIssuers'   => \App\Models\DocumentIssuer::all(['id', 'name']),
             'bankAccounts'      => \App\Models\BankAccount::all(['id', 'name', 'bank_name', 'account_number']),
         ]);
+    }
+
+    public function updateSpkNumber(Invoice $invoice, Request $request)
+    {
+        $request->validate(['spk_number' => 'nullable|string|max:100']);
+
+        $spkNumber = $request->spk_number ?: null;
+
+        // Cascade ke seluruh chain
+        $ids = [$invoice->id];
+        $currentId = $invoice->id;
+        while ($childId = Invoice::where('parent_invoice_id', $currentId)->value('id')) {
+            $ids[] = $childId;
+            $currentId = $childId;
+            if (count($ids) > 200) break;
+        }
+
+        Invoice::whereIn('id', $ids)->update(['spk_number' => $spkNumber]);
+
+        return back()->with('success', 'Nomor SPK diperbarui.');
+    }
+
+    public function uploadSpkFile(Invoice $invoice, Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:pdf|max:10240']);
+
+        // File disimpan berdasarkan invoice_id, tidak ada hubungannya dengan spk_number
+        $spk = Spk::firstOrNew(['client_id' => $invoice->client_id, 'invoice_id' => $invoice->id]);
+        if ($spk->file_path) Storage::disk('public')->delete($spk->file_path);
+        $spk->user_id   = Auth::id();
+        $spk->file_path = $request->file('file')->store('spk', 'public');
+        $spk->save();
+
+        // Coba parse nomor SPK dari PDF kalau invoice belum punya (opsional, terpisah dari file)
+        $parsedSpk = null;
+        if (!$invoice->spk_number) {
+            try {
+                $parser = new PdfParser();
+                $text   = $parser->parseFile($request->file('file')->getRealPath())->getText();
+                if (preg_match('/Nomor\s*:\s*([^\n\r]+)/i', $text, $m)) {
+                    $parsedSpk = trim($m[1]);
+                }
+            } catch (\Throwable) {}
+
+            if ($parsedSpk) {
+                $ids = [$invoice->id];
+                $curId = $invoice->id;
+                while ($childId = Invoice::where('parent_invoice_id', $curId)->value('id')) {
+                    $ids[] = $childId;
+                    $curId = $childId;
+                    if (count($ids) > 200) break;
+                }
+                Invoice::whereIn('id', $ids)->update(['spk_number' => $parsedSpk]);
+            }
+        }
+
+        $msg = $parsedSpk
+            ? "File SPK berhasil diupload · No. SPK ditemukan: {$parsedSpk}"
+            : 'File SPK berhasil diupload.';
+
+        return back()->with('success', $msg);
     }
 
     public function create()
@@ -627,7 +742,7 @@ PROMPT;
             $spkDate   = $request->start_date ? Carbon::parse($request->start_date) : $issueDate;
             $spkNumber = $request->spk_number ?: Spk::generateNumber($category->code, $spkDate);
 
-            // Buat record SPK
+            // Buat record SPK (invoice_id di-set setelah invoice dibuat)
             $spk = Spk::create([
                 'client_id'          => $client->id,
                 'user_id'            => Auth::id(),
@@ -676,6 +791,9 @@ PROMPT;
                     'discount'    => 0,
                 ]);
             }
+
+            // Link Spk ke invoice supaya PDF muncul di tabel SPK
+            $spk->update(['invoice_id' => $invoice->id]);
 
             $invoiceId = $invoice->id;
         });

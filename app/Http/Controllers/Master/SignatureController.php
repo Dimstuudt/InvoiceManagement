@@ -18,6 +18,10 @@ class SignatureController extends Controller
                 ...$s->toArray(),
                 'signature_image_url' => $s->signature_image ? Storage::url($s->signature_image) : null,
             ]),
+            'trashed' => Signature::onlyTrashed()->latest('deleted_at')->get()->map(fn($s) => [
+                ...$s->toArray(),
+                'signature_image_url' => $s->signature_image ? Storage::url($s->signature_image) : null,
+            ]),
         ]);
     }
 
@@ -82,13 +86,20 @@ class SignatureController extends Controller
     public function destroy(Signature $signature)
     {
         ActivityLogger::log('signature.deleted', $signature);
-
-        if ($signature->signature_image) {
-            Storage::disk('public')->delete($signature->signature_image);
-        }
-
         $signature->delete();
 
         return redirect()->route('master.signatures.index')->with('success', 'Signature berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        Signature::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('signature.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

@@ -31,6 +31,16 @@ class Invoice extends Model
         'receipt_sent_at'    => 'datetime',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Saat invoice dihapus via model, hapus Spk terhubung beserta file fisiknya
+        static::deleting(function (Invoice $invoice) {
+            $invoice->spkFile?->delete();
+        });
+    }
+
     public function user()            { return $this->belongsTo(User::class); }
     public function client()          { return $this->belongsTo(Client::class); }
     public function projectCategory() { return $this->belongsTo(ProjectCategory::class); }
@@ -39,6 +49,7 @@ class Invoice extends Model
     public function signature()       { return $this->belongsTo(Signature::class); }
     public function emailTemplateGroup() { return $this->belongsTo(EmailTemplateGroup::class); }
     public function items()           { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order'); }
+    public function spkFile()         { return $this->hasOne(Spk::class, 'invoice_id'); }
     public function parent()          { return $this->belongsTo(Invoice::class, 'parent_invoice_id'); }
     public function children()        { return $this->hasMany(Invoice::class, 'parent_invoice_id'); }
     public function carriedFrom()      { return $this->belongsTo(Invoice::class, 'carried_from_id'); }

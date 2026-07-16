@@ -3,11 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentIssuer extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = ['name', 'header_image', 'tax_id_name', 'tax_id_address', 'tax_id_number', 'sender_domain_id'];
+
+    protected static function boot()
+    {
+        parent::boot();
+        static::forceDeleting(function (DocumentIssuer $model) {
+            if ($model->header_image) Storage::disk('public')->delete($model->header_image);
+        });
+    }
 
     public function senderDomain()
     {

@@ -15,7 +15,8 @@ class EmailTemplateGroupController extends Controller
     public function index()
     {
         return Inertia::render('Master/EmailTemplateGroups/Index', [
-            'groups' => EmailTemplateGroup::orderBy('name')->get(),
+            'groups'  => EmailTemplateGroup::orderBy('name')->get(),
+            'trashed' => EmailTemplateGroup::onlyTrashed()->latest('deleted_at')->get(),
         ]);
     }
 
@@ -130,5 +131,17 @@ class EmailTemplateGroupController extends Controller
 
         return redirect()->route('master.email-template-groups.index')
             ->with('success', 'Grup template email berhasil dihapus.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+        $count = 0;
+        EmailTemplateGroup::whereIn('id', $request->ids)->each(function ($item) use (&$count) {
+            ActivityLogger::log('email_template_group.deleted', $item);
+            $item->delete();
+            $count++;
+        });
+        return back()->with('success', "{$count} data berhasil dihapus ke trash.");
     }
 }

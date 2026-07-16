@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EmailTemplateGroup extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'name', 'is_default',
         'subject_send1', 'body_send1',

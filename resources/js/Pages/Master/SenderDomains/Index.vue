@@ -1,6 +1,6 @@
 <template>
   <AppLayout title="Sender Domains">
-    <div class="space-y-6">
+    <div class="space-y-4">
 
       <!-- Header -->
       <div class="flex items-center justify-between">
@@ -8,14 +8,40 @@
           <h2 class="text-base font-semibold text-gray-900">Sender Domains</h2>
           <p class="text-sm text-gray-400 mt-0.5">{{ senderDomains.length }} sender terdaftar</p>
         </div>
-        <button @click="showForm = !showForm"
-          class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
-          Tambah
-        </button>
+        <div class="flex items-center gap-2">
+          <TrashPanel type="sender-domains" :items="trashed" name-field="display_name">
+            <template #info-header>Domain</template>
+            <template #info="{ item }">{{ item.domain ?? '—' }}</template>
+          </TrashPanel>
+          <button @click="showForm = !showForm"
+            class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Tambah
+          </button>
+        </div>
       </div>
+
+      <!-- Bulk action bar -->
+      <Transition name="bulk-bar">
+        <div v-if="selected.length > 0"
+          class="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900">
+          <input type="checkbox" :checked="allSelected" @change="toggleAll"
+            class="rounded border-gray-300 dark:border-gray-600 text-indigo-500 focus:ring-indigo-400"/>
+          <span class="text-sm font-medium text-indigo-700 dark:text-indigo-300">{{ selected.length }} dipilih</span>
+          <button @click="selected = []" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-1">Batal</button>
+          <div class="ml-auto">
+            <button @click="bulkDestroy"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 dark:text-red-300 dark:bg-red-900/50 dark:hover:bg-red-900 rounded-lg transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Hapus ke Trash ({{ selected.length }})
+            </button>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Add Form -->
       <Transition name="form-slide">
@@ -103,9 +129,12 @@
       <!-- List -->
       <div v-else class="space-y-3">
         <div v-for="sd in senderDomains" :key="sd.id"
-          class="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4">
+          :class="['bg-white rounded-2xl border shadow-sm px-5 py-4 flex items-center justify-between gap-4 transition-all',
+            selected.includes(sd.id) ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-100']">
 
           <div class="flex items-center gap-4 min-w-0">
+            <input type="checkbox" :value="sd.id" v-model="selected"
+              class="rounded border-gray-300 text-indigo-500 focus:ring-indigo-400 shrink-0"/>
             <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
               <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -193,10 +222,12 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TrashPanel from '@/Components/TrashPanel.vue';
 import { router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useSecurityGate } from '@/Composables/useSecurityGate';
 
-defineProps({ senderDomains: Array });
+const props = defineProps({ senderDomains: Array, trashed: { type: Array, default: () => [] } });
 
 const showForm   = ref(false);
 const submitting = ref(false);
@@ -220,7 +251,19 @@ function submit() {
   });
 }
 
-function startEdit(sd) {
+const { requireGate } = useSecurityGate();
+const selected = ref([]);
+
+const allSelected = computed(() =>
+  props.senderDomains.length > 0 && props.senderDomains.every(s => selected.value.includes(s.id))
+);
+
+function toggleAll() {
+  selected.value = allSelected.value ? [] : props.senderDomains.map(s => s.id);
+}
+
+async function startEdit(sd) {
+  if (!await requireGate()) return;
   editTarget.value = sd;
   editForm.value   = { display_name: sd.display_name, prefix: sd.prefix, domain: sd.domain };
 }
@@ -233,14 +276,23 @@ function submitEdit() {
   });
 }
 
-function destroy(sd) {
-  if (confirm(`Hapus sender "${sd.display_name}"?`)) {
-    router.delete(route('master.sender-domains.destroy', sd.id));
-  }
+async function destroy(sd) {
+  if (!await requireGate()) return;
+  router.delete(route('master.sender-domains.destroy', sd.id));
+}
+
+async function bulkDestroy() {
+  if (!await requireGate()) return;
+  router.delete(route('master.sender-domains.bulk-destroy'), {
+    data: { ids: selected.value },
+    onSuccess: () => { selected.value = []; },
+  });
 }
 </script>
 
 <style scoped>
+.bulk-bar-enter-active, .bulk-bar-leave-active { transition: all 0.15s ease; }
+.bulk-bar-enter-from, .bulk-bar-leave-to { opacity: 0; transform: translateY(-4px); }
 .form-slide-enter-active, .form-slide-leave-active { transition: all 0.2s ease; }
 .form-slide-enter-from, .form-slide-leave-to { opacity: 0; transform: translateY(-8px); }
 .modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s ease; }

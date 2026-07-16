@@ -32,9 +32,9 @@ class DashboardController extends Controller
             ->get()
             ->sum(fn($i) => $i->total);
 
-        // Overdue: unpaid, tidak frozen/carried, due_date sudah lewat
+        // Overdue: unpaid, tidak frozen/carried/inactive, due_date sudah lewat
         $overdueRaw = Invoice::where('payment_status', 'unpaid')
-            ->whereNotIn('document_status', ['frozen', 'carried'])
+            ->whereNotIn('document_status', ['frozen', 'carried', 'inactive'])
             ->where('is_demo', false)
             ->where('due_date', '<', $now->toDateString())
             ->with(['client', 'items'])
@@ -43,6 +43,7 @@ class DashboardController extends Controller
 
         $overdueInvoices = $overdueRaw->map(fn($inv) => [
             'id'              => $inv->id,
+            'client_id'       => $inv->client_id,
             'invoice_number'  => $inv->invoice_number,
             'client_name'     => $inv->client?->company_name,
             'due_date'        => $inv->due_date->toDateString(),
@@ -53,9 +54,9 @@ class DashboardController extends Controller
             'send_status'     => $inv->send_status,
         ]);
 
-        // Jatuh tempo 7 hari ke depan: unpaid, tidak frozen/carried
+        // Jatuh tempo 7 hari ke depan: unpaid, tidak frozen/carried/inactive
         $upcomingInvoices = Invoice::where('payment_status', 'unpaid')
-            ->whereNotIn('document_status', ['frozen', 'carried'])
+            ->whereNotIn('document_status', ['frozen', 'carried', 'inactive'])
             ->where('is_demo', false)
             ->whereBetween('due_date', [$now->toDateString(), $now->copy()->addDays(7)->toDateString()])
             ->with(['client', 'items'])
@@ -63,6 +64,7 @@ class DashboardController extends Controller
             ->get()
             ->map(fn($inv) => [
                 'id'              => $inv->id,
+                'client_id'       => $inv->client_id,
                 'invoice_number'  => $inv->invoice_number,
                 'client_name'     => $inv->client?->company_name,
                 'due_date'        => $inv->due_date->toDateString(),
@@ -101,15 +103,16 @@ class DashboardController extends Controller
             ->get()
             ->sum(fn($i) => $i->total);
 
-        // Status distribution berdasarkan 3 kolom baru
+        // Status distribution — konsisten dengan status di app
         $base = Invoice::where('is_demo', false);
         $statusCounts = [
-            'paid'    => (clone $base)->where('payment_status', 'paid')->count(),
-            'sent'    => (clone $base)->where('document_status', 'verified')->where('payment_status', 'unpaid')->where('send_status', '!=', 'unsent')->count(),
-            'antrean' => (clone $base)->where('document_status', 'verified')->where('payment_status', 'unpaid')->where('send_status', 'unsent')->count(),
-            'draft'   => (clone $base)->where('document_status', 'draft')->count(),
-            'carried' => (clone $base)->where('document_status', 'carried')->count(),
-            'frozen'  => (clone $base)->where('document_status', 'frozen')->count(),
+            'paid'     => (clone $base)->where('payment_status', 'paid')->count(),
+            'sent'     => (clone $base)->where('document_status', 'verified')->where('payment_status', 'unpaid')->where('send_status', '!=', 'unsent')->count(),
+            'antrean'  => (clone $base)->where('document_status', 'verified')->where('payment_status', 'unpaid')->where('send_status', 'unsent')->count(),
+            'draft'    => (clone $base)->where('document_status', 'draft')->count(),
+            'carried'  => (clone $base)->where('document_status', 'carried')->count(),
+            'frozen'   => (clone $base)->where('document_status', 'frozen')->count(),
+            'inactive' => (clone $base)->where('document_status', 'inactive')->count(),
         ];
 
         return Inertia::render('Dashboard', [

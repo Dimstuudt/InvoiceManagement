@@ -67,7 +67,7 @@
           </div>
 
           <!-- Aksi utama (kanan) -->
-          <div class="flex items-center gap-1.5 shrink-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
 
             <!-- Payment status select -->
             <select v-if="!['frozen','carried'].includes(invoice.document_status)"
@@ -272,7 +272,7 @@
 
         <!-- ── INFO ──────────────────────────────────────────────── -->
         <div class="px-8 py-6 border-b border-gray-100">
-          <div class="grid grid-cols-3 gap-x-8 gap-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
 
             <div>
               <p class="text-xs text-gray-400 font-medium mb-1">SPK Number</p>
@@ -355,7 +355,7 @@
         </div>
 
         <!-- ── INVOICE ITEMS ──────────────────────────────────────── -->
-        <div class="border-b border-gray-100">
+        <div class="border-b border-gray-100 overflow-x-auto">
           <div class="px-8 py-3 bg-gray-50 border-b border-gray-100">
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice Items</p>
           </div>

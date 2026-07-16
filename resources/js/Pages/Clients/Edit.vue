@@ -38,7 +38,7 @@
           </div>
 
           <!-- Director & PIC -->
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Direktur</label>
               <input v-model="form.director" type="text" class="w-full px-4 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" :class="form.errors.director ? 'border-red-400' : 'border-gray-300'" />
@@ -130,7 +130,7 @@
           </div>
 
           <!-- Status & Is Active -->
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Client Status</label>
               <select v-model="form.client_status" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">

@@ -21,7 +21,7 @@
           <div class="px-6 py-6 space-y-6">
 
             <!-- Identitas -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Nama</label>
                 <input v-model="form.name" type="text" placeholder="Nama lengkap"

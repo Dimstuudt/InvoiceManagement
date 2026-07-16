@@ -21,7 +21,7 @@
           <div class="px-6 py-6 space-y-5">
 
             <!-- Client + Project -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Recipient <span class="text-red-400">*</span></label>
                 <select v-model="form.client_id" class="field" :class="form.errors.client_id && 'field-error'">
@@ -39,7 +39,7 @@
             </div>
 
             <!-- Issue + Due Date -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Issue Date <span class="text-red-400">*</span></label>
                 <input v-model="form.issue_date" type="date" class="field" :class="form.errors.issue_date && 'field-error'" />
@@ -119,7 +119,7 @@
             </div>
 
             <!-- SPK + Status -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">No. SPK <span class="text-gray-400 font-normal text-xs ml-1">· opsional</span></label>
                 <input v-model="form.spk_number" type="text" class="field" />
@@ -174,7 +174,7 @@
             <!-- Dokumen -->
             <div class="border-t border-gray-100 pt-5">
               <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Kelengkapan Dokumen</p>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-2">Document Issuer <span class="text-red-400">*</span></label>
                   <select v-model="form.document_issuer_id" class="field" :class="form.errors.document_issuer_id && 'field-error'">

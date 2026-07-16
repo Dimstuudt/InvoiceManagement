@@ -2,12 +2,12 @@
   <AppLayout title="SPK">
     <div class="max-w-6xl mx-auto space-y-5">
 
-      <div class="flex items-center justify-between">
+      <div class="flex items-start justify-between gap-3">
         <div>
           <h2 class="text-lg font-semibold text-gray-900">Surat Perjanjian Kerja</h2>
           <p class="text-sm text-gray-400 mt-0.5">{{ props.clients.length }} klien terdaftar</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap justify-end">
           <Link :href="route('spk.create-local')"
             class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

@@ -37,7 +37,7 @@
       </div>
 
       <!-- Table -->
-      <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-100 bg-gray-50/60">

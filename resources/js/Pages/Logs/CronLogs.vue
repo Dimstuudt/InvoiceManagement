@@ -35,7 +35,7 @@
       </div>
 
       <!-- ── Stats ──────────────────────────────────────────────── -->
-      <div class="grid grid-cols-4 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
             <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">

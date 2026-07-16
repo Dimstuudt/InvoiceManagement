@@ -29,10 +29,10 @@
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm flex overflow-hidden" style="min-height: 600px;">
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col lg:flex-row overflow-hidden" style="min-height: 600px;">
 
         <!-- Left: Upload + PDF Preview -->
-        <div class="w-2/5 border-r border-gray-100 flex flex-col">
+        <div class="w-full lg:w-2/5 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
           <div class="p-4 border-b border-gray-50">
             <div
               class="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-200"
@@ -120,7 +120,7 @@
                 <span class="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-bold flex-shrink-0">1</span>
                 <p class="text-xs font-bold text-gray-700 uppercase tracking-wider">Data Klien Baru</p>
               </div>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid sm:grid-cols-2 gap-3">
                 <div class="col-span-2">
                   <FieldLabel label="Nama Perusahaan" required :detected="isDetected('company_name')" :parsed="parsed"/>
                   <input v-model="form.company_name" type="text" placeholder="PT. Contoh Indonesia"
@@ -174,7 +174,7 @@
 
             <!-- Info SPK -->
             <div>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid sm:grid-cols-2 gap-3">
                 <div class="col-span-2">
                   <FieldLabel label="No. SPK" :detected="isDetected('spk_number')" :parsed="parsed"/>
                   <input v-model="form.spk_number" type="text" placeholder="Otomatis dari dokumen SPK"
@@ -210,7 +210,7 @@
 
             <!-- Pengaturan Invoice -->
             <div>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid sm:grid-cols-2 gap-3">
                 <div>
                   <FieldLabel label="Produk / Layanan" required :detected="isDetected('service_name')" :parsed="parsed"/>
                   <input v-model="form.service_name" type="text" placeholder="Lisensi Aplikasi, Hosting..."

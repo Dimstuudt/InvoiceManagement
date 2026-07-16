@@ -93,7 +93,7 @@
           <p class="text-sm text-indigo-300">{{ search ? `Tidak ditemukan "${search}"` : 'Tidak ada invoice untuk bulan ' + nextMonthLabel + '.' }}</p>
         </div>
 
-        <div v-else class="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
+        <div v-else class="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-x-auto">
           <table class="w-full">
             <thead>
               <tr class="border-b border-indigo-50 bg-indigo-50/40">
@@ -229,7 +229,7 @@
         <p class="text-sm text-gray-300">{{ search ? `Tidak ditemukan "${search}"` : 'Tidak ada invoice lainnya.' }}</p>
       </div>
 
-      <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-100 bg-gray-50/60">

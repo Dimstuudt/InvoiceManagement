@@ -246,6 +246,19 @@ async function deleteGroup(group) {
 
 async function bulkDestroy() {
   if (!await requireGate()) return;
+  const { isConfirmed } = await Swal.fire({
+    title: `Hapus ${selected.value.length} grup template?`,
+    text: 'Data akan dipindahkan ke trash.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#6b7280',
+    confirmButtonText: 'Ya, Hapus',
+    cancelButtonText: 'Batal',
+    reverseButtons: true,
+    focusCancel: true,
+  });
+  if (!isConfirmed) return;
   router.delete(route('master.email-template-groups.bulk-destroy'), {
     data: { ids: selected.value },
     onSuccess: () => { selected.value = []; },

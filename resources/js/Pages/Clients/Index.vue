@@ -17,13 +17,13 @@
             <input v-model="search" type="text" placeholder="Cari client..."
               class="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 w-48 transition-all placeholder-gray-300"/>
           </div>
-          <Link :href="route('clients.create')"
+          <button @click="goCreate"
             class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
             </svg>
             Tambah
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -137,7 +137,7 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { Link, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import Swal from 'sweetalert2';
 import { useSecurityGate } from '@/Composables/useSecurityGate';
@@ -161,6 +161,12 @@ const filtered = computed(() => {
 
 function initials(name) {
     return name?.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() ?? '?';
+}
+
+async function goCreate() {
+    const passed = await requireGate();
+    if (!passed) return;
+    router.visit(route('clients.create'));
 }
 
 async function viewClient(client) {

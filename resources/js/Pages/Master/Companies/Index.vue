@@ -217,11 +217,15 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { router, useForm } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import Swal from 'sweetalert2'
+import { useSecurityGate } from '@/Composables/useSecurityGate'
 
 const props = defineProps({
   companies:  Array,
   categories: Array,
 })
+
+const { requireGate } = useSecurityGate()
 
 // Computed: unassigned categories
 const unassigned = computed(() =>
@@ -236,14 +240,16 @@ const errors      = ref({})
 
 const form = ref({ name: '', code: '', description: '' })
 
-function openAdd() {
+async function openAdd() {
+  if (!await requireGate()) return
   editTarget.value  = null
   form.value        = { name: '', code: '', description: '' }
   errors.value      = {}
   showForm.value    = true
 }
 
-function openEdit(company) {
+async function openEdit(company) {
+  if (!await requireGate()) return
   editTarget.value  = company
   form.value        = { name: company.name, code: company.code, description: company.description ?? '' }
   errors.value      = {}
@@ -275,8 +281,21 @@ function submitForm() {
   }
 }
 
-function destroy(company) {
-  if (!confirm(`Hapus "${company.name}"? Semua kategori di dalamnya akan dilepas.`)) return
+async function destroy(company) {
+  if (!await requireGate()) return
+  const { isConfirmed } = await Swal.fire({
+    title: 'Hapus perusahaan ini?',
+    html: `<span class="text-sm text-gray-600"><strong>"${company.name}"</strong> akan dihapus. Semua kategori di dalamnya akan dilepas.</span>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#6b7280',
+    confirmButtonText: 'Ya, Hapus',
+    cancelButtonText: 'Batal',
+    reverseButtons: true,
+    focusCancel: true,
+  })
+  if (!isConfirmed) return
   router.delete(route('master.companies.destroy', company.id))
 }
 
@@ -285,7 +304,8 @@ const showAssign  = ref(false)
 const assignTarget = ref(null)
 const assignIds    = ref([])
 
-function openAssign(company) {
+async function openAssign(company) {
+  if (!await requireGate()) return
   assignTarget.value = company
   assignIds.value    = company.project_categories.map(c => c.id)
   showAssign.value   = true

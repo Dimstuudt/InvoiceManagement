@@ -130,6 +130,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import TrashPanel from '@/Components/TrashPanel.vue';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import Swal from 'sweetalert2';
 import { useSecurityGate } from '@/Composables/useSecurityGate';
 
 const props = defineProps({ categories: Array, trashed: { type: Array, default: () => [] } });
@@ -152,11 +153,37 @@ async function goEdit(id) {
 
 async function destroy(cat) {
   if (!await requireGate()) return;
+  const { isConfirmed } = await Swal.fire({
+    title: 'Hapus kategori ini?',
+    text: `"${cat.name}" akan dipindahkan ke trash.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#6b7280',
+    confirmButtonText: 'Ya, Hapus',
+    cancelButtonText: 'Batal',
+    reverseButtons: true,
+    focusCancel: true,
+  });
+  if (!isConfirmed) return;
   router.delete(route('master.project-categories.destroy', cat.id));
 }
 
 async function bulkDestroy() {
   if (!await requireGate()) return;
+  const { isConfirmed } = await Swal.fire({
+    title: `Hapus ${selected.value.length} kategori?`,
+    text: 'Data akan dipindahkan ke trash.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#6b7280',
+    confirmButtonText: 'Ya, Hapus',
+    cancelButtonText: 'Batal',
+    reverseButtons: true,
+    focusCancel: true,
+  });
+  if (!isConfirmed) return;
   router.delete(route('master.project-categories.bulk-destroy'), {
     data: { ids: selected.value },
     onSuccess: () => { selected.value = []; },

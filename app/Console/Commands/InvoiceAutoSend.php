@@ -72,7 +72,6 @@ class InvoiceAutoSend extends Command
                 continue;
             }
 
-            $emails  = $activeEmails->pluck('email')->toArray();
             $toList  = [['email' => $activeEmails->first()->email]];
             $ccList  = $activeEmails->skip(1)->map(fn($e) => ['email' => $e->email])->values()->toArray();
 
@@ -129,9 +128,10 @@ class InvoiceAutoSend extends Command
                 $invoice->update(['send_status' => $nextStage]);
 
                 // Request 2: notifikasi internal
-                $this->sendInternalNotification($invoice, $nextStage);
+                $notifResult = $this->sendInternalNotification($invoice, $nextStage);
                 ActivityLogger::log('invoice.auto_sent', $invoice, [
-                    'to'    => $emails,
+                    'to'    => $toList[0]['email'],
+                    'cc'    => array_column($ccList, 'email'),
                     'stage' => $nextStage,
                 ]);
 
@@ -139,9 +139,11 @@ class InvoiceAutoSend extends Command
                     'invoice_id'     => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'client'         => $invoice->client->company_name ?? '-',
-                    'emails'         => $emails,
+                    'to'             => $toList[0]['email'],
+                    'cc'             => array_column($ccList, 'email'),
                     'stage'          => $nextStage,
                     'status'         => 'sent',
+                    'notif_internal' => $notifResult,
                     'error'          => null,
                 ];
                 $sent++;
@@ -191,7 +193,6 @@ class InvoiceAutoSend extends Command
                 continue;
             }
 
-            $emails  = $activeEmails->pluck('email')->toArray();
             $toList  = [['email' => $activeEmails->first()->email]];
             $ccList  = $activeEmails->skip(1)->map(fn($e) => ['email' => $e->email])->values()->toArray();
 
@@ -248,16 +249,21 @@ class InvoiceAutoSend extends Command
                 $invoice->update(['receipt_sent_at' => now()]);
 
                 // Request 2: notifikasi internal
-                $this->sendInternalNotification($invoice, 'paid');
-                ActivityLogger::log('invoice.receipt_sent', $invoice, ['to' => $emails]);
+                $notifResult = $this->sendInternalNotification($invoice, 'paid');
+                ActivityLogger::log('invoice.receipt_sent', $invoice, [
+                    'to' => $toList[0]['email'],
+                    'cc' => array_column($ccList, 'email'),
+                ]);
 
                 $details[] = [
                     'invoice_id'     => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'client'         => $invoice->client->company_name ?? '-',
-                    'emails'         => $emails,
+                    'to'             => $toList[0]['email'],
+                    'cc'             => array_column($ccList, 'email'),
                     'stage'          => 'paid',
                     'status'         => 'sent',
+                    'notif_internal' => $notifResult,
                     'error'          => null,
                 ];
                 $sent++;
@@ -303,33 +309,24 @@ class InvoiceAutoSend extends Command
         return self::SUCCESS;
     }
 
-    private function sendInternalNotification(Invoice $invoice, string $stage): void
+    // Return: ['sent' => N, 'failed' => N, 'skipped' => N, 'groups' => [...]]
+    private function sendInternalNotification(Invoice $invoice, string $stage): array
     {
-        if (! $invoice->user) return;
+        $result = ['sent' => 0, 'failed' => 0, 'skipped' => 0, 'groups' => []];
+
+        if (! $invoice->user) return $result;
 
         $notifEmails = $invoice->user->notificationEmails
             ->where('is_active', true)
             ->map(fn($ne) => [
-                'id'         => $ne->id,
-                'is_default' => $ne->is_default,
-                'email'      => $ne->is_default ? $invoice->user->email : $ne->email,
+                'group_id'  => $ne->group_id,
+                'send_type' => $ne->send_type,
+                'email'     => $ne->is_default ? $invoice->user->email : $ne->email,
             ])
             ->filter(fn($ne) => !empty($ne['email']))
             ->values();
 
-        if ($notifEmails->isEmpty()) return;
-
-        // Tentukan To dan CC
-        $defaultEntry = $notifEmails->firstWhere('is_default', true);
-        if ($defaultEntry) {
-            $internalTo = [['email' => $defaultEntry['email']]];
-            $internalCc = $notifEmails->where('is_default', false)
-                ->map(fn($ne) => ['email' => $ne['email']])->values()->toArray();
-        } else {
-            $sorted     = $notifEmails->sortBy('id')->values();
-            $internalTo = [['email' => $sorted->first()['email']]];
-            $internalCc = $sorted->skip(1)->map(fn($ne) => ['email' => $ne['email']])->values()->toArray();
-        }
+        if ($notifEmails->isEmpty()) return $result;
 
         $stageLabels = [
             'send1' => 'Pengiriman Pertama',
@@ -339,35 +336,74 @@ class InvoiceAutoSend extends Command
             'send5' => 'Pengiriman Kelima (Terakhir)',
             'paid'  => 'Pembayaran Diterima',
         ];
-        $stageLabel = $stageLabels[$stage] ?? $stage;
-        $subject    = "[Notifikasi] {$invoice->invoice_number} — {$stageLabel}";
+        $subject = "[Notifikasi] {$invoice->invoice_number} — " . ($stageLabels[$stage] ?? $stage);
 
         try {
             $htmlNotif = view('emails.internal_notification', [
                 'invoice' => $invoice,
                 'stage'   => $stage,
             ])->render();
+        } catch (\Throwable $e) {
+            $result['failed']++;
+            $result['groups'][] = ['status' => 'failed', 'error' => 'Render template gagal: ' . $e->getMessage()];
+            return $result;
+        }
+
+        $sender = [
+            'name'  => config('services.brevo.sender_name'),
+            'email' => config('services.brevo.sender_email'),
+        ];
+
+        $groups = $notifEmails->groupBy('group_id');
+        foreach ($groups as $groupId => $groupEmails) {
+            $toEntry = $groupEmails->firstWhere('send_type', 'to');
+
+            if (! $toEntry) {
+                $result['skipped']++;
+                $result['groups'][] = ['group_id' => $groupId, 'status' => 'skipped', 'error' => 'Tidak ada TO di grup ini'];
+                continue;
+            }
+
+            $ccEmails = $groupEmails
+                ->where('send_type', 'cc')
+                ->pluck('email')
+                ->toArray();
 
             $payload = [
-                'sender'      => [
-                    'name'  => config('services.brevo.sender_name'),
-                    'email' => config('services.brevo.sender_email'),
-                ],
-                'to'          => $internalTo,
+                'sender'      => $sender,
+                'to'          => [['email' => $toEntry['email']]],
                 'subject'     => $subject,
                 'htmlContent' => $htmlNotif,
             ];
-            if (!empty($internalCc)) {
-                $payload['cc'] = $internalCc;
+            if (! empty($ccEmails)) {
+                $payload['cc'] = array_map(fn($e) => ['email' => $e], $ccEmails);
             }
 
-            Http::withHeaders([
-                'api-key'      => config('services.brevo.key'),
-                'Content-Type' => 'application/json',
-            ])->post('https://api.brevo.com/v3/smtp/email', $payload);
-        } catch (\Throwable) {
-            // Gagal notif internal tidak menggagalkan pengiriman utama
+            try {
+                Http::withHeaders([
+                    'api-key'      => config('services.brevo.key'),
+                    'Content-Type' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', $payload);
+
+                $result['sent']++;
+                $result['groups'][] = [
+                    'group_id' => $groupId,
+                    'status'   => 'sent',
+                    'to'       => $toEntry['email'],
+                    'cc'       => $ccEmails,
+                ];
+            } catch (\Throwable $e) {
+                $result['failed']++;
+                $result['groups'][] = [
+                    'group_id' => $groupId,
+                    'status'   => 'failed',
+                    'to'       => $toEntry['email'],
+                    'error'    => $e->getMessage(),
+                ];
+            }
         }
+
+        return $result;
     }
 
     /**
